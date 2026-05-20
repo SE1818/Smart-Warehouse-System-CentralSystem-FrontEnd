@@ -1,0 +1,105 @@
+name: Smart Warehouse FrontEnd CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '20.x'
+  SONAR_PROJECT_KEY: SE1818_Smart-Warehouse-System-CentralSystem-FrontEnd
+  SONAR_ORGANIZATION: se1818
+
+jobs:
+  build-test-sonar:
+    name: Build, Test & SonarQube
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Run tests with coverage
+        run: npm run test -- --coverage --watchAll=false --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Install SonarQube Scanner
+        run: npm install -g @sonarqube/scanner
+
+      - name: SonarQube Begin
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} -Dsonar.organization=${{ env.SONAR_ORGANIZATION }} -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ env.SONAR_TOKEN }}
+        shell: pwsh
+        if: success()
+
+      - name: SonarQube End
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} -Dsonar.organization=${{ env.SONAR_ORGANIZATION }} -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=${{ env.SONAR_TOKEN }}
+        shell: pwsh
+        if: success()
+
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+        if: always()
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: windows-latest
+    needs: build-test-sonar
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build --if-present
+      - name: Deploy to Staging
+        run: echo "Deploying to staging environment..."
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: windows-latest
+    needs: build-test-sonar
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build --if-present
+      - name: Deploy to Production
+        run: echo "Deploying to production environment..."
