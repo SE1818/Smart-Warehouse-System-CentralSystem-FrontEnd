@@ -7,6 +7,15 @@ import {
 } from '@/components/logs';
 import type { AuditLog } from '@/types';
 
+// Default to last 7 days - moved outside to keep render functions pure
+const getDefaultFilters = () => {
+  const now = Date.now();
+  return {
+    startDate: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    endDate: new Date(now).toISOString().split('T')[0],
+  };
+};
+
 export function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
@@ -14,34 +23,35 @@ export function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Default to last 7 days
-  const getDefaultFilters = () => ({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-  });
-
-  const [filters, setFilters] = useState(getDefaultFilters());
-
-  const fetchLogs = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await auditLogService.getLogs(filters);
-      setLogs(data);
-    } catch (err) {
-      setError('Không thể tải dữ liệu log. Vui lòng thử lại sau.');
-      console.error('Error fetching audit logs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [filters, setFilters] = useState(getDefaultFilters);
 
   useEffect(() => {
-    fetchLogs();
+    let active = true;
+
+    auditLogService.getLogs(filters)
+      .then((data) => {
+        if (active) {
+          setLogs(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError('Không thể tải dữ liệu log. Vui lòng thử lại sau.');
+          console.error('Error fetching audit logs:', err);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [filters]);
 
   const handleFilterChange = (newFilters: Partial<typeof filters>) => {
     setFilters({ ...getDefaultFilters(), ...newFilters });
+    setLoading(true);
+    setError(null);
   };
 
   const handleLogClick = (log: AuditLog) => {

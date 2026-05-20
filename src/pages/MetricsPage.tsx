@@ -27,40 +27,51 @@ function MetricCard({ title, value, unit, icon, color }: MetricCardProps) {
   );
 }
 
+const metricConfig: Record<string, { label: string; unit: string; icon: string; color: string; type: MetricType }> = {
+  temperature: { label: 'Nhiệt độ', unit: '°C', icon: '🌡️', color: 'text-red-500', type: MetricType.Temperature },
+  humidity: { label: 'Độ ẩm', unit: '%', icon: '💧', color: 'text-blue-500', type: MetricType.Humidity },
+  pressure: { label: 'Áp suất', unit: 'hPa', icon: '⏲️', color: 'text-purple-500', type: MetricType.Pressure },
+  lightLevel: { label: 'Ánh sáng', unit: 'lux', icon: '💡', color: 'text-yellow-500', type: MetricType.LightLevel },
+  powerConsumption: { label: 'Tiêu thụ điện', unit: 'kWh', icon: '⚡', color: 'text-green-500', type: MetricType.PowerConsumption },
+  inventoryCount: { label: 'Số lượng hàng', unit: 'sp', icon: '📦', color: 'text-orange-500', type: MetricType.InventoryCount },
+};
+
 export function MetricsPage() {
   const [metrics, setMetrics] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState('WH001');
 
-  const metricConfig: Record<string, { label: string; unit: string; icon: string; color: string; type: MetricType }> = {
-    temperature: { label: 'Nhiệt độ', unit: '°C', icon: '🌡️', color: 'text-red-500', type: MetricType.Temperature },
-    humidity: { label: 'Độ ẩm', unit: '%', icon: '💧', color: 'text-blue-500', type: MetricType.Humidity },
-    pressure: { label: 'Áp suất', unit: 'hPa', icon: '⏲️', color: 'text-purple-500', type: MetricType.Pressure },
-    lightLevel: { label: 'Ánh sáng', unit: 'lux', icon: '💡', color: 'text-yellow-500', type: MetricType.LightLevel },
-    powerConsumption: { label: 'Tiêu thụ điện', unit: 'kWh', icon: '⚡', color: 'text-green-500', type: MetricType.PowerConsumption },
-    inventoryCount: { label: 'Số lượng hàng', unit: 'sp', icon: '📦', color: 'text-orange-500', type: MetricType.InventoryCount },
-  };
-
   useEffect(() => {
+    let active = true;
+
     const fetchLatestMetrics = async () => {
-      setLoading(true);
       const newMetrics: Record<string, number> = {};
 
       for (const [key, config] of Object.entries(metricConfig)) {
         try {
           const data = await metricsService.getLatestMetric(selectedWarehouse, config.type);
-          newMetrics[key] = data.metricValue;
+          if (active) {
+            newMetrics[key] = data.metricValue;
+          }
         } catch (err) {
           console.error(`Error fetching ${key}:`, err);
-          newMetrics[key] = 0;
+          if (active) {
+            newMetrics[key] = 0;
+          }
         }
       }
 
-      setMetrics(newMetrics);
-      setLoading(false);
+      if (active) {
+        setMetrics(newMetrics);
+        setLoading(false);
+      }
     };
 
     fetchLatestMetrics();
+
+    return () => {
+      active = false;
+    };
   }, [selectedWarehouse]);
 
   return (
@@ -77,7 +88,10 @@ export function MetricsPage() {
             </div>
             <select
               value={selectedWarehouse}
-              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              onChange={(e) => {
+                setSelectedWarehouse(e.target.value);
+                setLoading(true);
+              }}
               className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="WH001">WH001 - Kho A</option>
