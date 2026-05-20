@@ -5,7 +5,7 @@ dist-ssr/
 build/
 
 # Logs
-logs/
+/logs/
 *.log
 npm-debug.log*
 
