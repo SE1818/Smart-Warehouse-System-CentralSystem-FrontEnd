@@ -1,0 +1,30 @@
+# Frontend dependencies
+node_modules/
+dist/
+dist-ssr/
+build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# IDEs
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.history/
+.DS_Store
+
+# Temporary files
+tmp/
+temp/
