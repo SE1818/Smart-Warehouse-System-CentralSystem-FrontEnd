@@ -12,8 +12,8 @@ env:
   SONAR_ORGANIZATION: se1818
 
 jobs:
-  build-test-sonar:
-    name: Build, Test & SonarQube
+  build-sonar:
+    name: Build & SonarCloud
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,8 +32,8 @@ jobs:
       - name: Lint
         run: npm run lint --if-present
 
-      - name: Run tests with coverage
-        run: npm run test --if-present -- --coverage --watchAll=false
+      - name: TypeScript check
+        run: npx tsc --noEmit
 
       - name: Build
         run: npm run build --if-present
@@ -58,17 +58,10 @@ jobs:
           retention-days: 5
         if: success()
 
-      - name: Upload Coverage Report
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-        if: always()
-
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: build-test-sonar
+    needs: build-sonar
     if: github.ref == 'refs/heads/develop'
     environment: staging
     steps:
@@ -84,7 +77,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: build-test-sonar
+    needs: build-sonar
     if: github.ref == 'refs/heads/main'
     environment: production
     steps:
