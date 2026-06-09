@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as signalR from '@microsoft/signalr';
+import { secureRandom } from '@/utils/crypto';
 
 interface Robot {
   id: string;
@@ -86,8 +87,8 @@ export function InventoryPage() {
             dy = Math.sign(2 - robot.y);
           } else {
             // Random movement
-            dx = Math.floor(Math.random() * 3) - 1;
-            dy = Math.floor(Math.random() * 3) - 1;
+            dx = Math.floor(secureRandom() * 3) - 1;
+            dy = Math.floor(secureRandom() * 3) - 1;
           }
 
           let nextX = Math.max(0, Math.min(gridCols - 1, robot.x + dx));
@@ -109,7 +110,7 @@ export function InventoryPage() {
           }
 
           return { ...robot, x: nextX, y: nextY, battery: Math.max(0, robot.battery - 0.5), status, destination: dest };
-        } else if (robot.status === 'Idle' && Math.random() < 0.05) {
+        } else if (robot.status === 'Idle' && secureRandom() < 0.05) {
           // Randomly trigger wandering
           return { ...robot, status: 'Moving', destination: 'Tuần tra kho' };
         } else if (robot.status === 'Charging') {

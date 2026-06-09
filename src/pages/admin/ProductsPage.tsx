@@ -1,13 +1,6 @@
 import { useState } from 'react';
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  stockQuantity: number;
-  description?: string;
-}
+import type { Product } from '@/types';
+import { DEFAULT_PRODUCTS } from '@/constants';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>(() => {
@@ -19,16 +12,8 @@ export function ProductsPage() {
         return [];
       }
     }
-    const defaultProducts: Product[] = [
-      { id: '1', name: 'Đồ uống Coca Cola', category: 'Đồ uống', price: 15000, stockQuantity: 50, description: 'Coca Cola lon 330ml' },
-      { id: '2', name: 'Nước suối Aquafina', category: 'Đồ uống', price: 10000, stockQuantity: 100, description: 'Chai 500ml' },
-      { id: '3', name: 'Khẩu trang y tế N95', category: 'Vật tư y tế', price: 25000, stockQuantity: 200, description: 'Hộp 10 chiếc' },
-      { id: '4', name: 'Cồn sát khuẩn 70 độ', category: 'Vật tư y tế', price: 35000, stockQuantity: 15, description: 'Chai 500ml cồn y tế' },
-      { id: '5', name: 'Găng tay cao su y tế', category: 'Vật tư y tế', price: 85000, stockQuantity: 0, description: 'Hộp 100 chiếc' },
-      { id: '6', name: 'Băng cá nhân Urgo', category: 'Vật tư y tế', price: 20000, stockQuantity: 150, description: 'Hộp 100 miếng' }
-    ];
-    localStorage.setItem('admin_products', JSON.stringify(defaultProducts));
-    return defaultProducts;
+    localStorage.setItem('admin_products', JSON.stringify(DEFAULT_PRODUCTS));
+    return DEFAULT_PRODUCTS;
   });
   const [search, setSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -65,7 +50,10 @@ export function ProductsPage() {
       category: newProduct.category || 'Đồ uống',
       price: Number(newProduct.price),
       stockQuantity: Number(newProduct.stockQuantity || 0),
-      description: newProduct.description
+      description: newProduct.description,
+      unit: newProduct.category === 'Đồ uống' ? 'lon' : 'cái',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
     const updated = [...products, added];

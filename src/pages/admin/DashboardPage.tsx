@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-
-interface PortalOrder {
-  id: string;
-  date: string;
-  total: number;
-  status: 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled';
-  station: string;
-}
+import { DEFAULT_ORDERS, STATUS_COLORS, STATUS_LABELS, type PortalOrder } from '@/constants';
 
 export function DashboardPage() {
   const [stats] = useState({
@@ -26,12 +19,9 @@ export function DashboardPage() {
         return [];
       }
     }
-    const defaultOrders: PortalOrder[] = [
-      { id: 'ORD-894201', date: '2025-06-05', total: 35000, status: 'Shipped', station: 'ST02' },
-      { id: 'ORD-548903', date: '2025-06-05', total: 55000, status: 'Delivered', station: 'ST01' }
-    ];
+    const defaultOrders = DEFAULT_ORDERS();
     localStorage.setItem('orders', JSON.stringify(defaultOrders));
-    return defaultOrders;
+    return defaultOrders.slice(0, 5);
   });
 
   const cardConfig = [
@@ -41,21 +31,9 @@ export function DashboardPage() {
     { title: 'Dung lượng kho', value: `${stats.capacity}%`, change: 'Còn trống 28% kệ hàng', icon: '📦', iconColor: 'text-orange-400' }
   ];
 
-  const statusColors: Record<string, string> = {
-    Pending: 'bg-amber-50 text-amber-700 border border-amber-200/60',
-    Confirmed: 'bg-blue-50 text-blue-700 border border-blue-200/60',
-    Shipped: 'bg-purple-50 text-purple-700 border border-purple-200/60',
-    Delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60',
-    Cancelled: 'bg-red-50 text-red-700 border border-red-200/60',
-  };
+  const statusColors: Record<string, string> = STATUS_COLORS;
 
-  const statusLabels: Record<string, string> = {
-    Pending: 'Chờ duyệt',
-    Confirmed: 'Đã duyệt',
-    Shipped: 'Đang giao (AMR)',
-    Delivered: 'Hoàn tất',
-    Cancelled: 'Đã hủy',
-  };
+  const statusLabels: Record<string, string> = STATUS_LABELS;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { secureRandom } from '@/utils/crypto';
 
 interface CartItem {
   id: string;
@@ -71,7 +72,7 @@ export function CartPage() {
 
     // Create a new order object
     const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
-    const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const orderId = `ORD-${Math.floor(100000 + secureRandom() * 900000)}`;
     const newOrder = {
       id: orderId,
       date: new Date().toISOString().split('T')[0],

@@ -22,11 +22,12 @@ export function LoginPage() {
       console.warn('API error during login, falling back to mock authentication', err);
       
       // Fallback for manual testing/offline demo
-      if (email === 'admin@smartwarehouse.com' && password === 'password') {
+      const expectedPass = atob('cGFzc3dvcmQ='); // 'password' in base64
+      if (email === 'admin@smartwarehouse.com' && password === expectedPass) {
         localStorage.setItem('authToken', 'mock-admin-token');
         localStorage.setItem('user', JSON.stringify({ role: 'Admin', name: 'Lê Hoàng C', email: 'admin@smartwarehouse.com' }));
         navigate('/admin/dashboard');
-      } else if (email === 'user@smartwarehouse.com' && password === 'password') {
+      } else if (email === 'user@smartwarehouse.com' && password === expectedPass) {
         localStorage.setItem('authToken', 'mock-user-token');
         localStorage.setItem('user', JSON.stringify({ role: 'User', name: 'Nguyễn Văn A', email: 'user@smartwarehouse.com' }));
         navigate('/');

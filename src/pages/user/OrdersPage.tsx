@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { DEFAULT_ORDERS, STATUS_COLORS, STATUS_LABELS } from '@/constants';
 
 interface OrderItem {
   name: string;
@@ -26,29 +27,7 @@ export function OrdersPage() {
         return [];
       }
     }
-    const defaultOrders: Order[] = [
-      {
-        id: 'ORD-548903',
-        date: new Date().toISOString().split('T')[0],
-        total: 55000,
-        status: 'Delivered',
-        station: 'ST01',
-        items: [
-          { name: 'Đồ uống Coca Cola', quantity: 2, price: 15000 },
-          { name: 'Khẩu trang y tế N95', quantity: 1, price: 25000 }
-        ]
-      },
-      {
-        id: 'ORD-894201',
-        date: '2025-06-05',
-        total: 35000,
-        status: 'Shipped',
-        station: 'ST02',
-        items: [
-          { name: 'Cồn sát khuẩn 70 độ', quantity: 1, price: 35000 }
-        ]
-      }
-    ];
+    const defaultOrders = DEFAULT_ORDERS();
     localStorage.setItem('orders', JSON.stringify(defaultOrders));
     return defaultOrders;
   });
@@ -87,21 +66,9 @@ export function OrdersPage() {
     }, 0);
   }, [location]);
 
-  const statusColors = {
-    Pending: 'bg-amber-50 text-amber-700 border border-amber-200',
-    Confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
-    Shipped: 'bg-purple-50 text-purple-700 border border-purple-200',
-    Delivered: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    Cancelled: 'bg-red-50 text-red-700 border border-red-200',
-  };
+  const statusColors = STATUS_COLORS;
 
-  const statusLabels = {
-    Pending: 'Chờ xác nhận',
-    Confirmed: 'Đã xác nhận',
-    Shipped: 'Đang vận chuyển (AMR)',
-    Delivered: 'Đã giao hàng',
-    Cancelled: 'Đã hủy đơn',
-  };
+  const statusLabels = STATUS_LABELS;
 
   const cancelOrder = (orderId: string) => {
     const updated = orders.map((o) => {
