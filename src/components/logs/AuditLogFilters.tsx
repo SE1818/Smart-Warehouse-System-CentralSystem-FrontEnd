@@ -50,11 +50,11 @@ export function AuditLogFilters({ onFilterChange }: AuditLogFiltersProps) {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Search */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest">
             Tìm kiếm
           </label>
           <input
@@ -62,19 +62,19 @@ export function AuditLogFilters({ onFilterChange }: AuditLogFiltersProps) {
             placeholder="Tìm theo tin nhắn, thực thể..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-700 placeholder-slate-400 transition-all font-medium"
           />
         </div>
 
         {/* Activity Type */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Hoạt động
           </label>
           <select
             value={activityType}
             onChange={(e) => setActivityType(e.target.value as ActivityType | '')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-700 transition-all font-medium"
           >
             <option value="">Tất cả</option>
             {Object.values(ActivityType).map((type) => (
@@ -86,14 +86,14 @@ export function AuditLogFilters({ onFilterChange }: AuditLogFiltersProps) {
         </div>
 
         {/* Severity */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Mức độ
           </label>
           <select
             value={severity}
             onChange={(e) => setSeverity(e.target.value as LogSeverity | '')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-700 transition-all font-medium"
           >
             <option value="">Tất cả</option>
             {Object.values(LogSeverity).map((level) => (
@@ -105,42 +105,42 @@ export function AuditLogFilters({ onFilterChange }: AuditLogFiltersProps) {
         </div>
 
         {/* Start Date */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Từ ngày
           </label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-700 transition-all font-medium"
           />
         </div>
 
         {/* End Date */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+        <div className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-widest">
             Đến ngày
           </label>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-700 transition-all font-medium"
           />
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end gap-3">
+      <div className="flex justify-end gap-3 pt-2">
         <button
           onClick={handleReset}
-          className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="px-4 py-2 border border-slate-250 hover:bg-slate-100 text-slate-650 rounded-xl text-xs font-bold transition-all active:scale-98"
         >
           Đặt lại
         </button>
         <button
           onClick={handleApply}
-          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="px-4 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all"
         >
           Áp dụng bộ lọc
         </button>

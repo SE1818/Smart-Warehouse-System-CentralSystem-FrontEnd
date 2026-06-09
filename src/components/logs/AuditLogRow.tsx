@@ -12,13 +12,13 @@ export function AuditLogRow({ log, onClick }: AuditLogRowProps) {
       case 'Info':
         return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'Warning':
-        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+        return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'Error':
         return 'bg-red-50 text-red-700 border-red-200';
       case 'Critical':
         return 'bg-purple-50 text-purple-700 border-purple-200';
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
+        return 'bg-slate-50 text-slate-500 border-slate-200';
     }
   };
 
@@ -41,38 +41,38 @@ export function AuditLogRow({ log, onClick }: AuditLogRowProps) {
   return (
     <tr
       onClick={() => onClick(log)}
-      className="hover:bg-gray-50 cursor-pointer transition-colors"
+      className="hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-100"
     >
-      <td className="px-4 py-3 whitespace-nowrap text-sm">
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getSeverityBadgeClass(log.severity)}`}>
+      <td className="p-4 whitespace-nowrap">
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getSeverityBadgeClass(log.severity)}`}>
           {log.severity}
         </span>
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-700">
+      <td className="p-4 whitespace-nowrap font-bold text-slate-800">
         {log.activityType}
       </td>
-      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
+      <td className="p-4 text-slate-650 max-w-xs truncate font-medium" title={log.message}>
         {log.message || 'N/A'}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+      <td className="p-4 whitespace-nowrap text-slate-500 font-medium">
         {log.userName || log.userId || 'Hệ thống'}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+      <td className="p-4 whitespace-nowrap text-slate-500">
         {log.entityType ? (
           <div>
-            <span className="font-medium text-gray-800">{log.entityType}</span>
+            <span className="font-bold text-slate-700">{log.entityType}</span>
             {log.entityId && (
-              <span className="block text-xs text-gray-400">ID: {log.entityId}</span>
+              <span className="block text-[10px] text-slate-400 font-mono">ID: {log.entityId}</span>
             )}
           </div>
         ) : (
           'N/A'
         )}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+      <td className="p-4 whitespace-nowrap text-slate-500 text-xs font-medium">
         {formatDateTime(log.createdAt)}
       </td>
-      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">
+      <td className="p-4 whitespace-nowrap text-slate-400 font-mono text-xs">
         {log.ipAddress || 'N/A'}
       </td>
     </tr>

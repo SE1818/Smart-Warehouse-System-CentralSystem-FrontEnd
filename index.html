@@ -1,13 +1,63 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi" class="h-full bg-slate-50">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="https://api.dicebear.com/7.x/bottts/svg?seed=CentralSystem" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>smartwarehouse-frontend</title>
+    <title>Smart Warehouse - Hệ thống giám sát trung tâm</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              heading: ['Outfit', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                50: '#f5f7fa',
+                100: '#e4ebf2',
+                200: '#cddce9',
+                300: '#a7c2da',
+                400: '#7ba1c8',
+                500: '#5881b2',
+                600: '#436695',
+                700: '#365179',
+                800: '#304565',
+                900: '#2c3b54',
+                950: '#1e2637',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
   </head>
-  <body>
-    <div id="root"></div>
+  <body class="h-full antialiased text-slate-800 bg-slate-50">
+    <div id="root" class="min-h-full flex flex-col"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

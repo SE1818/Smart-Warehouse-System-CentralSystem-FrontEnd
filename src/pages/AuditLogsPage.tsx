@@ -7,7 +7,7 @@ import {
 } from '@/components/logs';
 import type { AuditLog } from '@/types';
 
-// Default to last 7 days - moved outside to keep render functions pure
+// Default to last 7 days
 const getDefaultFilters = () => {
   const now = Date.now();
   return {
@@ -65,117 +65,90 @@ export function AuditLogsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">Nhật ký hệ thống</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Theo dõi và quản lý các hoạt động trong hệ thống
-          </p>
-        </div>
+      <div className="border-b border-slate-200 pb-6">
+        <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+          <span>📋</span> Nhật ký hoạt động hệ thống
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Tra cứu, lọc và giám sát lịch sử hoạt động bảo mật của SmartWarehouse
+        </p>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filters */}
-        <div className="mb-6">
-          <AuditLogFilters onFilterChange={handleFilterChange} />
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {error}
-          </div>
-        )}
-
-        {/* Loading State */}
-        {loading ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
-          </div>
-        ) : (
-          <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="text-sm font-medium text-gray-500">Tổng số log</div>
-                <div className="mt-2 text-2xl font-bold text-gray-900">{logs.length}</div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="text-sm font-medium text-gray-500">Lỗi</div>
-                <div className="mt-2 text-2xl font-bold text-red-600">
-                  {logs.filter((l) => l.severity === 'Error').length}
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="text-sm font-medium text-gray-500">Cảnh báo</div>
-                <div className="mt-2 text-2xl font-bold text-yellow-600">
-                  {logs.filter((l) => l.severity === 'Warning').length}
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <div className="text-sm font-medium text-gray-500">Critical</div>
-                <div className="mt-2 text-2xl font-bold text-purple-600">
-                  {logs.filter((l) => l.severity === 'Critical').length}
-                </div>
-              </div>
-            </div>
-
-            {/* Log Table */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              {logs.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  Không có dữ liệu log cho bộ lọc đã chọn
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Mức độ
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Hoạt động
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Thông điệp
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Người dùng
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Thực thể
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Thời gian
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          IP
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {logs.map((log) => (
-                        <AuditLogRow
-                          key={log.id}
-                          log={log}
-                          onClick={handleLogClick}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </>
-        )}
+      {/* Filters */}
+      <div>
+        <AuditLogFilters onFilterChange={handleFilterChange} />
       </div>
 
-      {/* Detail Modal */}
+      {/* Error block */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold leading-relaxed">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+          <p className="text-slate-500 text-xs font-medium">Đang truy xuất thông tin nhật ký...</p>
+        </div>
+      ) : (
+        <>
+          {/* Statistics counter rows */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[
+              { label: 'Tổng số log', count: logs.length, color: 'border-blue-200 text-blue-700 bg-blue-50/50' },
+              { label: 'Lỗi phát sinh', count: logs.filter((l) => l.severity === 'Error').length, color: 'border-red-200 text-red-700 bg-red-50/50' },
+              { label: 'Cảnh báo', count: logs.filter((l) => l.severity === 'Warning').length, color: 'border-amber-200 text-amber-700 bg-amber-50/50' },
+              { label: 'Critical', count: logs.filter((l) => l.severity === 'Critical').length, color: 'border-purple-200 text-purple-700 bg-purple-50/50' }
+            ].map((stat, idx) => (
+              <div key={idx} className={`bg-white p-5 rounded-2xl border ${stat.color} shadow-sm`}>
+                <div className="text-[11px] font-bold text-slate-450 uppercase tracking-wider">{stat.label}</div>
+                <div className="mt-2 text-3xl font-heading font-black text-slate-800">{stat.count}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Log list table */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+            {logs.length === 0 ? (
+              <div className="p-16 text-center text-slate-400 space-y-2">
+                <span className="text-4xl block">🔍</span>
+                <p className="font-semibold text-sm">Không có dữ liệu log cho bộ lọc đã chọn</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                      <th className="p-4">Mức độ</th>
+                      <th className="p-4">Hoạt động</th>
+                      <th className="p-4">Thông điệp</th>
+                      <th className="p-4">Người dùng</th>
+                      <th className="p-4">Thực thể</th>
+                      <th className="p-4">Thời gian</th>
+                      <th className="p-4">IP</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                    {logs.map((log) => (
+                      <AuditLogRow
+                        key={log.id}
+                        log={log}
+                        onClick={handleLogClick}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Detail overlay Modal */}
       <AuditLogDetailModal
         log={selectedLog}
         isOpen={isDetailModalOpen}
