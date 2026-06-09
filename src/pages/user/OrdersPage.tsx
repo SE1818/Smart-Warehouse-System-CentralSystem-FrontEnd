@@ -17,22 +17,44 @@ interface Order {
 }
 
 export function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const ordersStr = localStorage.getItem('orders');
+    if (ordersStr) {
+      try {
+        return JSON.parse(ordersStr);
+      } catch {
+        return [];
+      }
+    }
+    const defaultOrders: Order[] = [
+      {
+        id: 'ORD-548903',
+        date: new Date().toISOString().split('T')[0],
+        total: 55000,
+        status: 'Delivered',
+        station: 'ST01',
+        items: [
+          { name: 'Đồ uống Coca Cola', quantity: 2, price: 15000 },
+          { name: 'Khẩu trang y tế N95', quantity: 1, price: 25000 }
+        ]
+      },
+      {
+        id: 'ORD-894201',
+        date: '2025-06-05',
+        total: 35000,
+        status: 'Shipped',
+        station: 'ST02',
+        items: [
+          { name: 'Cồn sát khuẩn 70 độ', quantity: 1, price: 35000 }
+        ]
+      }
+    ];
+    localStorage.setItem('orders', JSON.stringify(defaultOrders));
+    return defaultOrders;
+  });
+  const [loading] = useState(false);
   const location = useLocation();
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Check if redirect has success state message
-    if (location.state && (location.state as any).successMessage) {
-      setBannerMessage((location.state as any).successMessage);
-      // Clear history state to avoid banner repeating on refresh
-      window.history.replaceState({}, document.title);
-      setTimeout(() => setBannerMessage(null), 5000);
-    }
-
-    loadOrders();
-  }, [location]);
 
   const loadOrders = () => {
     const ordersStr = localStorage.getItem('orders');
@@ -43,35 +65,27 @@ export function OrdersPage() {
         setOrders([]);
       }
     } else {
-      // Seed default orders if empty
-      const defaultOrders: Order[] = [
-        {
-          id: 'ORD-548903',
-          date: new Date().toISOString().split('T')[0],
-          total: 55000,
-          status: 'Delivered',
-          station: 'ST01',
-          items: [
-            { name: 'Đồ uống Coca Cola', quantity: 2, price: 15000 },
-            { name: 'Khẩu trang y tế N95', quantity: 1, price: 25000 }
-          ]
-        },
-        {
-          id: 'ORD-894201',
-          date: '2025-06-05',
-          total: 35000,
-          status: 'Shipped',
-          station: 'ST02',
-          items: [
-            { name: 'Cồn sát khuẩn 70 độ', quantity: 1, price: 35000 }
-          ]
-        }
-      ];
-      localStorage.setItem('orders', JSON.stringify(defaultOrders));
-      setOrders(defaultOrders);
+      setOrders([]);
     }
-    setLoading(false);
   };
+
+  useEffect(() => {
+    // Check if redirect has success state message
+    if (location.state) {
+      const stateObj = location.state as { successMessage?: string };
+      if (stateObj.successMessage) {
+        setTimeout(() => {
+          setBannerMessage(stateObj.successMessage || null);
+          window.history.replaceState({}, document.title);
+          setTimeout(() => setBannerMessage(null), 5000);
+        }, 0);
+      }
+    }
+
+    setTimeout(() => {
+      loadOrders();
+    }, 0);
+  }, [location]);
 
   const statusColors = {
     Pending: 'bg-amber-50 text-amber-700 border border-amber-200',

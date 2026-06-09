@@ -2,6 +2,15 @@ import { useState, useEffect } from 'react';
 import apiClient from '@/services/api';
 import type { Product } from '@/types';
 
+interface LocalCartItem {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  quantity: number;
+  maxStock: number;
+}
+
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -10,7 +19,6 @@ export function ProductsPage() {
   const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
     apiClient.get('/products')
       .then((res) => {
         setProducts(res.data);
@@ -35,9 +43,9 @@ export function ProductsPage() {
     if (product.stockQuantity <= 0) return;
     
     const cartStr = localStorage.getItem('cart');
-    let cart = cartStr ? JSON.parse(cartStr) : [];
+    const cart: LocalCartItem[] = cartStr ? JSON.parse(cartStr) : [];
     
-    const existing = cart.find((item: any) => item.id === product.id);
+    const existing = cart.find((item) => item.id === product.id);
     if (existing) {
       existing.quantity += 1;
     } else {

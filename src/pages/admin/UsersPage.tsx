@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface User {
   id: string;
@@ -9,29 +9,26 @@ interface User {
 }
 
 export function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [search, setSearch] = useState('');
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-
-  useEffect(() => {
+  const [users, setUsers] = useState<User[]>(() => {
     const cachedUsers = localStorage.getItem('admin_users');
     if (cachedUsers) {
       try {
-        setUsers(JSON.parse(cachedUsers));
+        return JSON.parse(cachedUsers);
       } catch {
-        setUsers([]);
+        return [];
       }
-    } else {
-      const defaultUsers: User[] = [
-        { id: 'USR-01', name: 'Nguyễn Văn A', email: 'nguyenvana@email.com', role: 'User', status: 'Active' },
-        { id: 'USR-02', name: 'Trần Thị B', email: 'tranthib@email.com', role: 'Operator', status: 'Active' },
-        { id: 'USR-03', name: 'Lê Hoàng C', email: 'lehoangc@email.com', role: 'Admin', status: 'Active' },
-        { id: 'USR-04', name: 'Phạm Minh D', email: 'phammedd@email.com', role: 'User', status: 'Suspended' }
-      ];
-      localStorage.setItem('admin_users', JSON.stringify(defaultUsers));
-      setUsers(defaultUsers);
     }
-  }, []);
+    const defaultUsers: User[] = [
+      { id: 'USR-01', name: 'Nguyễn Văn A', email: 'nguyenvana@email.com', role: 'User', status: 'Active' },
+      { id: 'USR-02', name: 'Trần Thị B', email: 'tranthib@email.com', role: 'Operator', status: 'Active' },
+      { id: 'USR-03', name: 'Lê Hoàng C', email: 'lehoangc@email.com', role: 'Admin', status: 'Active' },
+      { id: 'USR-04', name: 'Phạm Minh D', email: 'phammedd@email.com', role: 'User', status: 'Suspended' }
+    ];
+    localStorage.setItem('admin_users', JSON.stringify(defaultUsers));
+    return defaultUsers;
+  });
+  const [search, setSearch] = useState('');
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const saveUsers = (updated: User[]) => {
     setUsers(updated);
@@ -41,7 +38,7 @@ export function UsersPage() {
   const toggleStatus = (id: string) => {
     const updated = users.map((u) => {
       if (u.id === id) {
-        return { ...u, status: (u.status === 'Active' ? 'Suspended' : 'Active') as any };
+        return { ...u, status: (u.status === 'Active' ? 'Suspended' : 'Active') as User['status'] };
       }
       return u;
     });
@@ -184,7 +181,7 @@ export function UsersPage() {
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phân vai trò</label>
                 <select
                   value={editingUser.role}
-                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}
+                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as User['role'] })}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
                 >
                   <option value="User">User (Nhân viên)</option>

@@ -5,7 +5,18 @@ export function UserLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
+  const [cartCount, setCartCount] = useState<number>(() => {
+    const cartStr = localStorage.getItem('cart');
+    if (cartStr) {
+      try {
+        const cart = JSON.parse(cartStr);
+        return cart.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0);
+      } catch {
+        return 0;
+      }
+    }
+    return 0;
+  });
 
   // Retrieve user info
   const userStr = localStorage.getItem('user');
@@ -16,7 +27,7 @@ export function UserLayout() {
     if (cartStr) {
       try {
         const cart = JSON.parse(cartStr);
-        const count = cart.reduce((sum: number, item: any) => sum + item.quantity, 0);
+        const count = cart.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0);
         setCartCount(count);
       } catch {
         setCartCount(0);
@@ -27,7 +38,6 @@ export function UserLayout() {
   };
 
   useEffect(() => {
-    updateCartCount();
     window.addEventListener('cart-updated', updateCartCount);
     return () => {
       window.removeEventListener('cart-updated', updateCartCount);

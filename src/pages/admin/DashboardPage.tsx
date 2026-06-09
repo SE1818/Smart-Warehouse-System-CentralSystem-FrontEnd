@@ -1,5 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+
+interface PortalOrder {
+  id: string;
+  date: string;
+  total: number;
+  status: 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled';
+  station: string;
+}
 
 export function DashboardPage() {
   const [stats] = useState({
@@ -9,26 +17,22 @@ export function DashboardPage() {
     capacity: 72, // 72%
   });
 
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Load orders from localStorage
+  const [recentOrders] = useState<PortalOrder[]>(() => {
     const ordersStr = localStorage.getItem('orders');
     if (ordersStr) {
       try {
-        setRecentOrders(JSON.parse(ordersStr).slice(0, 5));
+        return JSON.parse(ordersStr).slice(0, 5);
       } catch {
-        setRecentOrders([]);
+        return [];
       }
-    } else {
-      const defaultOrders = [
-        { id: 'ORD-894201', date: '2025-06-05', total: 35000, status: 'Shipped', station: 'ST02' },
-        { id: 'ORD-548903', date: '2025-06-05', total: 55000, status: 'Delivered', station: 'ST01' }
-      ];
-      localStorage.setItem('orders', JSON.stringify(defaultOrders));
-      setRecentOrders(defaultOrders);
     }
-  }, []);
+    const defaultOrders: PortalOrder[] = [
+      { id: 'ORD-894201', date: '2025-06-05', total: 35000, status: 'Shipped', station: 'ST02' },
+      { id: 'ORD-548903', date: '2025-06-05', total: 55000, status: 'Delivered', station: 'ST01' }
+    ];
+    localStorage.setItem('orders', JSON.stringify(defaultOrders));
+    return defaultOrders;
+  });
 
   const cardConfig = [
     { title: 'Doanh thu tháng', value: `${stats.totalSales.toLocaleString()}đ`, change: '+12.5% so với tháng trước', icon: '💰', iconColor: 'text-blue-400' },

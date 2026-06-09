@@ -11,19 +11,20 @@ interface CartItem {
 }
 
 export function CartPage() {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [items, setItems] = useState<CartItem[]>(() => {
+    const cartStr = localStorage.getItem('cart');
+    if (cartStr) {
+      try {
+        return JSON.parse(cartStr);
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
   const [stationId, setStationId] = useState('ST01');
-  const [loading, setLoading] = useState(true);
+  const [loading] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    loadCart();
-    
-    // Add event listener for updates from other tabs/components
-    const handleUpdate = () => loadCart();
-    window.addEventListener('cart-updated', handleUpdate);
-    return () => window.removeEventListener('cart-updated', handleUpdate);
-  }, []);
 
   const loadCart = () => {
     const cartStr = localStorage.getItem('cart');
@@ -36,8 +37,14 @@ export function CartPage() {
     } else {
       setItems([]);
     }
-    setLoading(false);
   };
+
+  useEffect(() => {
+    // Add event listener for updates from other tabs/components
+    const handleUpdate = () => loadCart();
+    window.addEventListener('cart-updated', handleUpdate);
+    return () => window.removeEventListener('cart-updated', handleUpdate);
+  }, []);
 
   const updateQuantity = (id: string, delta: number) => {
     const updated = items.map((item) => {

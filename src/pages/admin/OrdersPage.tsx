@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface OrderItem {
   name: string;
@@ -16,50 +16,43 @@ interface Order {
 }
 
 export function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  const loadOrders = () => {
+  const [orders, setOrders] = useState<Order[]>(() => {
     const ordersStr = localStorage.getItem('orders');
     if (ordersStr) {
       try {
-        setOrders(JSON.parse(ordersStr));
+        return JSON.parse(ordersStr);
       } catch {
-        setOrders([]);
+        return [];
       }
-    } else {
-      const defaultOrders: Order[] = [
-        {
-          id: 'ORD-548903',
-          date: '2025-06-05',
-          total: 55000,
-          status: 'Delivered',
-          station: 'ST01',
-          items: [
-            { name: 'Đồ uống Coca Cola', quantity: 2, price: 15000 },
-            { name: 'Khẩu trang y tế N95', quantity: 1, price: 25000 }
-          ]
-        },
-        {
-          id: 'ORD-894201',
-          date: '2025-06-05',
-          total: 35000,
-          status: 'Shipped',
-          station: 'ST02',
-          items: [
-            { name: 'Cồn sát khuẩn 70 độ', quantity: 1, price: 35000 }
-          ]
-        }
-      ];
-      localStorage.setItem('orders', JSON.stringify(defaultOrders));
-      setOrders(defaultOrders);
     }
-  };
+    const defaultOrders: Order[] = [
+      {
+        id: 'ORD-548903',
+        date: '2025-06-05',
+        total: 55000,
+        status: 'Delivered',
+        station: 'ST01',
+        items: [
+          { name: 'Đồ uống Coca Cola', quantity: 2, price: 15000 },
+          { name: 'Khẩu trang y tế N95', quantity: 1, price: 25000 }
+        ]
+      },
+      {
+        id: 'ORD-894201',
+        date: '2025-06-05',
+        total: 35000,
+        status: 'Shipped',
+        station: 'ST02',
+        items: [
+          { name: 'Cồn sát khuẩn 70 độ', quantity: 1, price: 35000 }
+        ]
+      }
+    ];
+    localStorage.setItem('orders', JSON.stringify(defaultOrders));
+    return defaultOrders;
+  });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const updateOrderStatus = (orderId: string, nextStatus: Order['status']) => {
     const updated = orders.map((o) => {

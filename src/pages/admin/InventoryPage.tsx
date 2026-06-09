@@ -11,6 +11,31 @@ interface Robot {
   destination?: string;
 }
 
+// Grid sizes (10x10 grid)
+const gridRows = 10;
+const gridCols = 10;
+
+// Shelves locations (obstacles)
+const shelves = [
+  { x: 2, y: 1 }, { x: 2, y: 2 },
+  { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 4 }, { x: 5, y: 5 },
+  { x: 7, y: 7 }, { x: 7, y: 8 }, { x: 8, y: 7 }, { x: 8, y: 8 }
+];
+
+// Delivery stations positions
+const deliveryStations = [
+  { id: 'ST01', name: 'Trạm A', x: 0, y: 2 },
+  { id: 'ST02', name: 'Trạm B', x: 9, y: 2 },
+  { id: 'ST03', name: 'Trạm C', x: 0, y: 6 },
+  { id: 'ST04', name: 'Trạm D', x: 9, y: 6 },
+  { id: 'ST05', name: 'Trạm E', x: 5, y: 0 }
+];
+
+// Charging docks
+const chargingDocks = [
+  { x: 0, y: 9 }, { x: 1, y: 9 }
+];
+
 export function InventoryPage() {
   const [robots, setRobots] = useState<Robot[]>([
     { id: 'AMR-01', name: 'AMR-01 (Mantis)', x: 2, y: 3, battery: 84, status: 'Moving', destination: 'Trạm A' },
@@ -19,31 +44,6 @@ export function InventoryPage() {
   ]);
   const [selectedRobot, setSelectedRobot] = useState<string | null>(null);
   const [signalRConnected, setSignalRConnected] = useState(false);
-
-  // Grid sizes (10x10 grid)
-  const gridRows = 10;
-  const gridCols = 10;
-
-  // Shelves locations (obstacles)
-  const shelves = [
-    { x: 2, y: 1 }, { x: 2, y: 2 },
-    { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 4 }, { x: 5, y: 5 },
-    { x: 7, y: 7 }, { x: 7, y: 8 }, { x: 8, y: 7 }, { x: 8, y: 8 }
-  ];
-
-  // Delivery stations positions
-  const deliveryStations = [
-    { id: 'ST01', name: 'Trạm A', x: 0, y: 2 },
-    { id: 'ST02', name: 'Trạm B', x: 9, y: 2 },
-    { id: 'ST03', name: 'Trạm C', x: 0, y: 6 },
-    { id: 'ST04', name: 'Trạm D', x: 9, y: 6 },
-    { id: 'ST05', name: 'Trạm E', x: 5, y: 0 }
-  ];
-
-  // Charging docks
-  const chargingDocks = [
-    { x: 0, y: 9 }, { x: 1, y: 9 }
-  ];
 
   useEffect(() => {
     // Attempt SignalR connection to backend AMR service
@@ -78,8 +78,8 @@ export function InventoryPage() {
       
       setRobots(prev => prev.map(robot => {
         if (robot.status === 'Moving') {
-          // Calculate move towards destination or random wander
-          let dx = 0, dy = 0;
+          let dx: number;
+          let dy: number;
           if (robot.id === 'AMR-01') {
             // Target Trạm A (0,2)
             dx = Math.sign(0 - robot.x);
