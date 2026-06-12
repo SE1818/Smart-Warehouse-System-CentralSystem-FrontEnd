@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { secureRandom } from '@/utils/crypto';
+import { orderService } from '@/services';
 
 interface CartItem {
   id: string;
@@ -24,6 +24,8 @@ export function CartPage() {
     return [];
   });
   const [stationId, setStationId] = useState('ST01');
+  const [paymentMethod, setPaymentMethod] = useState('VNPAY');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [loading] = useState(false);
   const navigate = useNavigate();
 
@@ -67,34 +69,55 @@ export function CartPage() {
     window.dispatchEvent(new Event('cart-updated'));
   };
 
-  const checkout = () => {
+  const checkout = async () => {
     if (items.length === 0) return;
 
-    // Create a new order object
-    const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
-    const orderId = `ORD-${Math.floor(100000 + secureRandom() * 900000)}`;
-    const newOrder = {
-      id: orderId,
-      date: new Date().toISOString().split('T')[0],
-      total: total,
-      status: 'Pending',
-      station: stationId,
-      items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price }))
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      alert("Vui lòng đăng nhập để thực hiện đặt hàng!");
+      navigate('/login');
+      return;
+    }
+
+    const user = JSON.parse(userStr);
+    setCheckoutLoading(true);
+
+    const selectedStation = stations.find(s => s.id === stationId);
+    const shippingAddress = selectedStation ? selectedStation.name : `Trạm ${stationId}`;
+
+    const orderRequest = {
+      userId: user.id,
+      deliveryNodeId: stationId,
+      shippingAddress: shippingAddress,
+      paymentMethod: paymentMethod,
+      items: items.map(item => ({
+        productId: item.id,
+        quantity: item.quantity,
+        price: item.price
+      }))
     };
 
-    // Save order to localStorage
-    const ordersStr = localStorage.getItem('orders');
-    const orders = ordersStr ? JSON.parse(ordersStr) : [];
-    orders.unshift(newOrder); // Add to beginning
-    localStorage.setItem('orders', JSON.stringify(orders));
+    try {
+      const response = await orderService.createOrder(orderRequest);
 
-    // Clear cart
-    localStorage.removeItem('cart');
-    setItems([]);
-    window.dispatchEvent(new Event('cart-updated'));
+      // Clear cart
+      localStorage.removeItem('cart');
+      setItems([]);
+      window.dispatchEvent(new Event('cart-updated'));
 
-    // Navigate to orders list with success message
-    navigate('/orders', { state: { successMessage: `Đặt đơn hàng ${orderId} thành công!` } });
+      if (response.paymentUrl) {
+        // Redirect to VNPAY sandbox / Momo / ZaloPay payment page
+        window.location.href = response.paymentUrl;
+      } else {
+        // Navigate to orders list with success message
+        navigate('/orders', { state: { successMessage: `Đặt đơn hàng ${response.orderId.substring(0, 8)} thành công!` } });
+      }
+    } catch (err: any) {
+      console.error('Error creating order:', err);
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại.');
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -209,6 +232,22 @@ export function CartPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2 pt-2">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Phương thức thanh toán
+                </label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-sm text-slate-700 font-medium"
+                >
+                  <option value="VNPAY">Thanh toán VNPAY (sandbox)</option>
+                  <option value="Wallet">Ví điện tử (Hệ thống)</option>
+                  <option value="Cash">Tiền mặt khi nhận hàng</option>
+                </select>
+              </div>
+              <div className="space-y-2">
                 <p className="text-[10px] text-slate-400 leading-relaxed pt-2 font-medium">
                   * Robot AMR sẽ tự động tìm đường tối ưu trong kho để vận chuyển đơn hàng này đến trạm bạn chọn.
                 </p>
@@ -220,7 +259,7 @@ export function CartPage() {
               <h3 className="font-heading font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <span>💳</span> Chi tiết thanh toán
               </h3>
-              <div className="space-y-2 text-sm text-slate-500 font-medium">
+              <div className="space-y-2 text-sm text-slate-505 font-medium">
                 <div className="flex justify-between">
                   <span>Tạm tính</span>
                   <span className="font-bold text-slate-800">{total.toLocaleString()}đ</span>
@@ -237,9 +276,10 @@ export function CartPage() {
               
               <button
                 onClick={checkout}
-                className="w-full mt-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white py-3 rounded-xl font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all flex items-center justify-center gap-2"
+                disabled={checkoutLoading}
+                className="w-full mt-4 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white py-3 rounded-xl font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>💳</span> Xác nhận & Đặt hàng
+                <span>💳</span> {checkoutLoading ? 'Đang xử lý...' : 'Xác nhận & Đặt hàng'}
               </button>
             </div>
           </div>

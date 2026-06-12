@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { DEFAULT_ORDERS, STATUS_COLORS, STATUS_LABELS } from '@/constants';
+import { DEFAULT_PRODUCTS, STATUS_COLORS, STATUS_LABELS } from '@/constants';
+import { orderService } from '@/services';
 
 interface OrderItem {
   name: string;
@@ -18,33 +19,67 @@ interface Order {
 }
 
 export function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const ordersStr = localStorage.getItem('orders');
-    if (ordersStr) {
-      try {
-        return JSON.parse(ordersStr);
-      } catch {
-        return [];
-      }
-    }
-    const defaultOrders = DEFAULT_ORDERS();
-    localStorage.setItem('orders', JSON.stringify(defaultOrders));
-    return defaultOrders;
-  });
-  const [loading] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const location = useLocation();
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
-  const loadOrders = () => {
-    const ordersStr = localStorage.getItem('orders');
-    if (ordersStr) {
-      try {
-        setOrders(JSON.parse(ordersStr));
-      } catch {
-        setOrders([]);
+  const getProductName = (productId: string) => {
+    const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
+    return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
+  };
+
+  const normalizeStatus = (status: any): 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled' => {
+    if (typeof status === 'number') {
+      switch (status) {
+        case 1: return 'Pending';
+        case 2: return 'Confirmed'; // Paid maps to Confirmed/Active
+        case 3: return 'Cancelled'; // Failed
+        case 4: return 'Cancelled';
+        case 5: return 'Confirmed';
+        default: return 'Pending';
       }
-    } else {
-      setOrders([]);
+    }
+    if (typeof status === 'string') {
+      const s = status.toLowerCase();
+      if (s === 'pending') return 'Pending';
+      if (s === 'paid' || s === 'confirmed') return 'Confirmed';
+      if (s === 'shipped') return 'Shipped';
+      if (s === 'delivered') return 'Delivered';
+      if (s === 'cancelled' || s === 'failed') return 'Cancelled';
+    }
+    return 'Pending';
+  };
+
+  const loadOrders = async () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      setLoading(false);
+      return;
+    }
+    const user = JSON.parse(userStr);
+    setLoading(true);
+    try {
+      const apiOrders = await orderService.getOrdersByUserId(user.id);
+      
+      const mappedOrders: Order[] = apiOrders.map((o: any) => ({
+        id: o.id,
+        date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        total: o.totalAmount,
+        status: normalizeStatus(o.status),
+        station: o.deliveryNodeId || 'Khu vực nhận',
+        items: o.items ? o.items.map((item: any) => ({
+          name: getProductName(item.productId),
+          quantity: item.quantity,
+          price: item.price
+        })) : []
+      }));
+
+      setOrders(mappedOrders);
+    } catch (err) {
+      console.error('Error loading orders:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -61,29 +96,27 @@ export function OrdersPage() {
       }
     }
 
-    setTimeout(() => {
-      loadOrders();
-    }, 0);
+    loadOrders();
   }, [location]);
 
-  const statusColors = STATUS_COLORS;
-
-  const statusLabels = STATUS_LABELS;
-
-  const cancelOrder = (orderId: string) => {
-    const updated = orders.map((o) => {
-      if (o.id === orderId && o.status === 'Pending') {
-        return { ...o, status: 'Cancelled' as const };
-      }
-      return o;
-    });
-    setOrders(updated);
-    localStorage.setItem('orders', JSON.stringify(updated));
+  const cancelOrder = async (orderId: string) => {
+    if (!window.confirm('Bạn có chắc muốn hủy đơn hàng này?')) return;
+    try {
+      await orderService.refundOrder(orderId);
+      alert('Hủy đơn hàng thành công!');
+      loadOrders();
+    } catch (err: any) {
+      console.error('Error cancelling order:', err);
+      alert(err.response?.data?.message || 'Có lỗi xảy ra khi hủy đơn hàng.');
+    }
   };
+
+  const statusColors = STATUS_COLORS;
+  const statusLabels = STATUS_LABELS;
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-slate-500">Đang tải lịch sử đơn hàng...</div>
+      <div className="p-8 text-center text-slate-500 font-semibold">Đang tải lịch sử đơn hàng...</div>
     );
   }
 
@@ -118,7 +151,7 @@ export function OrdersPage() {
               <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-heading font-extrabold text-slate-900 text-base">{o.id}</span>
+                    <span className="font-heading font-extrabold text-slate-900 text-sm">{o.id}</span>
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusColors[o.status]}`}>
                       {statusLabels[o.status]}
                     </span>

@@ -16,12 +16,12 @@ export interface PortalOrder {
 }
 
 export const DEFAULT_PRODUCTS: Product[] = [
-  { id: '1', name: 'Đồ uống Coca Cola', category: 'Đồ uống', price: 15000, stockQuantity: 50, description: 'Coca Cola lon 330ml', unit: 'lon', createdAt: '', updatedAt: '' },
-  { id: '2', name: 'Nước suối Aquafina', category: 'Đồ uống', price: 10000, stockQuantity: 100, description: 'Chai 500ml', unit: 'chai', createdAt: '', updatedAt: '' },
-  { id: '3', name: 'Khẩu trang y tế N95', category: 'Vật tư y tế', price: 25000, stockQuantity: 200, description: 'Hộp 10 chiếc', unit: 'hộp', createdAt: '', updatedAt: '' },
-  { id: '4', name: 'Cồn sát khuẩn 70 độ', category: 'Vật tư y tế', price: 35000, stockQuantity: 15, description: 'Chai 500ml cồn y tế', unit: 'chai', createdAt: '', updatedAt: '' },
-  { id: '5', name: 'Găng tay cao su y tế', category: 'Vật tư y tế', price: 85000, stockQuantity: 0, description: 'Hộp 100 chiếc', unit: 'hộp', createdAt: '', updatedAt: '' },
-  { id: '6', name: 'Băng cá nhân Urgo', category: 'Vật tư y tế', price: 20000, stockQuantity: 150, description: 'Hộp 100 miếng', unit: 'hộp', createdAt: '', updatedAt: '' }
+  { id: 'd3b07384-d113-4956-be7e-6813a8a65600', name: 'Đồ uống Coca Cola', category: 'Đồ uống', price: 15000, stockQuantity: 50, description: 'Coca Cola lon 330ml', unit: 'lon', createdAt: '', updatedAt: '' },
+  { id: 'd3b07384-d113-4956-be7e-6813a8a65601', name: 'Nước suối Aquafina', category: 'Đồ uống', price: 10000, stockQuantity: 100, description: 'Chai 500ml', unit: 'chai', createdAt: '', updatedAt: '' },
+  { id: 'd3b07384-d113-4956-be7e-6813a8a65602', name: 'Khẩu trang y tế N95', category: 'Vật tư y tế', price: 25000, stockQuantity: 200, description: 'Hộp 10 chiếc', unit: 'hộp', createdAt: '', updatedAt: '' },
+  { id: 'd3b07384-d113-4956-be7e-6813a8a65603', name: 'Cồn sát khuẩn 70 độ', category: 'Vật tư y tế', price: 35000, stockQuantity: 15, description: 'Chai 500ml cồn y tế', unit: 'chai', createdAt: '', updatedAt: '' },
+  { id: 'd3b07384-d113-4956-be7e-6813a8a65604', name: 'Găng tay cao su y tế', category: 'Vật tư y tế', price: 85000, stockQuantity: 0, description: 'Hộp 100 chiếc', unit: 'hộp', createdAt: '', updatedAt: '' },
+  { id: 'd3b07384-d113-4956-be7e-6813a8a65605', name: 'Băng cá nhân Urgo', category: 'Vật tư y tế', price: 20000, stockQuantity: 150, description: 'Hộp 100 miếng', unit: 'hộp', createdAt: '', updatedAt: '' }
 ];
 
 export const DEFAULT_ORDERS = (): PortalOrder[] => [
