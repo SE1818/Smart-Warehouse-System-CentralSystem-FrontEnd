@@ -23,7 +23,9 @@ export function RegisterPage() {
       const res = await authService.register({ username, email, password });
       localStorage.setItem('authToken', res.accessToken);
       localStorage.setItem('user', JSON.stringify({ role: res.role, name: username, email: email }));
-      navigate(res.role === 'Warehouse_Admin' || res.role === 'Admin' ? '/admin/dashboard' : '/');
+      // Supabase roles: 'warehouse_manager' = Warehouse Admin, 'Customer' = regular user
+      const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin';
+      navigate(isAdmin ? '/admin/dashboard' : '/');
     } catch {
       setError('Đăng ký thất bại. Vui lòng thử lại.');
     } finally {

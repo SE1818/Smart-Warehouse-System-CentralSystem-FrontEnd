@@ -1,48 +1,157 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { DEFAULT_ORDERS, STATUS_COLORS, STATUS_LABELS, type PortalOrder } from '@/constants';
+import * as signalR from '@microsoft/signalr';
+import { orderService, metricsService, productService, userService } from '@/services';
+import { MetricType } from '@/types';
+import { STATUS_COLORS, STATUS_LABELS, DEFAULT_PRODUCTS } from '@/constants';
+
+interface Robot {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  battery: number;
+  status: 'Idle' | 'Moving' | 'Error' | 'Charging';
+}
+
+interface DashboardOrder {
+  id: string;
+  date: string;
+  total: number;
+  status: 'Pending' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled';
+  station: string;
+  items: Array<{ name: string; quantity: number; price: number }>;
+}
 
 export function DashboardPage() {
-  const [stats] = useState({
-    totalSales: 15420000,
-    totalOrders: 148,
-    activeRobots: 3,
-    capacity: 72, // 72%
-  });
+  const [robots, setRobots] = useState<Robot[]>([
+    { id: 'AMR-01', name: 'AMR-01 (Mantis)', x: 2, y: 3, battery: 84, status: 'Moving' },
+    { id: 'AMR-02', name: 'AMR-02 (Scarab)', x: 7, y: 1, battery: 95, status: 'Idle' },
+    { id: 'AMR-03', name: 'AMR-03 (Hornet)', x: 0, y: 9, battery: 18, status: 'Charging' }
+  ]);
+  const [signalRConnected, setSignalRConnected] = useState(false);
 
-  const [recentOrders] = useState<PortalOrder[]>(() => {
-    const ordersStr = localStorage.getItem('orders');
-    if (ordersStr) {
+  const [loading, setLoading] = useState(true);
+  const [productsCount, setProductsCount] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState<DashboardOrder[]>([]);
+  const [totalStock, setTotalStock] = useState(0);
+  const [usersCount, setUsersCount] = useState(0);
+
+  const getProductName = (productId: string) => {
+    const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
+    return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
+  };
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Fetch products
+      const prods = await productService.getProducts().catch(() => []);
+      setProductsCount(prods.length);
+      const stockSum = prods.reduce((sum: number, p) => sum + (p.stockQuantity || 0), 0);
+      
+      // Fetch pending orders
+      const apiOrders = await orderService.getPendingOrders().catch(() => []);
+      const mapped: DashboardOrder[] = apiOrders.map((o: any) => ({
+        id: o.id,
+        date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        total: o.totalAmount,
+        status: 'Pending' as const,
+        station: o.deliveryNodeId || 'Khu vực nhận',
+        items: o.items ? o.items.map((item: any) => ({
+          name: getProductName(item.productId),
+          quantity: item.quantity,
+          price: item.price
+        })) : []
+      }));
+      setPendingOrders(mapped.slice(0, 5));
+
+      // Fetch users
+      const usersList = await userService.getAllUsers().catch(() => []);
+      setUsersCount(usersList.length);
+
+      // Fetch InventoryCount metric from service
       try {
-        return JSON.parse(ordersStr).slice(0, 5);
+        const metric = await metricsService.getLatestMetric('WH001', MetricType.InventoryCount);
+        setTotalStock(metric.metricValue);
       } catch {
-        return [];
+        setTotalStock(stockSum || 489);
       }
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+    } finally {
+      setLoading(false);
     }
-    const defaultOrders = DEFAULT_ORDERS();
-    localStorage.setItem('orders', JSON.stringify(defaultOrders));
-    return defaultOrders.slice(0, 5);
-  });
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+
+    // SignalR Connection
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl('http://localhost:5002/hubs/robot-tracking')
+      .withAutomaticReconnect()
+      .build();
+
+    connection.start()
+      .then(() => {
+        setSignalRConnected(true);
+        connection.on('ReceiveRobotLocation', (updatedRobot: Robot) => {
+          setRobots(prev => {
+            const idx = prev.findIndex(r => r.id === updatedRobot.id);
+            if (idx > -1) {
+              const clone = [...prev];
+              clone[idx] = { ...clone[idx], ...updatedRobot };
+              return clone;
+            }
+            return [...prev, updatedRobot];
+          });
+        });
+      })
+      .catch((err: any) => {
+        console.warn('SignalR offline on Dashboard. Running with static fleet representation.', err);
+      });
+
+    return () => {
+      connection.stop().catch(() => {});
+    };
+  }, []);
 
   const cardConfig = [
-    { title: 'Doanh thu tháng', value: `${stats.totalSales.toLocaleString()}đ`, change: '+12.5% so với tháng trước', icon: '💰', iconColor: 'text-blue-400' },
-    { title: 'Tổng đơn hàng', value: stats.totalOrders.toString(), change: '+8% hôm nay', icon: '📋', iconColor: 'text-purple-400' },
-    { title: 'Robot hoạt động', value: `${stats.activeRobots}/5`, change: '2 Đang chờ, 3 Đang chạy', icon: '🤖', iconColor: 'text-emerald-400' },
-    { title: 'Dung lượng kho', value: `${stats.capacity}%`, change: 'Còn trống 28% kệ hàng', icon: '📦', iconColor: 'text-orange-400' }
+    { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: '📦', iconColor: 'text-blue-400' },
+    { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ admin', icon: '📋', iconColor: 'text-purple-400' },
+    { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: '🤖', iconColor: 'text-emerald-400' },
+    { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: `Số lượng từ ${usersCount} tài khoản`, icon: '👥', iconColor: 'text-orange-400' }
   ];
 
-  const statusColors: Record<string, string> = STATUS_COLORS;
+  const statusColors = STATUS_COLORS;
+  const statusLabels = STATUS_LABELS;
 
-  const statusLabels: Record<string, string> = STATUS_LABELS;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 flex flex-col items-center justify-center space-y-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+        <p className="text-slate-500 text-xs font-semibold">Đang tổng hợp dữ liệu bảng điều khiển...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
-      <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-          <span>📊</span> Bảng điều khiển admin
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">Giám sát hoạt động kho hàng, robot AMR và phân tích kinh doanh</p>
+      <div className="flex items-center justify-between border-b border-slate-200 pb-6">
+        <div>
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <span>📊</span> Bảng điều khiển admin
+          </h1>
+          <p className="mt-1 text-sm text-slate-505">Giám sát hoạt động kho hàng, robot AMR và phân tích kinh doanh</p>
+        </div>
+        <button
+          onClick={loadDashboardData}
+          className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors"
+        >
+          🔄 Làm mới
+        </button>
       </div>
 
       {/* Cards stats grid */}
@@ -52,7 +161,7 @@ export function DashboardPage() {
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{c.title}</p>
               <h3 className="text-2xl font-heading font-black text-slate-900">{c.value}</h3>
-              <p className="text-[11px] text-slate-505 font-medium">{c.change}</p>
+              <p className="text-[11px] text-slate-500 font-medium">{c.change}</p>
             </div>
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-slate-50 border border-slate-200/60 ${c.iconColor}`}>
               {c.icon}
@@ -67,30 +176,33 @@ export function DashboardPage() {
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
               <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-                <span>📈</span> Biểu đồ doanh thu tuần
+                <span>📈</span> Biểu đồ hoạt động tuần này
               </h3>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Đơn vị: VNĐ</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Đơn vị: Đơn hàng</span>
             </div>
             
             {/* SVG custom bar graph */}
             <div className="h-64 flex items-end justify-between pt-6 gap-2">
               {[
-                { day: 'Th 2', val: 1200000, height: 'h-[40%] bg-brand-600/80' },
-                { day: 'Th 3', val: 1800000, height: 'h-[60%] bg-brand-600/80' },
-                { day: 'Th 4', val: 1500000, height: 'h-[50%] bg-brand-600/80' },
-                { day: 'Th 5', val: 2400000, height: 'h-[80%] bg-brand-500' },
-                { day: 'Th 6', val: 2900000, height: 'h-[90%] bg-brand-500' },
-                { day: 'Th 7', val: 3400000, height: 'h-full bg-brand-400' },
-                { day: 'CN', val: 2100000, height: 'h-[70%] bg-brand-600/80' }
+                { day: 'Th 2', val: 5, pct: 40 },
+                { day: 'Th 3', val: 8, pct: 60 },
+                { day: 'Th 4', val: 7, pct: 50 },
+                { day: 'Th 5', val: 12, pct: 80 },
+                { day: 'Th 6', val: 15, pct: 100 },
+                { day: 'Th 7', val: 9, pct: 70 },
+                { day: 'CN', val: 4, pct: 30 }
               ].map((bar, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
                   <div className="w-full relative flex justify-center h-48 items-end">
                     {/* Tooltip */}
                     <span className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg pointer-events-none z-10 whitespace-nowrap shadow-md">
-                      {bar.val.toLocaleString()}đ
+                      {bar.val} đơn
                     </span>
                     {/* Bar */}
-                    <div className={`w-8 sm:w-12 rounded-t-lg transition-all duration-300 ${bar.height} group-hover:brightness-110 group-hover:shadow-lg group-hover:shadow-brand-500/10`}></div>
+                    <div 
+                      style={{ height: `${bar.pct}%` }}
+                      className="w-8 sm:w-12 rounded-t-lg bg-brand-500/80 transition-all duration-300 group-hover:brightness-110 group-hover:shadow-lg group-hover:shadow-brand-500/10"
+                    ></div>
                   </div>
                   <span className="text-xs font-bold text-slate-400">{bar.day}</span>
                 </div>
@@ -102,25 +214,28 @@ export function DashboardPage() {
         {/* Sidebar panels */}
         <div className="space-y-6">
           <div className="bg-white text-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
-            <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-              <span>🤖</span> Trạng thái Robot AMR
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
+                <span>🤖</span> Trạng thái Robot AMR
+              </h3>
+              <span className={`w-2.5 h-2.5 rounded-full ${signalRConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+            </div>
             <div className="space-y-4">
-              {[
-                { name: 'AMR-01 (Mantis)', status: 'Vận chuyển', bat: 84, color: 'border-orange-200 text-orange-700 bg-orange-50' },
-                { name: 'AMR-02 (Scarab)', status: 'Rảnh (Idle)', bat: 95, color: 'border-emerald-200 text-emerald-700 bg-emerald-50' },
-                { name: 'AMR-03 (Hornet)', status: 'Sạc pin', bat: 18, color: 'border-red-200 text-red-700 bg-red-50 animate-pulse' }
-              ].map((r, idx) => (
+              {robots.map((r, idx) => (
                 <div key={idx} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                   <div className="space-y-1">
                     <h4 className="text-sm font-bold text-slate-900">{r.name}</h4>
-                    <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${r.color}`}>
-                      {r.status}
+                    <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                      r.status === 'Idle' ? 'border-emerald-250 text-emerald-700 bg-emerald-50' :
+                      r.status === 'Moving' ? 'border-brand-200 text-brand-700 bg-brand-50' :
+                      r.status === 'Charging' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-red-200 text-red-700 bg-red-50'
+                    }`}>
+                      {r.status === 'Idle' ? 'Rảnh (Idle)' : r.status === 'Moving' ? 'Đang chạy' : r.status === 'Charging' ? 'Đang sạc' : 'Lỗi'}
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className={`font-mono text-xs font-bold ${r.bat < 20 ? 'text-red-600' : 'text-slate-500'}`}>
-                      {r.bat}% Pin
+                    <span className={`font-mono text-xs font-bold ${r.battery < 20 ? 'text-red-600' : 'text-slate-500'}`}>
+                      {Math.round(r.battery)}% Pin
                     </span>
                   </div>
                 </div>
@@ -128,7 +243,7 @@ export function DashboardPage() {
             </div>
             <Link
               to="/admin/inventory"
-              className="block text-center w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-brand-650 hover:text-brand-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors"
+              className="block text-center w-full py-2.5 bg-slate-50 hover:bg-slate-105 text-brand-650 hover:text-brand-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors"
             >
               🗺️ Sơ đồ & điều phối AMR
             </Link>
@@ -140,10 +255,10 @@ export function DashboardPage() {
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-            <span>📋</span> Đơn hàng mới đặt
+            <span>📋</span> Đơn hàng mới đặt chờ duyệt
           </h3>
           <Link to="/admin/orders" className="text-brand-650 text-xs font-bold hover:underline">
-            Xem tất cả đơn hàng →
+            Xem tất cả đơn hàng chờ duyệt →
           </Link>
         </div>
         
@@ -158,12 +273,12 @@ export function DashboardPage() {
                 <th className="p-4">Trạng thái</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
-              {recentOrders.map((o) => (
+            <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
+              {pendingOrders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="p-4 font-bold text-slate-900">{o.id}</td>
                   <td className="p-4">{o.date}</td>
-                  <td className="p-4 font-bold text-slate-700">{o.station || 'ST01'}</td>
+                  <td className="p-4 font-bold text-slate-700">{o.station}</td>
                   <td className="p-4 text-slate-900 font-bold">{o.total.toLocaleString()}đ</td>
                   <td className="p-4">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusColors[o.status] || 'bg-slate-50 border-slate-200'}`}>
@@ -172,9 +287,9 @@ export function DashboardPage() {
                   </td>
                 </tr>
               ))}
-              {recentOrders.length === 0 && (
+              {pendingOrders.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không có đơn đặt hàng gần đây</td>
+                  <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không có đơn đặt hàng nào gần đây</td>
                 </tr>
               )}
             </tbody>

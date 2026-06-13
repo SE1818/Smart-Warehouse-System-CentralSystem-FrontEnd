@@ -1,20 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Product } from '@/types';
-import { DEFAULT_PRODUCTS } from '@/constants';
+import { productService } from '@/services';
 
 export function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const cached = localStorage.getItem('admin_products');
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch {
-        return [];
-      }
-    }
-    localStorage.setItem('admin_products', JSON.stringify(DEFAULT_PRODUCTS));
-    return DEFAULT_PRODUCTS;
-  });
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -26,9 +17,27 @@ export function ProductsPage() {
     description: ''
   });
 
+  const fetchProducts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await productService.getProducts();
+      setProducts(data);
+    } catch (err: any) {
+      console.error('Error fetching products from API', err);
+      setError('Không thể tải danh sách sản phẩm từ máy chủ. Vui lòng kiểm tra lại dịch vụ.');
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
   const saveProducts = (updated: Product[]) => {
     setProducts(updated);
-    localStorage.setItem('admin_products', JSON.stringify(updated));
   };
 
   const handleEditSave = (e: React.FormEvent) => {
@@ -109,59 +118,73 @@ export function ProductsPage() {
         </div>
       </div>
 
-      {/* Table List */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                <th className="p-4">Sản phẩm</th>
-                <th className="p-4">Phân loại</th>
-                <th className="p-4">Giá bán</th>
-                <th className="p-4">Tồn kho</th>
-                <th className="p-4 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
-              {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 font-bold text-slate-900">{p.name}</td>
-                  <td className="p-4">
-                    <span className="text-xs font-semibold bg-brand-50 border border-brand-100/50 text-brand-700 px-2.5 py-0.5 rounded-full">
-                      {p.category}
-                    </span>
-                  </td>
-                  <td className="p-4 text-slate-900 font-bold">{p.price.toLocaleString()}đ</td>
-                  <td className="p-4">
-                    <span className={`font-bold ${p.stockQuantity <= 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                      {p.stockQuantity} chiếc {p.stockQuantity <= 0 && ' (Hết hàng)'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right space-x-2">
-                    <button
-                      onClick={() => setEditingProduct(p)}
-                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
-                    >
-                      ✏️ Sửa
-                    </button>
-                    <button
-                      onClick={() => deleteProduct(p.id)}
-                      className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-55 rounded-lg text-xs font-semibold transition-colors"
-                    >
-                      🗑️ Xóa
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {/* Error block */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed">
+          ⚠️ {error}
         </div>
-      </div>
+      )}
+
+      {/* Table List */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+          <p className="text-slate-500 text-xs font-medium">Đang tải danh sách sản phẩm...</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                  <th className="p-4">Sản phẩm</th>
+                  <th className="p-4">Phân loại</th>
+                  <th className="p-4">Giá bán</th>
+                  <th className="p-4">Tồn kho</th>
+                  <th className="p-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
+                {filtered.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4 font-bold text-slate-900">{p.name}</td>
+                    <td className="p-4">
+                      <span className="text-xs font-semibold bg-brand-50 border border-brand-100/50 text-brand-700 px-2.5 py-0.5 rounded-full">
+                        {p.category}
+                      </span>
+                    </td>
+                    <td className="p-4 text-slate-900 font-bold">{p.price.toLocaleString()}đ</td>
+                    <td className="p-4">
+                      <span className={`font-bold ${p.stockQuantity <= 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                        {p.stockQuantity} chiếc {p.stockQuantity <= 0 && ' (Hết hàng)'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-2">
+                      <button
+                        onClick={() => setEditingProduct(p)}
+                        className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
+                      >
+                        ✏️ Sửa
+                      </button>
+                      <button
+                        onClick={() => deleteProduct(p.id)}
+                        className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-55 rounded-lg text-xs font-semibold transition-colors"
+                      >
+                        🗑️ Xóa
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editingProduct && (

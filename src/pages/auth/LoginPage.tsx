@@ -17,23 +17,12 @@ export function LoginPage() {
       const res = await authService.login({ email, password });
       localStorage.setItem('authToken', res.accessToken);
       localStorage.setItem('user', JSON.stringify({ role: res.role, name: email.split('@')[0] || 'Nhân viên', email: email }));
-      navigate(res.role === 'Warehouse_Admin' || res.role === 'Admin' ? '/admin/dashboard' : '/');
-    } catch (err) {
-      console.warn('API error during login, falling back to mock authentication', err);
-      
-      // Fallback for manual testing/offline demo
-      const expectedPass = atob('cGFzc3dvcmQ='); // 'password' in base64
-      if (email === 'admin@smartwarehouse.com' && password === expectedPass) {
-        localStorage.setItem('authToken', 'mock-admin-token');
-        localStorage.setItem('user', JSON.stringify({ role: 'Admin', name: 'Lê Hoàng C', email: 'admin@smartwarehouse.com' }));
-        navigate('/admin/dashboard');
-      } else if (email === 'user@smartwarehouse.com' && password === expectedPass) {
-        localStorage.setItem('authToken', 'mock-user-token');
-        localStorage.setItem('user', JSON.stringify({ role: 'User', name: 'Nguyễn Văn A', email: 'user@smartwarehouse.com' }));
-        navigate('/');
-      } else {
-        setError('Email hoặc mật khẩu không chính xác. Sử dụng thông tin gợi ý phía dưới để kiểm thử.');
-      }
+      // Supabase roles: 'warehouse_manager' = Warehouse Admin, 'Customer' = regular user
+      const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin';
+      navigate(isAdmin ? '/admin/dashboard' : '/');
+    } catch (err: any) {
+      console.error('API error during login', err);
+      setError(err.response?.data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ API Gateway.');
     } finally {
       setLoading(false);
     }
@@ -47,7 +36,7 @@ export function LoginPage() {
             🤖
           </div>
           <h1 className="text-3xl font-heading font-black text-slate-900 tracking-tight">SmartWarehouse</h1>
-          <p className="text-slate-500 text-sm font-medium">Hệ thống phân phối hàng hóa tự hành AMR</p>
+          <p className="text-slate-505 text-sm font-medium">Hệ thống phân phối hàng hóa tự hành AMR</p>
         </div>
         
         {error && (
@@ -58,7 +47,7 @@ export function LoginPage() {
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email truy cập</label>
+            <label className="block text-[10px] font-bold text-slate-505 uppercase tracking-widest">Email truy cập</label>
             <input
               type="email"
               value={email}
@@ -69,7 +58,7 @@ export function LoginPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mật khẩu bảo mật</label>
+            <label className="block text-[10px] font-bold text-slate-550 uppercase tracking-widest">Mật khẩu bảo mật</label>
             <input
               type="password"
               value={password}
@@ -88,18 +77,7 @@ export function LoginPage() {
           </button>
         </form>
 
-        {/* Demo Accounts Suggestion Card */}
-        <div className="bg-slate-55/60 border border-slate-200/80 rounded-2xl p-4 space-y-2 text-xs">
-          <p className="font-bold text-slate-700 flex items-center gap-1.5">
-            <span>💡</span> Tài khoản kiểm thử (Demo):
-          </p>
-          <div className="space-y-1 text-slate-500 font-medium">
-            <p>• <span className="font-bold text-slate-800">Admin:</span> admin@smartwarehouse.com | Mật khẩu: password</p>
-            <p>• <span className="font-bold text-slate-800">Nhân viên:</span> user@smartwarehouse.com | Mật khẩu: password</p>
-          </div>
-        </div>
-
-        <p className="text-center text-xs text-slate-500 font-medium">
+        <p className="text-center text-xs text-slate-505 font-medium">
           Chưa có tài khoản đăng ký?{' '}
           <Link to="/register" className="text-brand-650 font-bold hover:underline">
             Tạo tài khoản mới

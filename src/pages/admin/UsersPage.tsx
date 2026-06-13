@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { userService } from '@/services';
 
 interface User {
   id: string;
@@ -9,54 +10,64 @@ interface User {
 }
 
 export function UsersPage() {
-  const [users, setUsers] = useState<User[]>(() => {
-    const cachedUsers = localStorage.getItem('admin_users');
-    if (cachedUsers) {
-      try {
-        return JSON.parse(cachedUsers);
-      } catch {
-        return [];
-      }
-    }
-    const defaultUsers: User[] = [
-      { id: 'USR-01', name: 'Nguyễn Văn A', email: 'nguyenvana@email.com', role: 'User', status: 'Active' },
-      { id: 'USR-02', name: 'Trần Thị B', email: 'tranthib@email.com', role: 'Operator', status: 'Active' },
-      { id: 'USR-03', name: 'Lê Hoàng C', email: 'lehoangc@email.com', role: 'Admin', status: 'Active' },
-      { id: 'USR-04', name: 'Phạm Minh D', email: 'phammedd@email.com', role: 'User', status: 'Suspended' }
-    ];
-    localStorage.setItem('admin_users', JSON.stringify(defaultUsers));
-    return defaultUsers;
-  });
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  const saveUsers = (updated: User[]) => {
-    setUsers(updated);
-    localStorage.setItem('admin_users', JSON.stringify(updated));
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await userService.getAllUsers();
+      const mapped: User[] = data.map(u => ({
+        id: u.id,
+        name: u.username || 'Nhân viên',
+        email: u.email,
+        role: (u.role === 'Admin' || u.role === 'Operator' || u.role === 'User') ? u.role : 'User',
+        status: u.isActive ? 'Active' : 'Suspended'
+      }));
+      setUsers(mapped);
+    } catch (err: any) {
+      console.error('Error fetching users from API', err);
+      setError('Không thể kết nối đến máy chủ để tải danh sách người dùng. Vui lòng kiểm tra lại dịch vụ.');
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleStatus = (id: string) => {
-    const updated = users.map((u) => {
-      if (u.id === id) {
-        return { ...u, status: (u.status === 'Active' ? 'Suspended' : 'Active') as User['status'] };
-      }
-      return u;
-    });
-    saveUsers(updated);
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const toggleStatus = async (id: string, currentStatus: 'Active' | 'Suspended') => {
+    const targetActive = currentStatus !== 'Active';
+    try {
+      await userService.updateUserStatus(id, targetActive);
+      alert('Cập nhật trạng thái người dùng thành công!');
+      fetchUsers();
+    } catch (err: any) {
+      console.error('Error updating status:', err);
+      alert('Lỗi cập nhật trạng thái: ' + (err.response?.data?.message || err.message));
+    }
   };
 
-  const handleEditSave = (e: React.FormEvent) => {
+  const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
 
-    const updated = users.map((u) => {
-      if (u.id === editingUser.id) {
-        return editingUser;
-      }
-      return u;
-    });
-    saveUsers(updated);
-    setEditingUser(null);
+    try {
+      await userService.updateUserRole(editingUser.id, editingUser.role);
+      alert('Cập nhật vai trò thành công!');
+      setEditingUser(null);
+      fetchUsers();
+    } catch (err: any) {
+      console.error('Error saving user role:', err);
+      alert('Lỗi cập nhật vai trò: ' + (err.response?.data?.message || err.message));
+      setEditingUser(null);
+    }
   };
 
   const filtered = users.filter((u) => {
@@ -87,75 +98,89 @@ export function UsersPage() {
         </div>
       </div>
 
-      {/* Table grid */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                <th className="p-4">Nhân viên</th>
-                <th className="p-4">Email</th>
-                <th className="p-4">Vai trò</th>
-                <th className="p-4">Trạng thái</th>
-                <th className="p-4 text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
-              {filtered.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-brand-50 border border-brand-200/60 text-brand-700 rounded-lg flex items-center justify-center font-bold text-sm">
-                        {u.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="font-bold text-slate-900">{u.name}</span>
-                    </div>
-                  </td>
-                  <td className="p-4">{u.email}</td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                      u.role === 'Admin' ? 'bg-red-50 text-red-700 border-red-200' :
-                      u.role === 'Operator' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border border-slate-200'
-                    }`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                      u.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
-                    }`}>
-                      {u.status === 'Active' ? 'Hoạt động' : 'Khóa'}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right space-x-2">
-                    <button 
-                      onClick={() => setEditingUser(u)}
-                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
-                    >
-                      ✏️ Sửa vai trò
-                    </button>
-                    <button 
-                      onClick={() => toggleStatus(u.id)}
-                      className={`px-3 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${
-                        u.status === 'Active' 
-                          ? 'border-red-200 text-red-650 hover:bg-red-50' 
-                          : 'border-emerald-200 text-emerald-650 hover:bg-emerald-50'
-                      }`}
-                    >
-                      {u.status === 'Active' ? '🔒 Khóa' : '🔓 Mở'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không tìm thấy người dùng</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {/* Error block */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed">
+          ⚠️ {error}
         </div>
-      </div>
+      )}
+
+      {/* Table grid */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+          <p className="text-slate-500 text-xs font-medium">Đang tải danh sách người dùng...</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                  <th className="p-4">Nhân viên</th>
+                  <th className="p-4">Email</th>
+                  <th className="p-4">Vai trò</th>
+                  <th className="p-4">Trạng thái</th>
+                  <th className="p-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
+                {filtered.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-brand-50 border border-brand-200/60 text-brand-700 rounded-lg flex items-center justify-center font-bold text-sm">
+                          {u.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-bold text-slate-900">{u.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">{u.email}</td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                        u.role === 'Admin' ? 'bg-red-50 text-red-700 border-red-200' :
+                        u.role === 'Operator' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border border-slate-200'
+                      }`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                        u.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+                      }`}>
+                        {u.status === 'Active' ? 'Hoạt động' : 'Khóa'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-2">
+                      <button 
+                        onClick={() => setEditingUser(u)}
+                        className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
+                      >
+                        ✏️ Sửa vai trò
+                      </button>
+                      <button 
+                        onClick={() => toggleStatus(u.id, u.status)}
+                        className={`px-3 py-1.5 border rounded-lg text-xs font-semibold transition-colors ${
+                          u.status === 'Active' 
+                            ? 'border-red-200 text-red-650 hover:bg-red-50' 
+                            : 'border-emerald-200 text-emerald-650 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {u.status === 'Active' ? '🔒 Khóa' : '🔓 Mở'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không tìm thấy người dùng</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Edit User Modal Dialog */}
       {editingUser && (

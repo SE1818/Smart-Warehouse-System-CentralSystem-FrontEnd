@@ -2,11 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   LoginPage, 
   RegisterPage,
-  HomePage,
-  UserProducts,
-  CartPage,
-  UserOrders,
-  ProfilePage,
   AdminDashboard,
   AdminInventory,
   MetricsPage,
@@ -16,7 +11,6 @@ import {
   AdminUsers,
   AdminReports
 } from './pages';
-import { UserLayout } from './components/UserLayout';
 import { AdminLayout } from './components/AdminLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css';
@@ -46,27 +40,14 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* User / Employee routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute allowedRoles={['User', 'Operator', 'Admin', 'Warehouse_Admin']}>
-              <UserLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<HomePage />} />
-          <Route path="products" element={<UserProducts />} />
-          <Route path="cart" element={<CartPage />} />
-          <Route path="orders" element={<UserOrders />} />
-          <Route path="profile" element={<ProfilePage />} />
-        </Route>
+        {/* Redirect Root to Admin */}
+        <Route path="/" element={<Navigate to="/admin" replace />} />
 
         {/* Admin routes */}
         <Route
           path="/admin"
           element={
-            <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin']}>
+            <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager']}>
               <AdminLayout />
             </ProtectedRoute>
           }

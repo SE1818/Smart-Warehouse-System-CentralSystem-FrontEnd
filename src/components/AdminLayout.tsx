@@ -8,7 +8,7 @@ export function AdminLayout() {
 
   // Retrieve user info
   const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'Warehouse_Admin' };
+  const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'warehouse_manager' };
 
   const navItems = [
     { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: '📊' },
