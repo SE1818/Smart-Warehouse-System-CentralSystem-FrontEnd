@@ -20,9 +20,10 @@ export function LoginPage() {
       // Supabase roles: 'warehouse_manager' = Warehouse Admin, 'Customer' = regular user
       const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin';
       navigate(isAdmin ? '/admin/dashboard' : '/');
-    } catch (err: any) {
+    } catch (err) {
       console.error('API error during login', err);
-      setError(err.response?.data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ API Gateway.');
+      const apiError = err as { response?: { data?: { message?: string } } };
+      setError(apiError.response?.data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ API Gateway.');
     } finally {
       setLoading(false);
     }

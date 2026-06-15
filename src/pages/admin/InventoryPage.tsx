@@ -69,7 +69,7 @@ export function InventoryPage() {
           });
         });
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.warn('SignalR fallback. Operating in simulation mode.', err);
       });
 

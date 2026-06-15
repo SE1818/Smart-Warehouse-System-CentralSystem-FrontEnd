@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DEFAULT_PRODUCTS, STATUS_COLORS, STATUS_LABELS } from '@/constants';
 import { orderService } from '@/services';
 
@@ -27,17 +27,29 @@ export function OrdersPage() {
     return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
   };
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
       const apiOrders = await orderService.getPendingOrders();
-      const mapped: Order[] = apiOrders.map((o: any) => ({
+      interface ApiOrderItem {
+        productId: string;
+        quantity: number;
+        price: number;
+      }
+      interface ApiOrder {
+        id: string;
+        createdAt?: string;
+        totalAmount: number;
+        deliveryNodeId?: string;
+        items?: ApiOrderItem[];
+      }
+      const mapped: Order[] = (apiOrders as unknown as ApiOrder[]).map((o) => ({
         id: o.id,
         date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
         total: o.totalAmount,
         status: 'Pending', // pending list returns pending orders
         station: o.deliveryNodeId || 'Khu vực nhận',
-        items: o.items ? o.items.map((item: any) => ({
+        items: o.items ? o.items.map((item) => ({
           name: getProductName(item.productId),
           quantity: item.quantity,
           price: item.price
@@ -49,20 +61,24 @@ export function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    const timer = setTimeout(() => {
+      loadOrders();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadOrders]);
 
   const handleConfirm = async (orderId: string) => {
     try {
       await orderService.confirmOrder(orderId);
       alert('Đã duyệt đơn và phát lệnh Robot AMR thành công!');
       loadOrders();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error confirming order:', err);
-      alert(err.response?.data?.message || 'Có lỗi xảy ra khi duyệt đơn hàng.');
+      const apiError = err as { response?: { data?: { message?: string } } };
+      alert(apiError.response?.data?.message || 'Có lỗi xảy ra khi duyệt đơn hàng.');
     }
   };
 
@@ -72,19 +88,27 @@ export function OrdersPage() {
       await orderService.refundOrder(orderId);
       alert('Đã hủy và hoàn tiền đơn hàng thành công!');
       loadOrders();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cancelling order:', err);
-      alert(err.response?.data?.message || 'Có lỗi xảy ra khi hủy đơn hàng.');
+      const apiError = err as { response?: { data?: { message?: string } } };
+      alert(apiError.response?.data?.message || 'Có lỗi xảy ra khi hủy đơn hàng.');
     }
   };
 
   const statusColors = STATUS_COLORS;
   const statusLabels = STATUS_LABELS;
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const filtered = orders.filter((o) => 
     o.id.toLowerCase().includes(search.toLowerCase()) || 
     o.station.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedOrders = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   if (loading) {
     return (
@@ -118,7 +142,10 @@ export function OrdersPage() {
             type="text"
             placeholder="Tìm kiếm mã đơn hoặc trạm nhận..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
           />
         </div>
@@ -126,7 +153,7 @@ export function OrdersPage() {
 
       {/* Log list */}
       <div className="space-y-4">
-        {filtered.map((o) => (
+        {paginatedOrders.map((o) => (
           <div key={o.id} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-slate-300 transition-all">
             <div className="space-y-3 flex-1">
               {/* Top row */}
@@ -158,7 +185,7 @@ export function OrdersPage() {
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 md:border-t-0 md:pt-0 shrink-0">
               <button
                 onClick={() => handleCancel(o.id)}
-                className="px-4 py-2 border border-red-200 hover:bg-red-50 text-red-650 rounded-xl text-xs font-bold transition-all"
+                className="px-4 py-2 border border-red-200 hover:bg-red-55 text-red-650 rounded-xl text-xs font-bold transition-all"
               >
                 Hủy đơn
               </button>
@@ -175,6 +202,49 @@ export function OrdersPage() {
         {filtered.length === 0 && (
           <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center text-slate-400">
             <p className="font-semibold text-sm">Hiện không có đơn hàng nào chờ duyệt trong hệ thống</p>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span className="text-xs text-slate-500 font-semibold">
+              Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{" "}
+              <span className="font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filtered.length)}</span>{" "}
+              trong <span className="font-bold text-slate-800">{filtered.length}</span> đơn hàng
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+              >
+                &larr;
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 ${
+                    currentPage === page
+                      ? "border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-500/10"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+              >
+                &rarr;
+              </button>
+            </div>
           </div>
         )}
       </div>

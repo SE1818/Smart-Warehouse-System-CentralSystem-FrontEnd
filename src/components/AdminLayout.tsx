@@ -45,11 +45,10 @@ export function AdminLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group ${
-                  isActive
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group ${isActive
                     ? 'bg-brand-50 text-brand-700 border border-brand-100/40 shadow-xs'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <span className="text-lg transition-transform duration-150 group-hover:scale-110">
                   {item.icon}
@@ -71,14 +70,6 @@ export function AdminLayout() {
               <p className="text-xs text-slate-400 truncate">{user.email}</p>
             </div>
           </div>
-
-          <Link
-            to="/"
-            className="flex items-center justify-center gap-2 w-full mb-2 py-2 px-4 bg-white hover:bg-slate-50 text-brand-650 hover:text-brand-700 rounded-xl text-xs font-bold transition-all border border-slate-200"
-          >
-            🏠 Cổng Nhân Viên
-          </Link>
-
           <button
             onClick={handleLogout}
             className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-red-50 hover:bg-red-100/80 text-red-600 hover:text-red-755 rounded-xl text-sm font-bold transition-all border border-red-200/30"
@@ -97,14 +88,14 @@ export function AdminLayout() {
                 <h1 className="text-lg font-heading font-black text-slate-900">SmartWarehouse</h1>
                 <p className="text-xs text-brand-650 font-bold uppercase tracking-wider">Hệ Thống Trung Tâm</p>
               </div>
-              <button 
-                onClick={() => setIsMobileOpen(false)} 
+              <button
+                onClick={() => setIsMobileOpen(false)}
                 className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center text-sm transition-colors border border-slate-250/40"
               >
                 ✕
               </button>
             </div>
-            
+
             <nav className="flex-1 space-y-1 overflow-y-auto">
               {navItems.map((item) => {
                 const isActive = location.pathname === item.path;
@@ -113,11 +104,10 @@ export function AdminLayout() {
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsMobileOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      isActive
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
                         ? 'bg-brand-50 text-brand-700 border border-brand-100/40 shadow-xs'
                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     <span>{item.icon}</span>
                     <span className="font-bold text-sm">{item.label}</span>
@@ -125,7 +115,7 @@ export function AdminLayout() {
                 );
               })}
             </nav>
-            
+
             <div className="border-t border-slate-100 pt-4 mt-auto">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-brand-100 border border-brand-200 text-brand-750 flex items-center justify-center font-bold text-lg shrink-0">

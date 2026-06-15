@@ -23,7 +23,7 @@ export function ProductsPage() {
     try {
       const data = await productService.getProducts();
       setProducts(data);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching products from API', err);
       setError('Không thể tải danh sách sản phẩm từ máy chủ. Vui lòng kiểm tra lại dịch vụ.');
       setProducts([]);
@@ -33,7 +33,10 @@ export function ProductsPage() {
   };
 
   useEffect(() => {
-    fetchProducts();
+    const timer = setTimeout(() => {
+      fetchProducts();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const saveProducts = (updated: Product[]) => {
@@ -84,7 +87,14 @@ export function ProductsPage() {
     }
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
   const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedProducts = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
@@ -112,7 +122,10 @@ export function ProductsPage() {
             type="text"
             placeholder="Tìm kiếm theo tên sản phẩm..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
           />
         </div>
@@ -145,7 +158,7 @@ export function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
-                {filtered.map((p) => (
+                {paginatedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 font-bold text-slate-900">{p.name}</td>
                     <td className="p-4">
@@ -183,6 +196,49 @@ export function ProductsPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <span className="text-xs text-slate-500 font-semibold">
+                Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{" "}
+                <span className="font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filtered.length)}</span>{" "}
+                trong <span className="font-bold text-slate-800">{filtered.length}</span> sản phẩm
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+                >
+                  &larr;
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 ${
+                      currentPage === page
+                        ? "border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-500/10"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  className="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+                >
+                  &rarr;
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

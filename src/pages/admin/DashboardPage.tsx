@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { orderService, metricsService, productService, userService } from '@/services';
@@ -23,6 +23,37 @@ interface DashboardOrder {
   items: Array<{ name: string; quantity: number; price: number }>;
 }
 
+const getRobotStatusStyle = (status: string) => {
+  switch (status) {
+    case 'Idle':
+      return 'border-emerald-250 text-emerald-700 bg-emerald-50';
+    case 'Moving':
+      return 'border-brand-200 text-brand-700 bg-brand-50';
+    case 'Charging':
+      return 'border-amber-200 text-amber-700 bg-amber-50';
+    default:
+      return 'border-red-200 text-red-700 bg-red-50';
+  }
+};
+
+const getRobotStatusLabel = (status: string) => {
+  switch (status) {
+    case 'Idle':
+      return 'Rảnh (Idle)';
+    case 'Moving':
+      return 'Đang chạy';
+    case 'Charging':
+      return 'Đang sạc';
+    default:
+      return 'Lỗi';
+  }
+};
+
+const getProductName = (productId: string) => {
+  const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
+  return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
+};
+
 export function DashboardPage() {
   const [robots, setRobots] = useState<Robot[]>([
     { id: 'AMR-01', name: 'AMR-01 (Mantis)', x: 2, y: 3, battery: 84, status: 'Moving' },
@@ -37,28 +68,35 @@ export function DashboardPage() {
   const [totalStock, setTotalStock] = useState(0);
   const [usersCount, setUsersCount] = useState(0);
 
-  const getProductName = (productId: string) => {
-    const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
-    return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
-  };
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch products
       const prods = await productService.getProducts().catch(() => []);
       setProductsCount(prods.length);
-      const stockSum = prods.reduce((sum: number, p) => sum + (p.stockQuantity || 0), 0);
+      const stockSum = (prods as { stockQuantity?: number }[]).reduce((sum: number, p) => sum + (p.stockQuantity || 0), 0);
       
       // Fetch pending orders
       const apiOrders = await orderService.getPendingOrders().catch(() => []);
-      const mapped: DashboardOrder[] = apiOrders.map((o: any) => ({
+      interface ApiOrderItem {
+        productId: string;
+        quantity: number;
+        price: number;
+      }
+      interface ApiOrder {
+        id: string;
+        createdAt?: string;
+        totalAmount: number;
+        deliveryNodeId?: string;
+        items?: ApiOrderItem[];
+      }
+      const mapped: DashboardOrder[] = (apiOrders as unknown as ApiOrder[]).map((o) => ({
         id: o.id,
         date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
         total: o.totalAmount,
         status: 'Pending' as const,
         station: o.deliveryNodeId || 'Khu vực nhận',
-        items: o.items ? o.items.map((item: any) => ({
+        items: o.items ? o.items.map((item) => ({
           name: getProductName(item.productId),
           quantity: item.quantity,
           price: item.price
@@ -82,10 +120,24 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const handleRobotLocationUpdate = useCallback((updatedRobot: Robot) => {
+    setRobots(prev => {
+      const idx = prev.findIndex(r => r.id === updatedRobot.id);
+      if (idx > -1) {
+        const clone = [...prev];
+        clone[idx] = { ...clone[idx], ...updatedRobot };
+        return clone;
+      }
+      return [...prev, updatedRobot];
+    });
+  }, []);
 
   useEffect(() => {
-    loadDashboardData();
+    const timer = setTimeout(() => {
+      loadDashboardData();
+    }, 0);
 
     // SignalR Connection
     const connection = new signalR.HubConnectionBuilder()
@@ -96,30 +148,21 @@ export function DashboardPage() {
     connection.start()
       .then(() => {
         setSignalRConnected(true);
-        connection.on('ReceiveRobotLocation', (updatedRobot: Robot) => {
-          setRobots(prev => {
-            const idx = prev.findIndex(r => r.id === updatedRobot.id);
-            if (idx > -1) {
-              const clone = [...prev];
-              clone[idx] = { ...clone[idx], ...updatedRobot };
-              return clone;
-            }
-            return [...prev, updatedRobot];
-          });
-        });
+        connection.on('ReceiveRobotLocation', handleRobotLocationUpdate);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.warn('SignalR offline on Dashboard. Running with static fleet representation.', err);
       });
 
     return () => {
+      clearTimeout(timer);
       connection.stop().catch(() => {});
     };
-  }, []);
+  }, [loadDashboardData, handleRobotLocationUpdate]);
 
   const cardConfig = [
     { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: '📦', iconColor: 'text-blue-400' },
-    { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ admin', icon: '📋', iconColor: 'text-purple-400' },
+    { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ warehouse_manager', icon: '📋', iconColor: 'text-purple-400' },
     { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: '🤖', iconColor: 'text-emerald-400' },
     { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: `Số lượng từ ${usersCount} tài khoản`, icon: '👥', iconColor: 'text-orange-400' }
   ];
@@ -142,7 +185,7 @@ export function DashboardPage() {
       <div className="flex items-center justify-between border-b border-slate-200 pb-6">
         <div>
           <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>📊</span> Bảng điều khiển admin
+            <span>📊</span> Bảng điều khiển warehouse_manager
           </h1>
           <p className="mt-1 text-sm text-slate-505">Giám sát hoạt động kho hàng, robot AMR và phân tích kinh doanh</p>
         </div>
@@ -156,8 +199,8 @@ export function DashboardPage() {
 
       {/* Cards stats grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cardConfig.map((c, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition-all hover:border-slate-300">
+        {cardConfig.map((c) => (
+          <div key={c.title} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition-all hover:border-slate-300">
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{c.title}</p>
               <h3 className="text-2xl font-heading font-black text-slate-900">{c.value}</h3>
@@ -191,8 +234,8 @@ export function DashboardPage() {
                 { day: 'Th 6', val: 15, pct: 100 },
                 { day: 'Th 7', val: 9, pct: 70 },
                 { day: 'CN', val: 4, pct: 30 }
-              ].map((bar, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+              ].map((bar) => (
+                <div key={bar.day} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
                   <div className="w-full relative flex justify-center h-48 items-end">
                     {/* Tooltip */}
                     <span className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-bold py-1 px-2 rounded-lg pointer-events-none z-10 whitespace-nowrap shadow-md">
@@ -221,16 +264,12 @@ export function DashboardPage() {
               <span className={`w-2.5 h-2.5 rounded-full ${signalRConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
             </div>
             <div className="space-y-4">
-              {robots.map((r, idx) => (
-                <div key={idx} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+              {robots.map((r) => (
+                <div key={r.id} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                   <div className="space-y-1">
                     <h4 className="text-sm font-bold text-slate-900">{r.name}</h4>
-                    <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                      r.status === 'Idle' ? 'border-emerald-250 text-emerald-700 bg-emerald-50' :
-                      r.status === 'Moving' ? 'border-brand-200 text-brand-700 bg-brand-50' :
-                      r.status === 'Charging' ? 'border-amber-200 text-amber-700 bg-amber-50' : 'border-red-200 text-red-700 bg-red-50'
-                    }`}>
-                      {r.status === 'Idle' ? 'Rảnh (Idle)' : r.status === 'Moving' ? 'Đang chạy' : r.status === 'Charging' ? 'Đang sạc' : 'Lỗi'}
+                    <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${getRobotStatusStyle(r.status)}`}>
+                      {getRobotStatusLabel(r.status)}
                     </span>
                   </div>
                   <div className="text-right">

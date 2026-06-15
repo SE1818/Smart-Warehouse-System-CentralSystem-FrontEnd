@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { metricsService, productService } from '@/services';
 import { MetricType } from '@/types';
 import type { Product } from '@/types';
@@ -12,7 +12,7 @@ export function ReportsPage() {
   const [totalPower, setTotalPower] = useState(124.8);
   const [maxInventory, setMaxInventory] = useState(489);
 
-  const loadReportData = async () => {
+  const loadReportData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch metrics
@@ -36,11 +36,14 @@ export function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadReportData();
-  }, [timePeriod]);
+    const timer = setTimeout(() => {
+      loadReportData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [timePeriod, loadReportData]);
 
   const stats = [
     { title: 'Nhiệt độ trung bình', value: `${avgTemp.toFixed(1)}°C`, icon: '🌡️', color: 'bg-blue-50/50 text-blue-700 border-blue-200' },
