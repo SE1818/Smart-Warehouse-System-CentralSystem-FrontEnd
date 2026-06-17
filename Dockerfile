@@ -11,7 +11,7 @@ COPY . .
 
 # VITE "bake" biến này vào JS tĩnh tại thời điểm build.
 # → Nếu đổi IP sau này: docker compose build --no-cache frontend
-ARG VITE_API_BASE_URL=http://100.92.144.38:8000/api
+ARG VITE_API_BASE_URL=http://api-gateway:80/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build

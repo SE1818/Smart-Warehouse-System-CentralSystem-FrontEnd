@@ -12,3 +12,18 @@ export { ProductsPage as AdminProducts } from './admin/ProductsPage';
 export { OrdersPage as AdminOrders } from './admin/OrdersPage';
 export { UsersPage as AdminUsers } from './admin/UsersPage';
 export { ReportsPage as AdminReports } from './admin/ReportsPage';
+
+// Stock pages
+export { WarehousesPage } from './stock/WarehousesPage';
+export { StockLevelsPage } from './stock/StockLevelsPage';
+export { StockMovementsPage } from './stock/StockMovementsPage';
+export { StockAdjustmentsPage } from './stock/StockAdjustmentsPage';
+
+// Other pages
+export { SearchPage } from './search/SearchPage';
+export { NotificationsPage } from './NotificationsPage';
+export { FileManagementPage } from './admin/FileManagementPage';
+export { PromotionsPage } from './PromotionsPage';
+export { RobotManagementPage } from './RobotManagementPage';
+export { WalletPage } from './WalletPage';
+export { ProfilePage } from './ProfilePage';

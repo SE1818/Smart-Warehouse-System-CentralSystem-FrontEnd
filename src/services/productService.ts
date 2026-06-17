@@ -1,13 +1,9 @@
 import apiClient from './api';
-import type { Product } from '@/types';
+import type { Product } from '@/types/stock';
 
 export const productService = {
-  /**
-   * Fetch all products
-   * GET /api/products
-   */
   async getProducts(): Promise<Product[]> {
-    const res = await apiClient.get<Product[]>('/products');
+    const res = await apiClient.get<Product[]>('/api/v1/products');
     return res.data;
   }
 };

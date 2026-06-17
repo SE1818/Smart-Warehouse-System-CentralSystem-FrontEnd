@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { 
-  LoginPage, 
+import {
+  LoginPage,
   RegisterPage,
   AdminDashboard,
   AdminInventory,
@@ -9,7 +9,18 @@ import {
   AdminProducts,
   AdminOrders,
   AdminUsers,
-  AdminReports
+  AdminReports,
+  WarehousesPage,
+  StockLevelsPage,
+  StockMovementsPage,
+  StockAdjustmentsPage,
+  SearchPage,
+  NotificationsPage,
+  FileManagementPage,
+  PromotionsPage,
+  RobotManagementPage,
+  WalletPage,
+  ProfilePage,
 } from './pages';
 import { AdminLayout } from './components/AdminLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -55,6 +66,17 @@ function App() {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="inventory" element={<AdminInventory />} />
+          <Route path="warehouses" element={<WarehousesPage />} />
+          <Route path="stocklevels" element={<StockLevelsPage />} />
+          <Route path="stockmovements" element={<StockMovementsPage />} />
+          <Route path="stockadjustments" element={<StockAdjustmentsPage />} />
+          <Route path="search" element={<SearchPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="files" element={<FileManagementPage />} />
+          <Route path="promotions" element={<PromotionsPage />} />
+          <Route path="robots" element={<RobotManagementPage />} />
+          <Route path="wallet" element={<WalletPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="metrics" element={<MetricsPage />} />
           <Route path="logs" element={<AuditLogsPage />} />
           <Route path="products" element={<AdminProducts />} />
