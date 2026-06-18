@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { secureRandom } from '@/utils/crypto';
+import { Icons } from '@/components/Icons';
 
 interface Robot {
   id: string;
@@ -47,7 +48,7 @@ export function InventoryPage() {
   const [signalRConnected, setSignalRConnected] = useState(false);
 
   useEffect(() => {
-    // Attempt SignalR connection to backend AMR service
+    // Attempt SignalR connection to AMR service
     const connection = new signalR.HubConnectionBuilder()
       .withUrl('http://localhost:5002/hubs/robot-tracking')
       .withAutomaticReconnect()
@@ -135,7 +136,7 @@ export function InventoryPage() {
           ...r,
           status: 'Moving',
           destination: label,
-          x: r.x, // Starts moving towards coordinates
+          x: r.x,
           y: r.y
         };
       }
@@ -145,20 +146,24 @@ export function InventoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
+      {/* Background neon glows */}
+      <div className="absolute top-0 left-1/3 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>🗺️</span> Giám sát Robot & Kho hàng
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Warehouse className="w-8 h-8 text-brand-600 glow-blue" />
+            <span>Giám sát Robot & Kho hàng</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-505">
+          <p className="mt-1 text-sm text-slate-500">
             Định vị robot AMR trên sơ đồ lưới nhà kho thời gian thực.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-xs">
           <span className={`w-3 h-3 rounded-full ${signalRConnected ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}></span>
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+          <span className="text-xs font-bold text-slate-500 tracking-wide uppercase">
             {signalRConnected ? 'SignalR: Trực tuyến' : 'Chế độ mô phỏng (Simulation)'}
           </span>
         </div>
@@ -168,8 +173,9 @@ export function InventoryPage() {
         {/* Map column */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-            <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2 text-base">
-              <span>🗺️</span> Sơ đồ lưới nhà kho (Grid Map 10x10)
+            <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2.5 text-base mb-2">
+              <Icons.Dashboard className="w-5 h-5 text-brand-600" />
+              <span>Sơ đồ lưới nhà kho (Grid Map 10x10)</span>
             </h3>
 
             {/* Grid wrapper */}
@@ -195,10 +201,10 @@ export function InventoryPage() {
                     <div
                       key={idx}
                       className={`relative w-11 h-11 rounded-lg border font-mono text-[9px] flex flex-col items-center justify-center transition-all select-none ${
-                        isShelf ? 'bg-slate-200 border-slate-300 text-slate-700 font-bold' :
-                        isCharging ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                        station ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold cursor-pointer hover:bg-blue-100' :
-                        'bg-white border-slate-200/60 text-slate-400 hover:bg-slate-105'
+                        isShelf ? 'bg-slate-200 border-slate-300 text-slate-650 font-bold' :
+                        isCharging ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' :
+                        station ? `bg-blue-50 border-blue-200 text-blue-700 font-bold cursor-pointer hover:bg-blue-100 ${selectedRobot ? 'ring-2 ring-blue-500/30 animate-pulse' : ''}` :
+                        'bg-white border-slate-200/60 text-slate-400 hover:bg-slate-50'
                       }`}
                       title={station ? station.name : `Tọa độ: (${x}, ${y})`}
                       onClick={() => {
@@ -209,35 +215,35 @@ export function InventoryPage() {
                     >
                       {/* Grid index coords */}
                       {!activeRobot && !isShelf && !station && !isCharging && (
-                        <span>{x},{y}</span>
+                        <span className="opacity-70">{x},{y}</span>
                       )}
 
                       {/* Charging dock icon */}
-                      {isCharging && !activeRobot && <span>⚡</span>}
+                      {isCharging && !activeRobot && <Icons.Bolt className="w-4 h-4 text-amber-500" />}
 
                       {/* Shelf label */}
-                      {isShelf && <span>Kệ</span>}
+                      {isShelf && <span className="text-[10px] tracking-wide text-slate-500 font-semibold">KỆ</span>}
 
                       {/* Station name */}
                       {station && !activeRobot && (
-                        <div className="text-center font-bold text-[9px] leading-tight">
-                          <span>📍</span>
-                          <span className="block text-[8px]">{station.id}</span>
+                        <div className="text-center font-bold text-[9px] leading-tight flex flex-col items-center">
+                          <Icons.Dashboard className="w-3.5 h-3.5 text-blue-500 mb-0.5" />
+                          <span className="block text-[8px] text-blue-600">{station.id}</span>
                         </div>
                       )}
 
                       {/* Robot overlay display */}
                       {activeRobot && (
                         <div 
-                          className={`absolute inset-0.5 rounded-lg flex flex-col items-center justify-center text-white font-bold text-[9px] leading-none z-15 shadow-sm animate-pulse ${
-                            activeRobot.status === 'Error' ? 'bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.4)]' :
-                            activeRobot.status === 'Charging' ? 'bg-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.4)]' :
-                            activeRobot.status === 'Moving' ? 'bg-brand-650 shadow-[0_0_8px_rgba(88,129,178,0.4)]' : 'bg-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                          className={`absolute inset-0.5 rounded-lg flex flex-col items-center justify-center text-white font-bold text-[9px] leading-none z-15 shadow-sm ${
+                            activeRobot.status === 'Error' ? 'bg-red-650 shadow-[0_0_8px_rgba(220,38,38,0.3)] animate-pulse' :
+                            activeRobot.status === 'Charging' ? 'bg-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.3)] animate-pulse' :
+                            activeRobot.status === 'Moving' ? 'bg-brand-600 shadow-[0_0_8px_rgba(88,129,178,0.3)]' : 'bg-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                           }`}
                         >
-                          <span>🤖</span>
+                          <Icons.Robot className="w-4 h-4 text-white" />
                           <span className="text-[7px] mt-0.5">{activeRobot.id}</span>
-                          <span className="text-[7px] mt-0.5">{Math.round(activeRobot.battery)}%</span>
+                          <span className="text-[7px] mt-0.5 opacity-90">{Math.round(activeRobot.battery)}%</span>
                         </div>
                       )}
                     </div>
@@ -247,11 +253,11 @@ export function InventoryPage() {
             </div>
 
             {/* Map Legend */}
-            <div className="flex flex-wrap gap-4 pt-2 justify-center text-xs text-slate-500 font-medium">
+            <div className="flex flex-wrap gap-5 pt-3 justify-center text-xs text-slate-500 font-medium">
               <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-slate-200 rounded border border-slate-300"></span> Kệ hàng (Obstacle)</span>
               <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-blue-50 rounded border border-blue-200"></span> Trạm giao nhận (Station)</span>
               <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-amber-50 rounded border border-amber-200"></span> Trạm sạc (Charging)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-brand-500 rounded"></span> Robot AMR</span>
+              <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 bg-brand-500 rounded flex items-center justify-center text-[8px] text-white font-extrabold"><Icons.Robot className="w-2.5 h-2.5" /></span> Robot AMR</span>
             </div>
           </div>
         </div>
@@ -260,48 +266,70 @@ export function InventoryPage() {
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-6">
             <div>
-              <h3 className="font-heading font-bold text-slate-900 text-base">🤖 Đội Robot AMR</h3>
-              <p className="text-slate-500 text-xs mt-1">Chọn một Robot rảnh để phát lệnh điều phối di chuyển thủ công</p>
+              <h3 className="font-heading font-bold text-slate-900 text-base flex items-center gap-2">
+                <Icons.Robot className="w-5 h-5 text-brand-600" />
+                <span>Đội Robot AMR</span>
+              </h3>
+              <p className="text-slate-500 text-xs mt-1 leading-relaxed">Chọn một Robot rảnh để phát lệnh điều phối di chuyển thủ công</p>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {robots.map(r => (
                 <div 
                   key={r.id}
                   onClick={() => {
                     if (r.status === 'Idle') setSelectedRobot(selectedRobot === r.id ? null : r.id);
                   }}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                  className={`p-4 rounded-xl border transition-all flex flex-col gap-2.5 ${
                     selectedRobot === r.id 
-                      ? 'border-brand-500 bg-brand-50/40 shadow-xs' 
-                      : 'border-slate-200 hover:bg-slate-50/50'
+                      ? 'border-brand-500 bg-brand-50/40 shadow-xs ring-1 ring-brand-500/10' 
+                      : r.status === 'Idle' 
+                        ? 'border-slate-200 hover:bg-slate-50/50 cursor-pointer' 
+                        : 'border-slate-200/50 opacity-70 cursor-not-allowed'
                   }`}
                 >
                   <div className="flex justify-between items-center">
-                    <h4 className="font-bold text-slate-900 text-sm">{r.name}</h4>
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${selectedRobot === r.id ? 'bg-brand-500' : 'bg-slate-400'}`}></span>
+                      <span>{r.name}</span>
+                    </h4>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       r.status === 'Idle' ? 'bg-emerald-50 text-emerald-700 border-emerald-250' :
                       r.status === 'Moving' ? 'bg-brand-50 text-brand-700 border-brand-200' :
                       r.status === 'Charging' ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse' : 'bg-red-50 text-red-700 border-red-200 animate-pulse'
                     }`}>
-                      {r.status}
+                      {r.status === 'Idle' ? 'Rảnh rỗi' : r.status === 'Moving' ? 'Di chuyển' : r.status === 'Charging' ? 'Đang sạc' : 'Báo lỗi'}
                     </span>
                   </div>
                   
-                  <div className="flex justify-between text-xs text-slate-500 font-semibold">
-                    <span>Tọa độ: ({r.x}, {r.y})</span>
-                    <span>Pin: {Math.round(r.battery)}%</span>
+                  <div className="flex justify-between text-xs text-slate-500 font-semibold bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                    <span className="flex items-center gap-1">Tọa độ: <strong className="text-slate-800">({r.x}, {r.y})</strong></span>
+                    <span className="flex items-center gap-1">
+                      Pin: 
+                      <strong className={`font-bold ${r.battery > 50 ? 'text-emerald-600' : r.battery > 20 ? 'text-amber-600' : 'text-red-655'}`}>
+                        {Math.round(r.battery)}%
+                      </strong>
+                    </span>
                   </div>
 
                   {r.destination && (
-                    <div className="text-[10px] bg-slate-50 px-2.5 py-1 rounded-lg text-slate-505 font-bold border border-slate-200/60">
-                      🎯 Điểm đến: <span className="text-slate-900">{r.destination}</span>
+                    <div className="text-[10px] bg-slate-50 px-2.5 py-1.5 rounded-lg text-slate-600 font-bold border border-slate-150 flex items-center gap-1.5">
+                      <Icons.Dashboard className="w-3.5 h-3.5 text-brand-600" />
+                      <span>Điểm đến:</span> 
+                      <span className="text-slate-900 font-extrabold">{r.destination}</span>
                     </div>
                   )}
 
                   {r.status === 'Idle' && (
-                    <div className="text-[10px] text-brand-650 font-bold pt-1">
-                      {selectedRobot === r.id ? '👉 Chọn một Trạm giao (ST) trên sơ đồ lưới' : '⚡ Click để chọn điều phối'}
+                    <div className="text-[10px] font-bold pt-0.5 flex items-center gap-1 text-brand-600">
+                      {selectedRobot === r.id ? (
+                        <>
+                          <span className="animate-ping w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+                          <span>Hãy chọn một Trạm giao nhận (ST) trên sơ đồ lưới</span>
+                        </>
+                      ) : (
+                        <span>Nhấp để thiết lập lộ trình thủ công</span>
+                      )}
                     </div>
                   )}
                 </div>

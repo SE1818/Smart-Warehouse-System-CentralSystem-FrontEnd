@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Warehouse } from '@/types/stock';
 import { stockService } from '@/services/stock';
+import { Icons } from '@/components/Icons';
 
 export function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -97,106 +98,110 @@ export function WarehousesPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
+      {/* Background Glow */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>🏭</span> Quản lý kho hàng
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Warehouse className="w-8 h-8 text-brand-600 glow-blue" />
+            <span>Quản lý kho hàng</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-550">
             Quản lý danh sách các kho hàng và trung tâm phân phối
           </p>
         </div>
         <button
           onClick={() => setIsAdding(true)}
-          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 self-start sm:self-auto transition-all duration-150 active:scale-98"
+          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 self-start sm:self-auto transition-all cursor-pointer"
         >
-          ➕ Thêm kho mới
+          <Icons.Plus className="w-4 h-4 text-white" />
+          <span>Thêm kho mới</span>
         </button>
       </div>
 
       {/* Filter bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔍</span>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên kho hoặc mã kho..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
+            className="w-full pl-11 pr-4 py-3 bg-slate-55 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 placeholder-slate-400 font-semibold"
           />
+          <Icons.Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
       </div>
 
       {/* Error block */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold leading-relaxed">
-          ⚠️ {error}
+        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold flex items-center gap-2.5">
+          <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
       {/* Table List */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
-          <p className="text-slate-500 text-xs font-medium">
-            Đang tải danh sách kho hàng...
-          </p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600" />
+          <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách kho hàng...</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="w-full text-left border-collapse text-sm min-w-[700px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                  <th className="p-4">Mã kho</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold">
+                  <th className="p-4 pl-6">Mã kho</th>
                   <th className="p-4">Tên kho</th>
                   <th className="p-4">Địa chỉ</th>
                   <th className="p-4">Trạng thái</th>
-                  <th className="p-4 text-right">Thao tác</th>
+                  <th className="p-4 pr-6 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-600 font-medium">
+              <tbody className="divide-y divide-slate-100 text-slate-650 font-semibold">
                 {filtered.map((w) => (
                   <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 font-bold text-slate-900 font-mono text-xs">
+                    <td className="p-4 pl-6 font-bold text-brand-600 font-mono text-xs">
                       {w.code}
                     </td>
-                    <td className="p-4 font-bold text-slate-800">{w.name}</td>
-                    <td className="p-4 text-slate-600">{w.address}</td>
+                    <td className="p-4 font-bold text-slate-900">{w.name}</td>
+                    <td className="p-4 text-slate-500">{w.address}</td>
                     <td className="p-4">
                       <button
                         onClick={() => toggleActive(w.id)}
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-colors ${
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition-colors active:scale-95 ${
                           w.isActive
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                            : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                            : 'bg-slate-105 text-slate-500 border-slate-200 hover:bg-slate-200'
                         }`}
                       >
                         {w.isActive ? 'Hoạt động' : 'Tạm ngưng'}
                       </button>
                     </td>
-                    <td className="p-4 text-right space-x-2">
+                    <td className="p-4 pr-6 text-right space-x-3 whitespace-nowrap">
                       <button
                         onClick={() => setEditingWarehouse(w)}
-                        className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
+                        className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-350 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
                       >
-                        ✏️ Sửa
+                        Sửa
                       </button>
                       <button
                         onClick={() => deleteWarehouse(w.id)}
-                        className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold transition-colors"
+                        className="px-3.5 py-1.5 border border-red-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
                       >
-                        🗑️ Xóa
+                        Xóa
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">
+                    <td colSpan={5} className="p-16 text-center text-slate-400 italic">
                       Không tìm thấy kho hàng nào
                     </td>
                   </tr>
@@ -210,14 +215,15 @@ export function WarehousesPage() {
       {/* Edit Modal */}
       {editingWarehouse && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-heading font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2">
-              ✏️ Chỉnh sửa kho hàng
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
+            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <Icons.Warehouse className="w-5 h-5 text-brand-600" />
+              <span>Chỉnh sửa kho hàng</span>
             </h3>
 
             <form onSubmit={handleEditSave} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Mã kho
                 </label>
                 <input
@@ -227,12 +233,12 @@ export function WarehousesPage() {
                     setEditingWarehouse({ ...editingWarehouse, code: e.target.value })
                   }
                   required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-bold"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Tên kho
                 </label>
                 <input
@@ -242,12 +248,12 @@ export function WarehousesPage() {
                     setEditingWarehouse({ ...editingWarehouse, name: e.target.value })
                   }
                   required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-bold"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Địa chỉ
                 </label>
                 <textarea
@@ -257,12 +263,12 @@ export function WarehousesPage() {
                   }
                   required
                   rows={2}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 resize-none"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 resize-none h-20"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Trạng thái
                 </label>
                 <select
@@ -284,13 +290,13 @@ export function WarehousesPage() {
                 <button
                   type="button"
                   onClick={() => setEditingWarehouse(null)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors"
+                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all"
+                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Lưu thay đổi
                 </button>
@@ -303,14 +309,15 @@ export function WarehousesPage() {
       {/* Add Modal */}
       {isAdding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-heading font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2">
-              ➕ Thêm kho hàng mới
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
+            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <Icons.Plus className="w-5 h-5 text-brand-600" />
+              <span>Thêm kho hàng mới</span>
             </h3>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Mã kho
                 </label>
                 <input
@@ -324,7 +331,7 @@ export function WarehousesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Tên kho
                 </label>
                 <input
@@ -338,7 +345,7 @@ export function WarehousesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Địa chỉ
                 </label>
                 <textarea
@@ -349,12 +356,12 @@ export function WarehousesPage() {
                   }
                   required
                   rows={2}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 resize-none"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 resize-none h-20"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Trạng thái
                 </label>
                 <select
@@ -376,13 +383,13 @@ export function WarehousesPage() {
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500"
+                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all"
+                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Tạo kho hàng
                 </button>

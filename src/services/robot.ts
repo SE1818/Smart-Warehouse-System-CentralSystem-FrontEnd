@@ -1,5 +1,6 @@
 import apiClient from './api';
 import type { Robot, MoveRequest, StatusRequest, FulfillmentRequest } from '@/types/robot';
+import type { Order } from '@/types/product';
 
 export const robotService = {
   // Get all robots
@@ -24,8 +25,8 @@ export const robotService = {
   },
 
   // Get pending orders
-  async listPendingOrders(): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/v1/orders/pending');
+  async listPendingOrders(): Promise<Order[]> {
+    const response = await apiClient.get<Order[]>('/api/v1/orders/pending');
     return response.data;
   },
 };

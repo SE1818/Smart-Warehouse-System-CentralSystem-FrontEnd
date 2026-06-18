@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { metricsService } from '@/services';
 import { MetricType } from '@/types';
+import { Icons } from '@/components/Icons';
 
 interface MetricCardProps {
   title: string;
   value: string | number;
   unit: string;
-  icon: string;
+  icon: React.ReactNode;
   color: string;
-  glowColor: string;
 }
 
-function MetricCard({ title, value, unit, icon, color, glowColor }: MetricCardProps) {
+function MetricCard({ title, value, unit, icon, color }: MetricCardProps) {
   return (
     <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-300">
       <div className="flex items-center justify-between">
@@ -22,7 +22,7 @@ function MetricCard({ title, value, unit, icon, color, glowColor }: MetricCardPr
             <span className="text-xs text-slate-500 font-semibold">{unit}</span>
           </div>
         </div>
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border bg-slate-50 border-slate-100 ${color} ${glowColor}`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${color}`}>
           {icon}
         </div>
       </div>
@@ -30,14 +30,15 @@ function MetricCard({ title, value, unit, icon, color, glowColor }: MetricCardPr
   );
 }
 
-const metricConfig: Record<string, { label: string; unit: string; icon: string; color: string; glowColor: string; type: MetricType }> = {
-  temperature: { label: 'Nhiệt độ', unit: '°C', icon: '🌡️', color: 'text-red-650', glowColor: 'border-red-100 bg-red-50/30', type: MetricType.Temperature },
-  humidity: { label: 'Độ ẩm', unit: '%', icon: '💧', color: 'text-blue-650', glowColor: 'border-blue-100 bg-blue-50/30', type: MetricType.Humidity },
-  pressure: { label: 'Áp suất', unit: 'hPa', icon: '⏲️', color: 'text-purple-650', glowColor: 'border-purple-100 bg-purple-50/30', type: MetricType.Pressure },
-  lightLevel: { label: 'Ánh sáng', unit: 'lux', icon: '💡', color: 'text-yellow-600', glowColor: 'border-yellow-100 bg-yellow-50/30', type: MetricType.LightLevel },
-  powerConsumption: { label: 'Tiêu thụ điện', unit: 'kWh', icon: '⚡', color: 'text-emerald-650', glowColor: 'border-emerald-100 bg-emerald-50/30', type: MetricType.PowerConsumption },
-  inventoryCount: { label: 'Số lượng hàng', unit: 'sp', icon: '📦', color: 'text-orange-650', glowColor: 'border-orange-100 bg-orange-50/30', type: MetricType.InventoryCount },
+const metricConfig: Record<string, { label: string; unit: string; icon: React.ReactNode; color: string; glowColor: string; type: MetricType }> = {
+  temperature: { label: 'Nhiệt độ', unit: '°C', icon: <Icons.Thermometer className="w-6 h-6" />, color: 'text-red-600 bg-red-50/80 border-red-100/50', glowColor: 'border-red-100 bg-red-50/30', type: MetricType.Temperature },
+  humidity: { label: 'Độ ẩm', unit: '%', icon: <Icons.Droplet className="w-6 h-6" />, color: 'text-blue-600 bg-blue-50/80 border-blue-100/50', glowColor: 'border-blue-100 bg-blue-50/30', type: MetricType.Humidity },
+  pressure: { label: 'Áp suất', unit: 'hPa', icon: <Icons.Gauge className="w-6 h-6" />, color: 'text-purple-650 bg-purple-50/80 border-purple-100/50', glowColor: 'border-purple-100 bg-purple-50/30', type: MetricType.Pressure },
+  lightLevel: { label: 'Ánh sáng', unit: 'lux', icon: <Icons.LightBulb className="w-6 h-6" />, color: 'text-yellow-600 bg-yellow-50/80 border-yellow-100/50', glowColor: 'border-yellow-100 bg-yellow-50/30', type: MetricType.LightLevel },
+  powerConsumption: { label: 'Tiêu thụ điện', unit: 'kWh', icon: <Icons.Bolt className="w-6 h-6" />, color: 'text-emerald-650 bg-emerald-50/80 border-emerald-100/50', glowColor: 'border-emerald-100 bg-emerald-50/30', type: MetricType.PowerConsumption },
+  inventoryCount: { label: 'Số lượng hàng', unit: 'sp', icon: <Icons.StockBox className="w-6 h-6" />, color: 'text-orange-650 bg-orange-50/80 border-orange-100/50', glowColor: 'border-orange-100 bg-orange-50/30', type: MetricType.InventoryCount },
 };
+
 
 export function MetricsPage() {
   const [metrics, setMetrics] = useState<Record<string, number>>({});
@@ -93,10 +94,11 @@ export function MetricsPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>📊</span> Giám sát chỉ số môi trường
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Metrics className="w-8 h-8 text-brand-600" />
+            <span>Giám sát chỉ số môi trường</span>
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Theo dõi các chỉ số hiệu suất và môi trường kho theo thời gian thực
@@ -109,7 +111,7 @@ export function MetricsPage() {
               setSelectedWarehouse(e.target.value);
               setLoading(true);
             }}
-            className="px-4 py-2.5 bg-white border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-xs font-bold text-slate-700"
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs font-bold text-slate-700 shadow-xs cursor-pointer"
           >
             <option value="WH001">WH001 - Kho A (Đồ uống)</option>
             <option value="WH002">WH002 - Kho B (Vật tư)</option>
@@ -138,7 +140,6 @@ export function MetricsPage() {
               unit={config.unit}
               icon={config.icon}
               color={config.color}
-              glowColor={config.glowColor}
             />
           ))}
         </div>
@@ -147,8 +148,9 @@ export function MetricsPage() {
       {/* Analytical charts simulation */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-            <span>📈</span> Lịch sử hoạt động 24h
+          <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2.5">
+            <Icons.AnalyticsReport className="w-5 h-5 text-brand-600" />
+            <span>Lịch sử hoạt động 24h</span>
           </h3>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tự động cập nhật</span>
         </div>

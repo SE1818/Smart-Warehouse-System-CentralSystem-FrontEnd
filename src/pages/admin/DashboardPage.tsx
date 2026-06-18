@@ -4,6 +4,8 @@ import * as signalR from '@microsoft/signalr';
 import { orderService, metricsService, productService, userService } from '@/services';
 import { MetricType } from '@/types';
 import { STATUS_COLORS, STATUS_LABELS, DEFAULT_PRODUCTS } from '@/constants';
+import { Icons } from '@/components/Icons';
+
 
 interface Robot {
   id: string;
@@ -161,10 +163,10 @@ export function DashboardPage() {
   }, [loadDashboardData, handleRobotLocationUpdate]);
 
   const cardConfig = [
-    { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: '📦', iconColor: 'text-blue-400' },
-    { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ warehouse_manager', icon: '📋', iconColor: 'text-purple-400' },
-    { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: '🤖', iconColor: 'text-emerald-400' },
-    { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: `Số lượng từ ${usersCount} tài khoản`, icon: '👥', iconColor: 'text-orange-400' }
+    { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: <Icons.Product className="w-6 h-6" />, iconColor: 'text-blue-500 bg-blue-50/80 border-blue-100/50' },
+    { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ quản lý', icon: <Icons.CartOrder className="w-6 h-6" />, iconColor: 'text-purple-500 bg-purple-50/80 border-purple-100/50' },
+    { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: <Icons.Robot className="w-6 h-6" />, iconColor: 'text-emerald-500 bg-emerald-50/80 border-emerald-100/50' },
+    { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: `Số lượng từ ${usersCount} tài khoản`, icon: <Icons.StockBox className="w-6 h-6" />, iconColor: 'text-orange-500 bg-orange-50/80 border-orange-100/50' }
   ];
 
   const statusColors = STATUS_COLORS;
@@ -173,7 +175,7 @@ export function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 flex flex-col items-center justify-center space-y-4">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+        <Icons.Spinner className="h-10 w-10 text-brand-600" />
         <p className="text-slate-500 text-xs font-semibold">Đang tổng hợp dữ liệu bảng điều khiển...</p>
       </div>
     );
@@ -182,31 +184,33 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-6">
+      <div className="flex items-center justify-between border-b border-slate-200/80 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>📊</span> Bảng điều khiển warehouse_manager
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Dashboard className="w-8 h-8 text-brand-600" />
+            <span>Bảng điều khiển quản lý</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-505">Giám sát hoạt động kho hàng, robot AMR và phân tích kinh doanh</p>
+          <p className="mt-1 text-sm text-slate-500">Giám sát hoạt động kho hàng, robot AMR và phân tích kinh doanh</p>
         </div>
         <button
           onClick={loadDashboardData}
-          className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-55 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-98 cursor-pointer"
         >
-          🔄 Làm mới
+          <Icons.Refresh className="w-4 h-4 text-slate-500" />
+          <span>Làm mới</span>
         </button>
       </div>
 
       {/* Cards stats grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cardConfig.map((c) => (
-          <div key={c.title} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition-all hover:border-slate-300">
+          <div key={c.title} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300/80">
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{c.title}</p>
               <h3 className="text-2xl font-heading font-black text-slate-900">{c.value}</h3>
               <p className="text-[11px] text-slate-500 font-medium">{c.change}</p>
             </div>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl bg-slate-50 border border-slate-200/60 ${c.iconColor}`}>
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${c.iconColor}`}>
               {c.icon}
             </div>
           </div>
@@ -219,7 +223,8 @@ export function DashboardPage() {
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
               <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-                <span>📈</span> Biểu đồ hoạt động tuần này
+                <Icons.AnalyticsReport className="w-5 h-5 text-brand-600" />
+                <span>Biểu đồ hoạt động tuần này</span>
               </h3>
               <span className="text-[10px] font-bold text-slate-400 uppercase">Đơn vị: Đơn hàng</span>
             </div>
@@ -244,7 +249,7 @@ export function DashboardPage() {
                     {/* Bar */}
                     <div 
                       style={{ height: `${bar.pct}%` }}
-                      className="w-8 sm:w-12 rounded-t-lg bg-brand-500/80 transition-all duration-300 group-hover:brightness-110 group-hover:shadow-lg group-hover:shadow-brand-500/10"
+                      className="w-8 sm:w-12 rounded-t-lg bg-brand-500/85 transition-all duration-300 group-hover:bg-brand-600 group-hover:shadow-lg group-hover:shadow-brand-500/20"
                     ></div>
                   </div>
                   <span className="text-xs font-bold text-slate-400">{bar.day}</span>
@@ -259,7 +264,8 @@ export function DashboardPage() {
           <div className="bg-white text-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-                <span>🤖</span> Trạng thái Robot AMR
+                <Icons.Robot className="w-5 h-5 text-brand-600" />
+                <span>Trạng thái Robot AMR</span>
               </h3>
               <span className={`w-2.5 h-2.5 rounded-full ${signalRConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
             </div>
@@ -282,9 +288,10 @@ export function DashboardPage() {
             </div>
             <Link
               to="/admin/inventory"
-              className="block text-center w-full py-2.5 bg-slate-50 hover:bg-slate-105 text-brand-650 hover:text-brand-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors"
+              className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-brand-600 hover:text-brand-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all cursor-pointer"
             >
-              🗺️ Sơ đồ & điều phối AMR
+              <Icons.Dashboard className="w-4 h-4" />
+              <span>Sơ đồ & điều phối AMR</span>
             </Link>
           </div>
         </div>
@@ -294,9 +301,10 @@ export function DashboardPage() {
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-heading font-bold text-slate-900 flex items-center gap-2">
-            <span>📋</span> Đơn hàng mới đặt chờ duyệt
+            <Icons.CartOrder className="w-5 h-5 text-brand-600" />
+            <span>Đơn hàng mới đặt chờ duyệt</span>
           </h3>
-          <Link to="/admin/orders" className="text-brand-650 text-xs font-bold hover:underline">
+          <Link to="/admin/orders" className="text-brand-600 text-xs font-bold hover:text-brand-700 hover:underline transition-all">
             Xem tất cả đơn hàng chờ duyệt →
           </Link>
         </div>
@@ -317,7 +325,7 @@ export function DashboardPage() {
                 <tr key={o.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="p-4 font-bold text-slate-900">{o.id}</td>
                   <td className="p-4">{o.date}</td>
-                  <td className="p-4 font-bold text-slate-700">{o.station}</td>
+                  <td className="p-4 font-bold text-slate-755">{o.station}</td>
                   <td className="p-4 text-slate-900 font-bold">{o.total.toLocaleString()}đ</td>
                   <td className="p-4">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusColors[o.status] || 'bg-slate-50 border-slate-200'}`}>
@@ -338,3 +346,4 @@ export function DashboardPage() {
     </div>
   );
 }
+

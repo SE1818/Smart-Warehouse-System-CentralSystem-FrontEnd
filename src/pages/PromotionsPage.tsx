@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { promotionService } from '../services/promotion';
 import type { PromotionDto, CreatePromotionRequest } from '../types/promotion';
+import { Icons } from '@/components/Icons';
 
 export function PromotionsPage() {
   const [promotions, setPromotions] = useState<PromotionDto[]>([]);
@@ -21,11 +22,7 @@ export function PromotionsPage() {
     flashSaleProducts: [],
   });
 
-  useEffect(() => {
-    loadPromotions();
-  }, []);
-
-  const loadPromotions = async () => {
+  const loadPromotions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -37,7 +34,14 @@ export function PromotionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadPromotions();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadPromotions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,9 +66,10 @@ export function PromotionsPage() {
         flashSaleProducts: [],
       });
       loadPromotions();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving promotion:', err);
-      alert('Lỗi khi lưu khuyến mãi: ' + (err.response?.data?.message || err.message));
+      const axiosError = err as { response?: { data?: { message?: string } }; message?: string };
+      alert('Lỗi khi lưu khuyến mãi: ' + (axiosError.response?.data?.message || axiosError.message));
     }
   };
 
@@ -112,175 +117,215 @@ export function PromotionsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return 'bg-green-100 text-green-800';
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
       case 'inactive':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-slate-50 text-slate-500 border-slate-200/60';
       case 'expired':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-50 text-red-700 border-red-200/60';
       default:
-        return 'bg-slate-100 text-slate-800';
+        return 'bg-slate-50 text-slate-700 border-slate-200/60';
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-slate-900">Quản lý Khuyến mãi</h1>
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex justify-between items-center border-b border-slate-200/80 pb-6">
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.TagDiscount className="w-8 h-8 text-brand-600" />
+            <span>Quản lý Khuyến mãi</span>
+          </h1>
           <button
             onClick={() => { setEditingPromotion(null); setForm({
               code: '', description: '', type: 'percentage', value: 0, startDate: '', endDate: '', usageLimit: 0
             }); setShowModal(true); }}
-            className="px-4 py-2 bg-brand-600 text-white rounded-xl hover:bg-brand-500"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all cursor-pointer"
           >
-            ➕ Thêm khuyến mãi
+            <Icons.Plus className="w-4 h-4" />
+            <span>Thêm khuyến mãi</span>
           </button>
         </div>
 
-        {error && <div className="p-4 bg-red-50 text-red-700 rounded-xl mb-4">{error}</div>}
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold flex items-start gap-2.5">
+            <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {loading ? (
-          <div className="text-center py-12">Đang tải...</div>
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+            <Icons.Spinner className="h-10 w-10 text-brand-600" />
+            <p className="text-slate-505 text-xs font-semibold">Đang tải danh sách khuyến mãi...</p>
+          </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Mã</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Mô tả</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Loại</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Giá trị</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Thời gian</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Trạng thái</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {promotions.map((promo) => (
-                  <tr key={promo.id}>
-                    <td className="px-6 py-4 font-medium text-slate-900">{promo.code}</td>
-                    <td className="px-6 py-4 text-slate-600">{promo.description}</td>
-                    <td className="px-6 py-4 text-slate-600">{promo.type}</td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {promo.type === 'percentage' ? `${promo.value}%` : `${promo.value.toLocaleString()}đ`}
-                    </td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {new Date(promo.startDate).toLocaleDateString('vi-VN')} - {new Date(promo.endDate).toLocaleDateString('vi-VN')}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(promo.status)}`}>
-                        {getStatusLabel(promo.status)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => handleEdit(promo)} className="text-brand-600 hover:text-brand-800">Sửa</button>
-                      <button onClick={() => handleDelete(promo.id)} className="text-red-600 hover:text-red-800">Xóa</button>
-                    </td>
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                    <th className="p-4">Mã</th>
+                    <th className="p-4">Mô tả</th>
+                    <th className="p-4">Loại</th>
+                    <th className="p-4">Giá trị</th>
+                    <th className="p-4">Thời gian</th>
+                    <th className="p-4">Trạng thái</th>
+                    <th className="p-4 text-right">Thao tác</th>
                   </tr>
-                ))}
-                {promotions.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">Chưa có khuyến mãi nào</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-705 font-medium">
+                  {promotions.map((promo) => (
+                    <tr key={promo.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 font-bold text-slate-900">{promo.code}</td>
+                      <td className="p-4 text-slate-600 max-w-xs truncate">{promo.description}</td>
+                      <td className="p-4 text-slate-605">
+                        <span className="bg-slate-100 border border-slate-200 text-slate-800 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg">
+                          {promo.type === 'percentage' ? 'Phần trăm' : 'Cố định'}
+                        </span>
+                      </td>
+                      <td className="p-4 font-bold text-slate-900">
+                        {promo.type === 'percentage' ? `${promo.value}%` : `${promo.value.toLocaleString()}đ`}
+                      </td>
+                      <td className="p-4 text-slate-500 text-xs">
+                        {new Date(promo.startDate).toLocaleDateString('vi-VN')} - {new Date(promo.endDate).toLocaleDateString('vi-VN')}
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full border ${getStatusColor(promo.status)}`}>
+                          {getStatusLabel(promo.status)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right space-x-2">
+                        <button
+                          onClick={() => handleEdit(promo)}
+                          className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-brand-600 text-xs font-bold rounded-lg border border-slate-200 hover:border-slate-300 transition-all cursor-pointer"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => handleDelete(promo.id)}
+                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100/80 text-red-650 text-xs font-bold rounded-lg border border-red-200/40 transition-all cursor-pointer"
+                        >
+                          Xóa
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {promotions.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-400 italic">Chưa có khuyến mãi nào hoạt động</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white rounded-xl p-6 w-full max-w-lg">
-              <h2 className="text-xl font-bold mb-4">{editingPromotion ? 'Sửa khuyến mãi' : 'Thêm khuyến mãi'}</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 border border-slate-200/60">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h2 className="text-lg font-heading font-black text-slate-900">
+                  {editingPromotion ? 'Sửa khuyến mãi' : 'Thêm khuyến mãi mới'}
+                </h2>
+                <button
+                  onClick={() => { setShowModal(false); setEditingPromotion(null); }}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer border border-slate-200/40"
+                >
+                  ✕
+                </button>
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Mã khuyến mãi</label>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã khuyến mãi</label>
                   <input
                     type="text"
                     value={form.code}
                     onChange={(e) => setForm({ ...form, code: e.target.value })}
                     required
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    placeholder="VD: GIAMGIA30"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Mô tả</label>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả chi tiết</label>
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     required
+                    placeholder="Nhập mô tả khuyến mãi..."
                     rows={2}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-medium"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Loại</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loại chiết khấu</label>
                     <select
                       value={form.type}
                       onChange={(e) => setForm({ ...form, type: e.target.value as 'percentage' | 'fixed' })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold cursor-pointer"
                     >
                       <option value="percentage">Phần trăm (%)</option>
                       <option value="fixed">Giá trị cố định (đ)</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Giá trị</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-widest">Mức giảm</label>
                     <input
                       type="number"
                       value={form.value}
                       onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
                       required
                       min={0}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold"
                     />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Ngày bắt đầu</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ngày bắt đầu</label>
                     <input
                       type="date"
                       value={form.startDate.slice(0, 10)}
                       onChange={(e) => setForm({ ...form, startDate: e.target.value + 'T00:00:00' })}
                       required
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold cursor-pointer"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Ngày kết thúc</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ngày kết thúc</label>
                     <input
                       type="date"
                       value={form.endDate.slice(0, 10)}
                       onChange={(e) => setForm({ ...form, endDate: e.target.value + 'T23:59:59' })}
                       required
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold cursor-pointer"
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Giới hạn sử dụng</label>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giới hạn số lần sử dụng</label>
                   <input
                     type="number"
                     value={form.usageLimit}
                     onChange={(e) => setForm({ ...form, usageLimit: Number(e.target.value) })}
                     required
                     min={1}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold"
                   />
                 </div>
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => { setShowModal(false); setEditingPromotion(null); }}
-                    className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+                    className="px-4 py-2.5 border border-slate-200 hover:bg-slate-55 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-98"
                   >
                     Hủy
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-500"
+                    className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-brand-500/10 hover:shadow-brand-500/25 active:scale-98 cursor-pointer"
                   >
                     {editingPromotion ? 'Cập nhật' : 'Tạo mới'}
                   </button>
@@ -293,3 +338,4 @@ export function PromotionsPage() {
     </div>
   );
 }
+

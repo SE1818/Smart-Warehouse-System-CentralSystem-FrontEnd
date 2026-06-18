@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Product } from '@/types';
 import { productService } from '@/services';
+import { Icons } from '@/components/Icons';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -97,27 +98,31 @@ export function ProductsPage() {
   const paginatedProducts = filtered.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
+      {/* Background Glows */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>📦</span> Quản lý sản phẩm
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Product className="w-8 h-8 text-brand-600 glow-blue" />
+            <span>Quản lý sản phẩm</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-505">Điều khiển danh mục hàng hóa, giá bán và số lượng tồn kho</p>
+          <p className="mt-1 text-sm text-slate-500">Điều khiển danh mục hàng hóa, giá bán và số lượng tồn kho</p>
         </div>
         <button
           onClick={() => setIsAdding(true)}
-          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 self-start sm:self-auto transition-all duration-150 active:scale-98"
+          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 self-start sm:self-auto transition-all cursor-pointer"
         >
-          ➕ Thêm sản phẩm mới
+          <Icons.Plus className="w-4 h-4 text-white" />
+          <span>Thêm sản phẩm mới</span>
         </button>
       </div>
 
       {/* Filter bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">🔍</span>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên sản phẩm..."
@@ -126,71 +131,73 @@ export function ProductsPage() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
+            className="w-full pl-11 pr-4 py-3 bg-slate-55 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 placeholder-slate-400 font-semibold"
           />
+          <Icons.Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
       </div>
 
       {/* Error block */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed">
-          ⚠️ {error}
+        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2.5">
+          <Icons.AlertWarning className="w-4 h-4 text-red-600 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
       {/* Table List */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
-          <p className="text-slate-500 text-xs font-medium">Đang tải danh sách sản phẩm...</p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600" />
+          <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách sản phẩm...</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+            <table className="w-full text-left border-collapse text-sm min-w-[700px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                  <th className="p-4">Sản phẩm</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold">
+                  <th className="p-4 pl-6">Sản phẩm</th>
                   <th className="p-4">Phân loại</th>
                   <th className="p-4">Giá bán</th>
                   <th className="p-4">Tồn kho</th>
-                  <th className="p-4 text-right">Thao tác</th>
+                  <th className="p-4 pr-6 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
+              <tbody className="divide-y divide-slate-100 text-slate-600 font-semibold">
                 {paginatedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 font-bold text-slate-900">{p.name}</td>
+                    <td className="p-4 pl-6 font-bold text-slate-900">{p.name}</td>
                     <td className="p-4">
-                      <span className="text-xs font-semibold bg-brand-50 border border-brand-100/50 text-brand-700 px-2.5 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-brand-50 border border-brand-100/50 text-brand-700 px-3 py-1 rounded-full">
                         {p.category}
                       </span>
                     </td>
-                    <td className="p-4 text-slate-900 font-bold">{p.price.toLocaleString()}đ</td>
+                    <td className="p-4 text-slate-900 font-extrabold">{p.price.toLocaleString()}đ</td>
                     <td className="p-4">
                       <span className={`font-bold ${p.stockQuantity <= 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
                         {p.stockQuantity} chiếc {p.stockQuantity <= 0 && ' (Hết hàng)'}
                       </span>
                     </td>
-                    <td className="p-4 text-right space-x-2">
+                    <td className="p-4 pr-6 text-right space-x-3 whitespace-nowrap">
                       <button
                         onClick={() => setEditingProduct(p)}
-                        className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition-colors"
+                        className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
                       >
-                        ✏️ Sửa
+                        Sửa
                       </button>
                       <button
                         onClick={() => deleteProduct(p.id)}
-                        className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-55 rounded-lg text-xs font-semibold transition-colors"
+                        className="px-3.5 py-1.5 border border-red-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
                       >
-                        🗑️ Xóa
+                        Xóa
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
+                    <td colSpan={5} className="p-16 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
                   </tr>
                 )}
               </tbody>
@@ -210,18 +217,18 @@ export function ProductsPage() {
                   type="button"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  className="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-550 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer"
                 >
-                  &larr;
+                  <Icons.ChevronLeft className="w-4 h-4" />
                 </button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
                     type="button"
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 ${
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 cursor-pointer ${
                       currentPage === page
-                        ? "border-brand-500 bg-brand-500 text-white shadow-md shadow-brand-500/10"
+                        ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/10"
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
@@ -232,9 +239,9 @@ export function ProductsPage() {
                   type="button"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  className="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50 disabled:pointer-events-none active:scale-95"
+                  className="w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-550 hover:bg-slate-50 flex items-center justify-center text-xs font-bold transition-all disabled:opacity-30 disabled:pointer-events-none active:scale-95 cursor-pointer"
                 >
-                  &rarr;
+                  <Icons.ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -245,52 +252,53 @@ export function ProductsPage() {
       {/* Edit Modal */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-heading font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2">
-              ✏️ Chỉnh sửa sản phẩm
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
+            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <Icons.Product className="w-5 h-5 text-brand-600" />
+              <span>Chỉnh sửa sản phẩm</span>
             </h3>
             
             <form onSubmit={handleEditSave} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tên sản phẩm</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
                 <input
                   type="text"
                   value={editingProduct.name}
                   onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
                   required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Giá bán (đ)</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
                   <input
                     type="number"
                     value={editingProduct.price}
                     onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Số lượng tồn</label>
+                  <label className="block text-[10px] font-bold text-slate-405 uppercase tracking-widest">Số lượng tồn</label>
                   <input
                     type="number"
                     value={editingProduct.stockQuantity}
                     onChange={(e) => setEditingProduct({ ...editingProduct, stockQuantity: Number(e.target.value) })}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phân loại</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phân loại</label>
                 <select
                   value={editingProduct.category}
                   onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
                 >
                   <option value="Đồ uống">Đồ uống</option>
                   <option value="Vật tư y tế">Vật tư y tế</option>
@@ -303,13 +311,13 @@ export function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors"
+                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all"
+                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Lưu thay đổi
                 </button>
@@ -322,53 +330,54 @@ export function ProductsPage() {
       {/* Add Modal */}
       {isAdding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl">
-            <h3 className="text-lg font-heading font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2">
-              ➕ Thêm sản phẩm mới
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
+            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <Icons.Plus className="w-5 h-5 text-brand-600" />
+              <span>Thêm sản phẩm mới</span>
             </h3>
             
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tên sản phẩm</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
                 <input
                   type="text"
                   placeholder="Ví dụ: Nước uống đóng chai"
                   value={newProduct.name}
                   onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                   required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Giá bán (đ)</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
                   <input
                     type="number"
                     value={newProduct.price || ''}
                     onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Số lượng tồn</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
                   <input
                     type="number"
                     value={newProduct.stockQuantity || ''}
                     onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: Number(e.target.value) })}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phân loại</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phân loại</label>
                 <select
                   value={newProduct.category}
                   onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
                 >
                   <option value="Đồ uống">Đồ uống</option>
                   <option value="Vật tư y tế">Vật tư y tế</option>
@@ -378,12 +387,12 @@ export function ProductsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mô tả ngắn</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả ngắn</label>
                 <textarea
                   placeholder="Mô tả công dụng..."
                   value={newProduct.description}
                   onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 h-20"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 h-20 resize-none"
                 />
               </div>
 
@@ -391,13 +400,13 @@ export function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500"
+                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-brand-650 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all"
+                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Tạo sản phẩm
                 </button>

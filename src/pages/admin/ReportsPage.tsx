@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { metricsService, productService } from '@/services';
 import { MetricType } from '@/types';
 import type { Product } from '@/types';
+import { Icons } from '@/components/Icons';
 
 export function ReportsPage() {
   const [timePeriod, setTimePeriod] = useState('7days');
@@ -46,10 +47,10 @@ export function ReportsPage() {
   }, [timePeriod, loadReportData]);
 
   const stats = [
-    { title: 'Nhiệt độ trung bình', value: `${avgTemp.toFixed(1)}°C`, icon: '🌡️', color: 'bg-blue-50/50 text-blue-700 border-blue-200' },
-    { title: 'Độ ẩm trung bình', value: `${avgHumidity.toFixed(1)}%`, icon: '💧', color: 'bg-emerald-50/50 text-emerald-700 border-emerald-200' },
-    { title: 'Tiêu thụ điện năng', value: `${totalPower.toFixed(1)} kWh`, icon: '⚡', color: 'bg-purple-50/50 text-purple-700 border-purple-200' },
-    { title: 'Số lượng tồn kho (Max)', value: maxInventory.toLocaleString(), icon: '📦', color: 'bg-amber-50/50 text-amber-700 border-amber-200' }
+    { title: 'Nhiệt độ trung bình', value: `${avgTemp.toFixed(1)}°C`, icon: <Icons.Thermometer className="w-6 h-6 text-blue-600" />, color: 'bg-blue-50/50 text-blue-700 border-blue-200' },
+    { title: 'Độ ẩm trung bình', value: `${avgHumidity.toFixed(1)}%`, icon: <Icons.Droplet className="w-6 h-6 text-emerald-650" />, color: 'bg-emerald-50/50 text-emerald-700 border-emerald-200' },
+    { title: 'Tiêu thụ điện năng', value: `${totalPower.toFixed(1)} kWh`, icon: <Icons.Bolt className="w-6 h-6 text-purple-650" />, color: 'bg-purple-50/50 text-purple-700 border-purple-200' },
+    { title: 'Số lượng tồn kho (Max)', value: maxInventory.toLocaleString(), icon: <Icons.StockBox className="w-6 h-6 text-amber-600" />, color: 'bg-amber-50/50 text-amber-700 border-amber-200' }
   ];
 
   return (
@@ -57,16 +58,17 @@ export function ReportsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>📈</span> Báo cáo hiệu suất kho
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.AnalyticsReport className="w-8 h-8 text-brand-600 glow-blue" />
+            <span>Báo cáo hiệu suất kho</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-505">Phân tích tần suất giao nhận, chỉ số môi trường và thống kê hàng hóa tồn kho</p>
+          <p className="mt-1 text-sm text-slate-550 font-medium">Phân tích tần suất giao nhận, chỉ số môi trường và thống kê hàng hóa tồn kho</p>
         </div>
         <div className="flex items-center gap-3">
           <select
             value={timePeriod}
             onChange={(e) => setTimePeriod(e.target.value)}
-            className="px-4 py-2.5 bg-white border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-xs text-xs font-bold text-slate-700"
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-xs text-xs font-bold text-slate-700"
           >
             <option value="today">Hôm nay</option>
             <option value="7days">7 ngày qua</option>
@@ -75,9 +77,10 @@ export function ReportsPage() {
           </select>
           <button
             onClick={loadReportData}
-            className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors"
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-98 cursor-pointer shadow-xs"
           >
-            🔄 Tải lại
+            <Icons.Refresh className="w-3.5 h-3.5 text-slate-500" />
+            <span>Tải lại</span>
           </button>
         </div>
       </div>
@@ -92,9 +95,9 @@ export function ReportsPage() {
           {/* Stats grids */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {stats.map((item, idx) => (
-              <div key={idx} className={`p-6 rounded-2xl border ${item.color} flex flex-col justify-between shadow-sm transition-all hover:border-slate-300 bg-white`}>
+              <div key={idx} className={`p-6 rounded-2xl border border-slate-200/80 flex flex-col justify-between shadow-sm transition-all hover:border-slate-350 bg-white hover:-translate-y-0.5 duration-200`}>
                 <div className="space-y-3">
-                  <span className="text-3xl block">{item.icon}</span>
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center border border-slate-100 bg-slate-50/50">{item.icon}</div>
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.title}</p>
                     <h4 className="text-lg font-heading font-black text-slate-900 mt-1">{item.value}</h4>
@@ -108,8 +111,9 @@ export function ReportsPage() {
             {/* Real Product Stocks comparison table */}
             <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-100">
-                <h3 className="font-heading font-bold text-slate-900 text-base flex items-center gap-2">
-                  <span>📦</span> Chi tiết tồn kho sản phẩm hiện tại
+                <h3 className="font-heading font-bold text-slate-900 text-base flex items-center gap-2.5">
+                  <Icons.StockBox className="w-5 h-5 text-brand-600" />
+                  <span>Chi tiết tồn kho sản phẩm hiện tại</span>
                 </h3>
               </div>
               <div className="overflow-x-auto">
@@ -145,8 +149,9 @@ export function ReportsPage() {
 
             {/* Most Ordered Products mock ratios replaced with actual product proportions */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-6">
-              <h3 className="font-heading font-bold text-slate-900 text-base flex items-center gap-2">
-                <span>🥤</span> Tỷ lệ phân bổ sản phẩm theo giá
+              <h3 className="font-heading font-bold text-slate-900 text-base flex items-center gap-2.5">
+                <Icons.AnalyticsReport className="w-5 h-5 text-brand-600" />
+                <span>Tỷ lệ phân bổ sản phẩm theo giá</span>
               </h3>
               
               <div className="space-y-4">

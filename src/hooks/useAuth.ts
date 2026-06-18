@@ -15,17 +15,20 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    if (token && userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+    const timer = setTimeout(() => {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+      if (token && userData) {
+        try {
+          setUser(JSON.parse(userData));
+        } catch {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const login = (token: string, userData: User) => {

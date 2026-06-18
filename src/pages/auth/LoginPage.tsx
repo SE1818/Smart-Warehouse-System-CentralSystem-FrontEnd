@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services';
+import { Icons } from '@/components/Icons';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -17,7 +18,6 @@ export function LoginPage() {
       const res = await authService.login({ email, password });
       localStorage.setItem('authToken', res.accessToken);
       localStorage.setItem('user', JSON.stringify({ role: res.role, name: email.split('@')[0] || 'Nhân viên', email: email }));
-      // Supabase roles: 'warehouse_manager' = Warehouse Admin, 'Customer' = regular user
       const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin';
       navigate(isAdmin ? '/admin/dashboard' : '/');
     } catch (err) {
@@ -30,57 +30,69 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 tech-grid">
-      <div className="glass-panel rounded-3xl border border-slate-200/80 shadow-2xl p-8 w-full max-w-md space-y-6 glow-blue">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 tech-grid relative overflow-hidden">
+      {/* Decorative gradient glowing circles */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="glass-panel rounded-3xl border border-slate-200/80 shadow-2xl p-8 w-full max-w-md space-y-6 glow-blue relative z-10">
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-brand-600 text-white rounded-2xl mx-auto flex items-center justify-center text-3xl font-heading font-black shadow-lg shadow-brand-500/10">
-            🤖
+          <div className="w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-500 text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-brand-500/20">
+            <Icons.Robot className="w-9 h-9" />
           </div>
           <h1 className="text-3xl font-heading font-black text-slate-900 tracking-tight">SmartWarehouse</h1>
-          <p className="text-slate-505 text-sm font-medium">Hệ thống phân phối hàng hóa tự hành AMR</p>
+          <p className="text-slate-500 text-sm font-medium">Hệ thống phân phối hàng hóa tự hành AMR</p>
         </div>
         
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed">
-            ⚠️ {error}
+          <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed flex items-start gap-2.5">
+            <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-bold text-slate-505 uppercase tracking-widest">Email truy cập</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email truy cập</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ten@smartwarehouse.com"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
               required
             />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[10px] font-bold text-slate-550 uppercase tracking-widest">Mật khẩu bảo mật</label>
+            <label className="block text-[10px] font-bold text-slate-405 uppercase tracking-widest">Mật khẩu bảo mật</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-250 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
               required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white py-3 rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 hover:shadow-brand-500/25 active:scale-98 transition-all flex items-center justify-center"
+            className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white py-3 rounded-xl font-bold text-sm shadow-md shadow-brand-500/15 hover:shadow-brand-500/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Đang xác thực...' : 'Đăng nhập hệ thống'}
+            {loading ? (
+              <>
+                <Icons.Spinner className="w-4 h-4 text-white" />
+                <span>Đang xác thực...</span>
+              </>
+            ) : (
+              <span>Đăng nhập hệ thống</span>
+            )}
           </button>
         </form>
 
-        <p className="text-center text-xs text-slate-505 font-medium">
+        <p className="text-center text-xs text-slate-500 font-medium">
           Chưa có tài khoản đăng ký?{' '}
-          <Link to="/register" className="text-brand-650 font-bold hover:underline">
+          <Link to="/register" className="text-brand-600 font-bold hover:text-brand-700 transition-colors">
             Tạo tài khoản mới
           </Link>
         </p>
@@ -88,3 +100,4 @@ export function LoginPage() {
     </div>
   );
 }
+

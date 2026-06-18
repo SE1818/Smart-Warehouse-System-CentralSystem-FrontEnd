@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Warehouse, Product, StockLevel } from '@/types/stock';
 import { StockMovementType } from '@/types/stock';
 import { stockService as stockApi } from '@/services/stock';
+import { Icons } from '@/components/Icons';
 
 export function StockAdjustmentsPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -20,42 +21,50 @@ export function StockAdjustmentsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   // Fetch warehouses and products on mount
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const [warehousesData, productsData] = await Promise.all([
-          stockApi.getWarehouses(),
-          stockApi.getProducts(),
-        ]);
-        setWarehouses(warehousesData);
-        setProducts(productsData);
-      } catch (err) {
-        console.error('Error fetching initial data', err);
-        setError('Không thể tải danh sách kho và sản phẩm.');
-      }
-    };
-    fetchInitialData();
+  const fetchInitialData = useCallback(async () => {
+    try {
+      const [warehousesData, productsData] = await Promise.all([
+        stockApi.getWarehouses(),
+        stockApi.getProducts(),
+      ]);
+      setWarehouses(warehousesData);
+      setProducts(productsData);
+    } catch (err) {
+      console.error('Error fetching initial data', err);
+      setError('Không thể tải danh sách kho và sản phẩm.');
+    }
   }, []);
 
-  // Fetch stock levels when warehouse or product selected
   useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchInitialData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchInitialData]);
+
+  // Fetch stock levels when warehouse or product selected
+  const fetchStockLevel = useCallback(async () => {
     if (selectedWarehouse && selectedProduct) {
-      const fetchStockLevel = async () => {
-        try {
-          const levels = await stockApi.getStockLevels();
-          const level = levels.find(
-            (l) => l.warehouseId === selectedWarehouse && l.productId === selectedProduct
-          );
-          setStockLevels(level ? [level] : []);
-        } catch (err) {
-          console.error('Error fetching stock level', err);
-        }
-      };
-      fetchStockLevel();
+      try {
+        const levels = await stockApi.getStockLevels();
+        const level = levels.find(
+          (l) => l.warehouseId === selectedWarehouse && l.productId === selectedProduct
+        );
+        setStockLevels(level ? [level] : []);
+      } catch (err) {
+        console.error('Error fetching stock level', err);
+      }
     } else {
       setStockLevels([]);
     }
   }, [selectedWarehouse, selectedProduct]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchStockLevel();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchStockLevel]);
 
   const currentStockLevel = stockLevels[0];
   const currentQuantity = currentStockLevel?.quantity || 0;
@@ -99,14 +108,18 @@ export function StockAdjustmentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
+      {/* Background Glow */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <span>🔧</span> Điều chỉnh tồn kho
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.AdjustmentSettings className="w-8 h-8 text-brand-600 glow-blue" />
+            <span>Điều chỉnh tồn kho</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-550">
             Thêm/xóa/sửa số lượng tồn kho thủ công (cho admin)
           </p>
         </div>
@@ -115,34 +128,37 @@ export function StockAdjustmentsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Form Section */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span>📝</span> Form điều chỉnh
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6 hover:border-slate-350 transition-all">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
+              <Icons.Folder className="w-5 h-5 text-brand-600" />
+              <span>Form điều chỉnh</span>
             </h2>
 
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold">
-                ⚠️ {error}
+              <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2.5">
+                <Icons.AlertWarning className="w-4 h-4 text-red-655 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
             {success && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200/60 rounded-xl text-emerald-700 text-xs font-semibold">
-                ✅ {success}
+              <div className="p-4 bg-emerald-50 border border-emerald-200/40 rounded-xl text-emerald-700 text-xs font-semibold flex items-center gap-2.5">
+                <Icons.SuccessCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{success}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Kho hàng
                   </label>
                   <select
                     value={selectedWarehouse}
                     onChange={(e) => setSelectedWarehouse(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
                   >
                     <option value="">Chọn kho...</option>
                     {warehouses.map((w) => (
@@ -154,14 +170,14 @@ export function StockAdjustmentsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Sản phẩm
                   </label>
                   <select
                     value={selectedProduct}
                     onChange={(e) => setSelectedProduct(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
                   >
                     <option value="">Chọn sản phẩm...</option>
                     {products.map((p) => (
@@ -174,34 +190,34 @@ export function StockAdjustmentsPage() {
               </div>
 
               {currentStockLevel && (
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+                <div className="p-4.5 bg-slate-50 rounded-xl border border-slate-200/60 space-y-2.5">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Tồn kho hiện tại
                   </p>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="font-bold text-slate-900">
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-650">
+                    <span className="text-slate-900 font-extrabold text-sm">
                       {currentQuantity} đơn vị
                     </span>
-                    <span className="text-slate-500">|</span>
-                    <span className="text-slate-600">
-                      Đã đặt: {currentStockLevel.reservedQuantity}
+                    <span className="text-slate-305">|</span>
+                    <span>
+                      Đã đặt: <strong className="text-amber-600 font-extrabold">{currentStockLevel.reservedQuantity}</strong>
                     </span>
-                    <span className="text-slate-500">|</span>
-                    <span className="text-slate-600">
-                      Có sẵn: {currentQuantity - currentStockLevel.reservedQuantity}
+                    <span className="text-slate-305">|</span>
+                    <span>
+                      Có sẵn: <strong className="text-emerald-750 font-extrabold">{currentQuantity - currentStockLevel.reservedQuantity}</strong>
                     </span>
                   </div>
                 </div>
               )}
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Loại điều chỉnh
                 </label>
                 <select
                   value={adjustmentType}
                   onChange={(e) => setAdjustmentType(parseInt(e.target.value) as StockMovementType)}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
                 >
                   <option value={StockMovementType.Adjust}>Điều chỉnh (Adjust)</option>
                   <option value={StockMovementType.In}>Nhập kho (In)</option>
@@ -210,7 +226,7 @@ export function StockAdjustmentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Số lượng {adjustmentType === 1 ? 'xuất' : adjustmentType === 0 ? 'nhập' : 'điều chỉnh'}
                 </label>
                 <input
@@ -220,17 +236,17 @@ export function StockAdjustmentsPage() {
                   required
                   min="1"
                   placeholder="Nhập số lượng..."
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-800"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
                 />
                 {currentQuantity > 0 && (
-                  <p className="text-xs text-slate-500">
-                    Tồn kho mới sẽ là: <strong>{newQuantity}</strong>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Tồn kho dự kiến sau điều chỉnh: <strong className="text-brand-600 text-sm font-extrabold">{newQuantity}</strong>
                   </p>
                 )}
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Mã tham chiếu (tuỳ chọn)
                 </label>
                 <input
@@ -238,12 +254,12 @@ export function StockAdjustmentsPage() {
                   value={referenceNo}
                   onChange={(e) => setReferenceNo(e.target.value)}
                   placeholder="Ví dụ: PO-123, ADJ-001..."
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-800"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Ghi chú (tuỳ chọn)
                 </label>
                 <textarea
@@ -251,7 +267,7 @@ export function StockAdjustmentsPage() {
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Lý do điều chỉnh..."
                   rows={3}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-800 resize-none"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold resize-none h-24"
                 />
               </div>
 
@@ -259,15 +275,15 @@ export function StockAdjustmentsPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full px-5 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                  className="w-full px-5 py-3.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-brand-600/10 transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                 >
                   {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Đang xử lý...
-                    </span>
+                    <>
+                      <Icons.Spinner className="w-4 h-4 text-white animate-spin" />
+                      <span>Đang xử lý...</span>
+                    </>
                   ) : (
-                    '✅ Xác nhận điều chỉnh'
+                    <span>Xác nhận điều chỉnh</span>
                   )}
                 </button>
               </div>
@@ -277,11 +293,12 @@ export function StockAdjustmentsPage() {
 
         {/* Info Section */}
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
-            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <span>ℹ️</span> Hướng dẫn
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 hover:border-slate-350 transition-all">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
+              <Icons.Info className="w-4.5 h-4.5 text-brand-600" />
+              <span>Hướng dẫn sử dụng</span>
             </h3>
-            <ul className="space-y-2 text-xs text-slate-600">
+            <ul className="space-y-3 text-xs text-slate-550 leading-relaxed font-semibold">
               <li className="flex items-start gap-2">
                 <span>•</span>
                 <span>Chọn kho và sản phẩm cần điều chỉnh</span>
@@ -298,31 +315,30 @@ export function StockAdjustmentsPage() {
                 <span>•</span>
                 <span>Có thể thêm mã tham chiếu và ghi chú</span>
               </li>
-              <li className="flex items-start gap-2">
-                <span>⚠️</span>
-                <span className="text-amber-600 font-semibold">
-                  Hành động này sẽ ghi log và không thể hoàn tác
-                </span>
+              <li className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200/50 rounded-lg text-amber-700 mt-2 font-bold">
+                <Icons.AlertWarning className="w-4.5 h-4.5 shrink-0 text-amber-600 mt-0.5" />
+                <span>Hành động này sẽ ghi log lịch sử và không thể hoàn tác</span>
               </li>
             </ul>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
-            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <span>📊</span> Thống kê
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 hover:border-slate-350 transition-all">
+            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
+              <Icons.AnalyticsReport className="w-4.5 h-4.5 text-brand-600" />
+              <span>Thống kê kho hàng</span>
             </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500">Tổng số kho:</span>
-                <span className="text-sm font-bold text-slate-900">{warehouses.length}</span>
+            <div className="space-y-3.5 text-xs font-bold text-slate-550">
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span>Tổng số kho hàng:</span>
+                <span className="text-slate-900 text-sm font-extrabold">{warehouses.length}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500">Tổng số sản phẩm:</span>
-                <span className="text-sm font-bold text-slate-900">{products.length}</span>
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span>Tổng số sản phẩm:</span>
+                <span className="text-slate-900 text-sm font-extrabold">{products.length}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500">Số lượng tồn hiện tại:</span>
-                <span className="text-sm font-bold text-slate-900">{currentQuantity}</span>
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span>Tồn kho hiện tại của mục đã chọn:</span>
+                <span className="text-brand-600 text-sm font-extrabold">{currentQuantity}</span>
               </div>
             </div>
           </div>

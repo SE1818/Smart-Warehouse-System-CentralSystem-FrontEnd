@@ -6,6 +6,8 @@ import {
   AuditLogFilters,
 } from '@/components/logs';
 import type { AuditLog } from '@/types';
+import { Icons } from '@/components/Icons';
+
 
 // Default to last 7 days
 const getDefaultFilters = () => {
@@ -68,8 +70,9 @@ export function AuditLogsPage() {
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
       <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-          <span>📋</span> Nhật ký hoạt động hệ thống
+        <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+          <Icons.HistoryLogs className="w-8 h-8 text-brand-600" />
+          <span>Nhật ký hoạt động hệ thống</span>
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Tra cứu, lọc và giám sát lịch sử hoạt động bảo mật của SmartWarehouse
@@ -83,15 +86,16 @@ export function AuditLogsPage() {
 
       {/* Error block */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold leading-relaxed">
-          ⚠️ {error}
+        <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed flex items-start gap-2.5">
+          <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
 
       {/* Loading state */}
       {loading ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
+          <Icons.Spinner className="h-10 w-10 text-brand-600" />
           <p className="text-slate-500 text-xs font-medium">Đang truy xuất thông tin nhật ký...</p>
         </div>
       ) : (
@@ -104,8 +108,8 @@ export function AuditLogsPage() {
               { label: 'Cảnh báo', count: logs.filter((l) => l.severity === 'Warning').length, color: 'border-amber-200 text-amber-700 bg-amber-50/50' },
               { label: 'Critical', count: logs.filter((l) => l.severity === 'Critical').length, color: 'border-purple-200 text-purple-700 bg-purple-50/50' }
             ].map((stat, idx) => (
-              <div key={idx} className={`bg-white p-5 rounded-2xl border ${stat.color} shadow-sm`}>
-                <div className="text-[11px] font-bold text-slate-450 uppercase tracking-wider">{stat.label}</div>
+              <div key={idx} className={`bg-white p-5 rounded-2xl border ${stat.color} shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm`}>
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{stat.label}</div>
                 <div className="mt-2 text-3xl font-heading font-black text-slate-800">{stat.count}</div>
               </div>
             ))}
@@ -114,8 +118,8 @@ export function AuditLogsPage() {
           {/* Log list table */}
           <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
             {logs.length === 0 ? (
-              <div className="p-16 text-center text-slate-400 space-y-2">
-                <span className="text-4xl block">🔍</span>
+              <div className="p-16 text-center text-slate-400 space-y-3">
+                <Icons.Search className="w-12 h-12 text-slate-350 mx-auto" />
                 <p className="font-semibold text-sm">Không có dữ liệu log cho bộ lọc đã chọn</p>
               </div>
             ) : (

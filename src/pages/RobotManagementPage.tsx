@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { robotService } from '../services/robot';
 import type { Robot, MoveRequest, StatusRequest, FulfillmentRequest } from '../types/robot';
+import { Icons } from '@/components/Icons';
+import type { Order } from '../types/product';
 
 export function RobotManagementPage() {
   const [robots, setRobots] = useState<Robot[]>([]);
@@ -10,13 +12,9 @@ export function RobotManagementPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showFulfillmentModal, setShowFulfillmentModal] = useState(false);
-  const [pendingOrders, setPendingOrders] = useState<any[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
 
-  useEffect(() => {
-    loadRobots();
-  }, []);
-
-  const loadRobots = async () => {
+  const loadRobots = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -28,7 +26,14 @@ export function RobotManagementPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadRobots();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadRobots]);
 
   const handleMove = async (request: MoveRequest) => {
     if (!selectedRobot) return;
@@ -109,142 +114,139 @@ export function RobotManagementPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-slate-500">Đang tải...</div>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
+        <Icons.Spinner className="h-10 w-10 text-brand-600" />
+        <p className="text-slate-505 text-xs font-semibold">Đang tải danh sách robot...</p>
       </div>
     );
   }
 
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-slate-900">Quản lý Robot AMR</h1>
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <div className="flex justify-between items-center border-b border-slate-200/80 pb-6">
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Robot className="w-8 h-8 text-brand-600" />
+            <span>Quản lý Robot AMR</span>
+          </h1>
           <button
             onClick={loadPendingOrders}
             disabled={actionLoading}
-            className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
           >
-            Xử lý đơn hàng chờ
+            <Icons.Plus className="w-4 h-4" />
+            <span>Xử lý đơn hàng chờ</span>
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-            {error}
+          <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed flex items-start gap-2.5">
+            <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Tên
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Vị trí (X, Y)
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Pin
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Trạng thái
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Thao tác
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {robots.map((robot) => (
-                <tr key={robot.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                    {robot.id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                    {robot.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                    ({robot.x.toFixed(2)}, {robot.y.toFixed(2)})
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-full ${getBatteryColor(robot.battery)}`}
-                          style={{ width: `${robot.battery}%` }}
-                        />
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
+                  <th className="p-4">ID</th>
+                  <th className="p-4">Tên</th>
+                  <th className="p-4">Vị trí (X, Y)</th>
+                  <th className="p-4">Pin</th>
+                  <th className="p-4">Trạng thái</th>
+                  <th className="p-4 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                {robots.map((robot) => (
+                  <tr key={robot.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-4 font-bold text-slate-900">{robot.id}</td>
+                    <td className="p-4">{robot.name}</td>
+                    <td className="p-4 font-mono text-slate-900">
+                      ({robot.x.toFixed(2)}, {robot.y.toFixed(2)})
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-20 bg-slate-200/60 rounded-full h-2 overflow-hidden border border-slate-300/10">
+                          <div
+                            className={`h-full ${getBatteryColor(robot.battery)} transition-all duration-300`}
+                            style={{ width: `${robot.battery}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-slate-900">{robot.battery.toFixed(0)}%</span>
                       </div>
-                      <span className="text-sm text-slate-900">{robot.battery.toFixed(0)}%</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                        robot.status
-                      )}`}
-                    >
-                      {robot.status === 'Idle'
-                        ? 'Rảnh'
-                        : robot.status === 'Moving'
-                        ? 'Đang di chuyển'
-                        : robot.status === 'Charging'
-                        ? 'Đang sạc'
-                        : robot.status === 'Error'
-                        ? 'Lỗi'
-                        : 'Offline'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => {
-                        setSelectedRobot(robot);
-                        setShowMoveModal(true);
-                      }}
-                      className="text-brand-600 hover:text-brand-900 mr-4"
-                      disabled={robot.status === 'Moving' || robot.status === 'Charging'}
-                    >
-                      Di chuyển
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedRobot(robot);
-                        if (robot.status === 'Idle') {
-                          handleStatusUpdate({ status: 'Charging' });
-                        } else if (robot.status === 'Charging') {
-                          handleStatusUpdate({ status: 'Idle' });
-                        }
-                      }}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      {robot.status === 'Charging' ? 'Dừng sạc' : 'Bắt đầu sạc'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Bạn có chắc muốn cập nhật trạng thái lỗi cho robot này?')) {
-                          handleStatusUpdate({ status: 'Error' });
-                        }
-                      }}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Đánh dấu lỗi
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {robots.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                    Chưa có robot nào
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="p-4">
+                      <span
+                        className={`px-2.5 py-0.5 inline-flex text-xs font-bold rounded-full border ${getStatusColor(
+                          robot.status
+                        )}`}
+                      >
+                        {robot.status === 'Idle'
+                          ? 'Rảnh'
+                          : robot.status === 'Moving'
+                          ? 'Đang di chuyển'
+                          : robot.status === 'Charging'
+                          ? 'Đang sạc'
+                          : robot.status === 'Error'
+                          ? 'Lỗi'
+                          : 'Offline'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-2">
+                      <button
+                        onClick={() => {
+                          setSelectedRobot(robot);
+                          setShowMoveModal(true);
+                        }}
+                        className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={robot.status === 'Moving' || robot.status === 'Charging'}
+                      >
+                        Di chuyển
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedRobot(robot);
+                          if (robot.status === 'Idle') {
+                            handleStatusUpdate({ status: 'Charging' });
+                          } else if (robot.status === 'Charging') {
+                            handleStatusUpdate({ status: 'Idle' });
+                          }
+                        }}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                          robot.status === 'Charging'
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-705 border-amber-200/60'
+                            : 'bg-blue-50 hover:bg-blue-100/80 text-blue-700 border-blue-200/60'
+                        }`}
+                      >
+                        {robot.status === 'Charging' ? 'Dừng sạc' : 'Bắt đầu sạc'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Bạn có chắc muốn cập nhật trạng thái lỗi cho robot này?')) {
+                            handleStatusUpdate({ status: 'Error' });
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100/80 text-red-650 text-xs font-bold rounded-lg border border-red-200/40 transition-all cursor-pointer"
+                      >
+                        Đánh dấu lỗi
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {robots.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                      Chưa có robot nào hoạt động
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -273,6 +275,7 @@ export function RobotManagementPage() {
     </div>
   );
 }
+
 
 interface MoveModalProps {
   robot: Robot;
@@ -351,7 +354,7 @@ function MoveModal({ robot, onMove, onClose }: MoveModalProps) {
 }
 
 interface FulfillmentModalProps {
-  orders: any[];
+  orders: Order[];
   robots: Robot[];
   onFulfill: (request: FulfillmentRequest) => Promise<void>;
   onClose: () => void;

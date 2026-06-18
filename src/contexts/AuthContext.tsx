@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '@/types/auth';
 import { authService } from '@/services/auth';
 
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userData = await authService.getProfile();
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
-    } catch (error) {
+    } catch {
       setUser(null);
       localStorage.removeItem('user');
       localStorage.removeItem('authToken');
@@ -32,15 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem('user');
+    const timer = setTimeout(() => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {
+          localStorage.removeItem('user');
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -70,12 +73,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 }
