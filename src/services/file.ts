@@ -10,7 +10,7 @@ export const fileService = {
       formData.append('subFolder', subFolder);
     }
 
-    const response = await apiClient.post<UploadResponse>('/api/v1/files/upload', formData, {
+    const response = await apiClient.post<UploadResponse>('/v1/files/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -34,12 +34,12 @@ export const fileService = {
     const params = subFolder !== undefined && subFolder !== FileSubFolder.Root
       ? { subFolder }
       : undefined;
-    const response = await apiClient.get<FileListResponse>('/api/v1/files', { params });
+    const response = await apiClient.get<FileListResponse>('/v1/files', { params });
     return response.data;
   },
 
   async deleteFile(url: string): Promise<void> {
-    await apiClient.delete('/api/v1/files', {
+    await apiClient.delete('/v1/files', {
       data: { url },
     });
   },

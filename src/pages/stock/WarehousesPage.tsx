@@ -39,57 +39,75 @@ export function WarehousesPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const saveWarehouses = (updated: Warehouse[]) => {
-    setWarehouses(updated);
-  };
-
-  const handleEditSave = (e: React.FormEvent) => {
+  const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingWarehouse) return;
 
-    const updated = warehouses.map((w) =>
-      w.id === editingWarehouse.id ? editingWarehouse : w
-    );
-    saveWarehouses(updated);
-    setEditingWarehouse(null);
-  };
-
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newWarehouse.code || !newWarehouse.name || !newWarehouse.address) return;
-
-    const added: Warehouse = {
-      id: `${Date.now()}`,
-      code: newWarehouse.code,
-      name: newWarehouse.name,
-      address: newWarehouse.address,
-      isActive: newWarehouse.isActive ?? true,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updated = [...warehouses, added];
-    saveWarehouses(updated);
-    setIsAdding(false);
-    setNewWarehouse({
-      code: '',
-      name: '',
-      address: '',
-      isActive: true,
-    });
-  };
-
-  const deleteWarehouse = (id: string) => {
-    if (window.confirm('Bạn có chắc muốn xóa kho hàng này?')) {
-      const updated = warehouses.filter((w) => w.id !== id);
-      saveWarehouses(updated);
+    try {
+      await stockService.updateWarehouse(editingWarehouse.id, {
+        code: editingWarehouse.code,
+        name: editingWarehouse.name,
+        address: editingWarehouse.address,
+        isActive: editingWarehouse.isActive,
+      });
+      setEditingWarehouse(null);
+      fetchWarehouses();
+    } catch (err) {
+      console.error('Error updating warehouse', err);
+      alert('Không thể cập nhật thông tin kho hàng. Vui lòng kiểm tra lại.');
     }
   };
 
-  const toggleActive = (id: string) => {
-    const updated = warehouses.map((w) =>
-      w.id === id ? { ...w, isActive: !w.isActive } : w
-    );
-    saveWarehouses(updated);
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWarehouse.code || !newWarehouse.name || !newWarehouse.address) return;
+
+    try {
+      await stockService.createWarehouse({
+        code: newWarehouse.code,
+        name: newWarehouse.name,
+        address: newWarehouse.address,
+        isActive: newWarehouse.isActive ?? true,
+      });
+      setIsAdding(false);
+      setNewWarehouse({
+        code: '',
+        name: '',
+        address: '',
+        isActive: true,
+      });
+      fetchWarehouses();
+    } catch (err) {
+      console.error('Error creating warehouse', err);
+      alert('Không thể tạo kho hàng mới. Vui lòng kiểm tra lại.');
+    }
+  };
+
+  const deleteWarehouse = async (id: string) => {
+    if (window.confirm('Bạn có chắc muốn xóa kho hàng này?')) {
+      try {
+        await stockService.deleteWarehouse(id);
+        fetchWarehouses();
+      } catch (err) {
+        console.error('Error deleting warehouse', err);
+        alert('Không thể xóa kho hàng. Vui lòng kiểm tra lại.');
+      }
+    }
+  };
+
+  const toggleActive = async (id: string) => {
+    const warehouse = warehouses.find((w) => w.id === id);
+    if (!warehouse) return;
+
+    try {
+      await stockService.updateWarehouse(id, {
+        isActive: !warehouse.isActive,
+      });
+      fetchWarehouses();
+    } catch (err) {
+      console.error('Error toggling active state', err);
+      alert('Không thể thay đổi trạng thái kho hàng. Vui lòng kiểm tra lại.');
+    }
   };
 
   const filtered = warehouses.filter((w) =>

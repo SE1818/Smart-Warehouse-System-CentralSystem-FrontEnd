@@ -11,10 +11,12 @@ export function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
+    sku: '',
     name: '',
     category: 'Đồ uống',
     price: 0,
     stockQuantity: 0,
+    unit: 'chiếc',
     description: ''
   });
 
@@ -22,8 +24,17 @@ export function ProductsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await productService.getProducts();
-      setProducts(data);
+      const productsData = await productService.getProducts();
+
+      const mapped = productsData.map((p) => {
+        return {
+          ...p,
+          stockQuantity: p.stockQuantity ?? 0,
+          category: p.category || 'Đồ uống',
+          unit: p.unit || 'chiếc'
+        };
+      });
+      setProducts(mapped);
     } catch (err) {
       console.error('Error fetching products from API', err);
       setError('Không thể tải danh sách sản phẩm từ máy chủ. Vui lòng kiểm tra lại dịch vụ.');
@@ -40,51 +51,71 @@ export function ProductsPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const saveProducts = (updated: Product[]) => {
-    setProducts(updated);
-  };
-
-  const handleEditSave = (e: React.FormEvent) => {
+  const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
 
-    const updated = products.map((p) => (p.id === editingProduct.id ? editingProduct : p));
-    saveProducts(updated);
-    setEditingProduct(null);
+    try {
+      await productService.updateProduct(editingProduct.id, {
+        sku: editingProduct.sku || '',
+        name: editingProduct.name,
+        description: editingProduct.description || '',
+        price: Number(editingProduct.price),
+        stockQuantity: Number(editingProduct.stockQuantity),
+        category: editingProduct.category,
+        unit: editingProduct.unit,
+        imageUrl: editingProduct.imageUrl || ''
+      });
+      setEditingProduct(null);
+      fetchProducts();
+    } catch (err) {
+      console.error('Error updating product', err);
+      alert('Không thể cập nhật sản phẩm. Vui lòng kiểm tra lại.');
+    }
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProduct.name || !newProduct.price) return;
+    if (!newProduct.name || !newProduct.price || !newProduct.sku) return;
 
-    const added: Product = {
-      id: `${Date.now()}`,
-      name: newProduct.name,
-      category: newProduct.category || 'Đồ uống',
-      price: Number(newProduct.price),
-      stockQuantity: Number(newProduct.stockQuantity || 0),
-      description: newProduct.description,
-      unit: newProduct.category === 'Đồ uống' ? 'lon' : 'cái',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    const updated = [...products, added];
-    saveProducts(updated);
-    setIsAdding(false);
-    setNewProduct({
-      name: '',
-      category: 'Đồ uống',
-      price: 0,
-      stockQuantity: 0,
-      description: ''
-    });
+    try {
+      await productService.createProduct({
+        sku: newProduct.sku,
+        name: newProduct.name,
+        description: newProduct.description || '',
+        price: Number(newProduct.price),
+        stockQuantity: Number(newProduct.stockQuantity || 0),
+        category: newProduct.category || 'Đồ uống',
+        unit: newProduct.unit || 'chiếc',
+        imageUrl: newProduct.imageUrl || ''
+      });
+      setIsAdding(false);
+      setNewProduct({
+        sku: '',
+        name: '',
+        category: 'Đồ uống',
+        price: 0,
+        stockQuantity: 0,
+        unit: 'chiếc',
+        description: '',
+        imageUrl: ''
+      });
+      fetchProducts();
+    } catch (err) {
+      console.error('Error creating product', err);
+      alert('Không thể tạo sản phẩm mới. Vui lòng kiểm tra lại.');
+    }
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     if (window.confirm('Bạn có chắc muốn xóa sản phẩm này?')) {
-      const updated = products.filter((p) => p.id !== id);
-      saveProducts(updated);
+      try {
+        await productService.deleteProduct(id);
+        fetchProducts();
+      } catch (err) {
+        console.error('Error deleting product', err);
+        alert('Không thể xóa sản phẩm. Vui lòng kiểm tra lại.');
+      }
     }
   };
 
@@ -167,7 +198,10 @@ export function ProductsPage() {
               <tbody className="divide-y divide-slate-100 text-slate-600 font-semibold">
                 {paginatedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 pl-6 font-bold text-slate-900">{p.name}</td>
+                    <td className="p-4 pl-6 font-bold text-slate-900">
+                      <div>{p.name}</div>
+                      {p.sku && <div className="text-[10px] text-slate-400 font-mono tracking-wider">{p.sku}</div>}
+                    </td>
                     <td className="p-4">
                       <span className="text-xs font-bold bg-brand-50 border border-brand-100/50 text-brand-700 px-3 py-1 rounded-full">
                         {p.category}
@@ -257,7 +291,7 @@ export function ProductsPage() {
               <Icons.Product className="w-5 h-5 text-brand-600" />
               <span>Chỉnh sửa sản phẩm</span>
             </h3>
-            
+
             <form onSubmit={handleEditSave} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
@@ -267,6 +301,17 @@ export function ProductsPage() {
                   onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
                   required
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
+                <input
+                  type="text"
+                  value={editingProduct.sku || ''}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, sku: e.target.value })}
+                  required
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
                 />
               </div>
 
@@ -282,15 +327,25 @@ export function ProductsPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-405 uppercase tracking-widest">Số lượng tồn</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
                   <input
                     type="number"
                     value={editingProduct.stockQuantity}
                     onChange={(e) => setEditingProduct({ ...editingProduct, stockQuantity: Number(e.target.value) })}
-                    required
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/image.png"
+                  value={editingProduct.imageUrl || ''}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -304,6 +359,21 @@ export function ProductsPage() {
                   <option value="Vật tư y tế">Vật tư y tế</option>
                   <option value="Linh kiện">Linh kiện</option>
                   <option value="Khác">Khác</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Đơn vị</label>
+                <select
+                  value={editingProduct.unit}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, unit: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                >
+                  <option value="chiếc">chiếc</option>
+                  <option value="hộp">hộp</option>
+                  <option value="thùng">thùng</option>
+                  <option value="lít">lít</option>
+                  <option value="kg">kg</option>
                 </select>
               </div>
 
@@ -335,7 +405,7 @@ export function ProductsPage() {
               <Icons.Plus className="w-5 h-5 text-brand-600" />
               <span>Thêm sản phẩm mới</span>
             </h3>
-            
+
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
@@ -346,6 +416,18 @@ export function ProductsPage() {
                   onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                   required
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: SKU-WATER-01"
+                  value={newProduct.sku || ''}
+                  onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
+                  required
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
                 />
               </div>
 
@@ -364,12 +446,22 @@ export function ProductsPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
                   <input
                     type="number"
-                    value={newProduct.stockQuantity || ''}
+                    value={newProduct.stockQuantity || 0}
                     onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: Number(e.target.value) })}
-                    required
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/image.png"
+                  value={newProduct.imageUrl || ''}
+                  onChange={(e) => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -383,6 +475,21 @@ export function ProductsPage() {
                   <option value="Vật tư y tế">Vật tư y tế</option>
                   <option value="Linh kiện">Linh kiện</option>
                   <option value="Khác">Khác</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Đơn vị</label>
+                <select
+                  value={newProduct.unit}
+                  onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
+                >
+                  <option value="chiếc">chiếc</option>
+                  <option value="hộp">hộp</option>
+                  <option value="thùng">thùng</option>
+                  <option value="lít">lít</option>
+                  <option value="kg">kg</option>
                 </select>
               </div>
 
