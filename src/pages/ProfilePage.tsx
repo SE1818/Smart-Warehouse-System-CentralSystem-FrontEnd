@@ -97,7 +97,7 @@ export function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
               <div className="space-y-4">
                 <h3 className="text-base font-heading font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
-                  <Icons.Profile className="w-4.5 h-4.5 text-brand-600" />
+                  <Icons.Profile className="w-5 h-5 text-brand-600" />
                   <span>Thông tin cá nhân</span>
                 </h3>
                 <dl className="grid grid-cols-3 gap-y-3 gap-x-2 text-sm leading-relaxed">
@@ -117,7 +117,7 @@ export function ProfilePage() {
 
               <div className="space-y-4">
                 <h3 className="text-base font-heading font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
-                  <Icons.AdjustmentSettings className="w-4.5 h-4.5 text-brand-600" />
+                  <Icons.AdjustmentSettings className="w-5 h-5 text-brand-600" />
                   <span>Thông tin hệ thống</span>
                 </h3>
                 <dl className="grid grid-cols-3 gap-y-3 gap-x-2 text-sm leading-relaxed">

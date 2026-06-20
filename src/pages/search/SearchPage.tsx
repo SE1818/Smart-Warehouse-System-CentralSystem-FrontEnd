@@ -208,7 +208,7 @@ export function SearchPage() {
               <div className="mt-6 space-y-4">
                 <div className="p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl shadow-xs">
                   <h3 className="font-heading font-bold text-emerald-800 mb-2.5 text-sm flex items-center gap-2">
-                    <Icons.Info className="w-4.5 h-4.5 text-emerald-600" />
+                    <Icons.Info className="w-5 h-5 text-emerald-600" />
                     <span>Trả lời:</span>
                   </h3>
                   <p className="text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap font-medium">

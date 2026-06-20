@@ -1,30 +1,37 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import {
-  LoginPage,
-  RegisterPage,
-  AdminDashboard,
-  AdminInventory,
-  MetricsPage,
-  AuditLogsPage,
-  AdminProducts,
-  AdminOrders,
-  AdminUsers,
-  AdminReports,
-  WarehousesPage,
-  StockLevelsPage,
-  StockMovementsPage,
-  StockAdjustmentsPage,
-  SearchPage,
-  NotificationsPage,
-  FileManagementPage,
-  PromotionsPage,
-  RobotManagementPage,
-  WalletPage,
-  ProfilePage,
-} from './pages';
+import { lazy, Suspense } from 'react';
 import { AdminLayout } from './components/AdminLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css';
+
+// Auth pages
+const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({ default: m.RegisterPage })));
+
+// Admin pages
+const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const AdminInventory = lazy(() => import('./pages/admin/InventoryPage').then(m => ({ default: m.InventoryPage })));
+const AdminProducts = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const AdminOrders = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ default: m.OrdersPage })));
+const AdminUsers = lazy(() => import('./pages/admin/UsersPage').then(m => ({ default: m.UsersPage })));
+const AdminReports = lazy(() => import('./pages/admin/ReportsPage').then(m => ({ default: m.ReportsPage })));
+
+// Stock pages
+const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
+const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage').then(m => ({ default: m.StockLevelsPage })));
+const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage').then(m => ({ default: m.StockMovementsPage })));
+const StockAdjustmentsPage = lazy(() => import('./pages/stock/StockAdjustmentsPage').then(m => ({ default: m.StockAdjustmentsPage })));
+
+// Other pages
+const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ default: m.SearchPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+const FileManagementPage = lazy(() => import('./pages/admin/FileManagementPage').then(m => ({ default: m.FileManagementPage })));
+const PromotionsPage = lazy(() => import('./pages/PromotionsPage').then(m => ({ default: m.PromotionsPage })));
+const RobotManagementPage = lazy(() => import('./pages/RobotManagementPage').then(m => ({ default: m.RobotManagementPage })));
+const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default: m.WalletPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const MetricsPage = lazy(() => import('./pages/MetricsPage').then(m => ({ default: m.MetricsPage })));
+const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
 
 function UnauthorizedPage() {
   return (
@@ -45,49 +52,56 @@ function UnauthorizedPage() {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Auth routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Suspense fallback={
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-800">
+          <div className="w-10 h-10 border-4 border-slate-300 border-t-brand-600 rounded-full animate-spin"></div>
+          <p className="mt-4 text-slate-500 text-sm font-semibold">Đang tải trang...</p>
+        </div>
+      }>
+        <Routes>
+          {/* Auth routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Redirect Root to Admin */}
-        <Route path="/" element={<Navigate to="/admin" replace />} />
+          {/* Redirect Root to Admin */}
+          <Route path="/" element={<Navigate to="/admin" replace />} />
 
-        {/* Admin routes */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager']}>
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="inventory" element={<AdminInventory />} />
-          <Route path="warehouses" element={<WarehousesPage />} />
-          <Route path="stocklevels" element={<StockLevelsPage />} />
-          <Route path="stockmovements" element={<StockMovementsPage />} />
-          <Route path="stockadjustments" element={<StockAdjustmentsPage />} />
-          <Route path="search" element={<SearchPage />} />
-          <Route path="notifications" element={<NotificationsPage />} />
-          <Route path="files" element={<FileManagementPage />} />
-          <Route path="promotions" element={<PromotionsPage />} />
-          <Route path="robots" element={<RobotManagementPage />} />
-          <Route path="wallet" element={<WalletPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="metrics" element={<MetricsPage />} />
-          <Route path="logs" element={<AuditLogsPage />} />
-          <Route path="products" element={<AdminProducts />} />
-          <Route path="orders" element={<AdminOrders />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="reports" element={<AdminReports />} />
-        </Route>
+          {/* Admin routes */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager']}>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="inventory" element={<AdminInventory />} />
+            <Route path="warehouses" element={<WarehousesPage />} />
+            <Route path="stocklevels" element={<StockLevelsPage />} />
+            <Route path="stockmovements" element={<StockMovementsPage />} />
+            <Route path="stockadjustments" element={<StockAdjustmentsPage />} />
+            <Route path="search" element={<SearchPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="files" element={<FileManagementPage />} />
+            <Route path="promotions" element={<PromotionsPage />} />
+            <Route path="robots" element={<RobotManagementPage />} />
+            <Route path="wallet" element={<WalletPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="metrics" element={<MetricsPage />} />
+            <Route path="logs" element={<AuditLogsPage />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="reports" element={<AdminReports />} />
+          </Route>
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

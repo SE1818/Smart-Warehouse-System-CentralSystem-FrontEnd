@@ -295,7 +295,7 @@ export function StockAdjustmentsPage() {
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 hover:border-slate-350 transition-all">
             <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
-              <Icons.Info className="w-4.5 h-4.5 text-brand-600" />
+              <Icons.Info className="w-5 h-5 text-brand-600" />
               <span>Hướng dẫn sử dụng</span>
             </h3>
             <ul className="space-y-3 text-xs text-slate-550 leading-relaxed font-semibold">
@@ -316,7 +316,7 @@ export function StockAdjustmentsPage() {
                 <span>Có thể thêm mã tham chiếu và ghi chú</span>
               </li>
               <li className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200/50 rounded-lg text-amber-700 mt-2 font-bold">
-                <Icons.AlertWarning className="w-4.5 h-4.5 shrink-0 text-amber-600 mt-0.5" />
+                <Icons.AlertWarning className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
                 <span>Hành động này sẽ ghi log lịch sử và không thể hoàn tác</span>
               </li>
             </ul>
@@ -324,7 +324,7 @@ export function StockAdjustmentsPage() {
 
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 hover:border-slate-350 transition-all">
             <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2 text-sm border-b border-slate-200 pb-2">
-              <Icons.AnalyticsReport className="w-4.5 h-4.5 text-brand-600" />
+              <Icons.AnalyticsReport className="w-5 h-5 text-brand-600" />
               <span>Thống kê kho hàng</span>
             </h3>
             <div className="space-y-3.5 text-xs font-bold text-slate-550">
