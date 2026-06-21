@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Cài dependencies trước (tận dụng Docker layer cache)
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 # Copy toàn bộ source code
 COPY . .
