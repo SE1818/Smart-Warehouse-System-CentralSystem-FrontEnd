@@ -12,13 +12,95 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const hasRepeatingChars = (str: string): boolean => {
+    for (let i = 0; i < str.length - 2; i++) {
+      if (str[i] === str[i + 1] && str[i] === str[i + 2]) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const hasSequentialChars = (str: string): boolean => {
+    for (let i = 0; i < str.length - 2; i++) {
+      const code1 = str.charCodeAt(i);
+      const code2 = str.charCodeAt(i + 1);
+      const code3 = str.charCodeAt(i + 2);
+      if (code2 === code1 + 1 && code3 === code1 + 2) return true;
+      if (code2 === code1 - 1 && code3 === code1 - 2) return true;
+    }
+    return false;
+  };
+
+  const validateForm = (): boolean => {
+    if (!username.trim()) {
+      setError('Tên tài khoản không được để trống.');
+      return false;
+    }
+    if (username.trim().length < 3) {
+      setError('Tên tài khoản phải có ít nhất 3 ký tự.');
+      return false;
+    }
+
+    if (!email.trim()) {
+      setError('Email không được để trống.');
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Email không đúng định dạng.');
+      return false;
+    }
+
+    if (!password) {
+      setError('Mật khẩu không được để trống.');
+      return false;
+    }
+    if (password.length < 8) {
+      setError('Mật khẩu phải có ít nhất 8 ký tự.');
+      return false;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError('Mật khẩu phải chứa ít nhất một chữ cái viết hoa.');
+      return false;
+    }
+    if (!/[a-z]/.test(password)) {
+      setError('Mật khẩu phải chứa ít nhất một chữ cái viết thường.');
+      return false;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError('Mật khẩu phải chứa ít nhất một chữ số.');
+      return false;
+    }
+    if (!/[^a-zA-Z0-9]/.test(password)) {
+      setError('Mật khẩu phải chứa ít nhất một ký tự đặc biệt.');
+      return false;
+    }
+    if (hasRepeatingChars(password)) {
+      setError('Mật khẩu không được chứa quá 2 ký tự lặp lại liên tiếp.');
+      return false;
+    }
+    if (hasSequentialChars(password)) {
+      setError('Mật khẩu không được chứa chuỗi ký tự liên tiếp.');
+      return false;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Mật khẩu xác nhận không khớp.');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
+
+    if (!validateForm()) {
       return;
     }
+
     setLoading(true);
     try {
       const res = await authService.register({ username, email, password });
@@ -26,8 +108,23 @@ export function RegisterPage() {
       localStorage.setItem('user', JSON.stringify({ role: res.role, name: username, email: email }));
       const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin';
       navigate(isAdmin ? '/admin/dashboard' : '/');
-    } catch {
-      setError('Đăng ký thất bại. Vui lòng thử lại.');
+    } catch (err) {
+      console.error('API error during registration', err);
+      const apiError = err as { response?: { data?: { message?: string, errors?: Record<string, string[]> } } };
+      
+      let errorMsg = 'Đăng ký thất bại. Vui lòng thử lại.';
+      if (apiError.response?.data?.errors) {
+        // FluentValidation returns nested errors object, let's extract the first error message
+        const firstErrorKey = Object.keys(apiError.response.data.errors)[0];
+        const errorsList = apiError.response.data.errors[firstErrorKey];
+        if (errorsList && errorsList.length > 0) {
+          errorMsg = errorsList[0];
+        }
+      } else if (apiError.response?.data?.message) {
+        errorMsg = apiError.response.data.message;
+      }
+      
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }

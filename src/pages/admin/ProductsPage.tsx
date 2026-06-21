@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Product } from '@/types';
 import { productService } from '@/services';
 import { Icons } from '@/components/Icons';
+import { toast } from 'react-toastify';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -9,6 +10,7 @@ export function ProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
     sku: '',
@@ -67,10 +69,11 @@ export function ProductsPage() {
         imageUrl: editingProduct.imageUrl || ''
       });
       setEditingProduct(null);
+      toast.success('Cập nhật sản phẩm thành công!');
       fetchProducts();
     } catch (err) {
       console.error('Error updating product', err);
-      alert('Không thể cập nhật sản phẩm. Vui lòng kiểm tra lại.');
+      toast.error('Không thể cập nhật sản phẩm. Vui lòng kiểm tra lại.');
     }
   };
 
@@ -100,22 +103,27 @@ export function ProductsPage() {
         description: '',
         imageUrl: ''
       });
+      toast.success('Thêm sản phẩm mới thành công!');
       fetchProducts();
     } catch (err) {
       console.error('Error creating product', err);
-      alert('Không thể tạo sản phẩm mới. Vui lòng kiểm tra lại.');
+      toast.error('Không thể tạo sản phẩm mới. Vui lòng kiểm tra lại.');
     }
   };
 
-  const deleteProduct = async (id: string) => {
-    if (window.confirm('Bạn có chắc muốn xóa sản phẩm này?')) {
-      try {
-        await productService.deleteProduct(id);
-        fetchProducts();
-      } catch (err) {
-        console.error('Error deleting product', err);
-        alert('Không thể xóa sản phẩm. Vui lòng kiểm tra lại.');
-      }
+  const deleteProduct = (id: string) => {
+    setDeletingProductId(id);
+  };
+
+  const confirmDelete = async (id: string) => {
+    try {
+      await productService.deleteProduct(id);
+      setDeletingProductId(null);
+      toast.success('Xóa sản phẩm thành công!');
+      fetchProducts();
+    } catch (err) {
+      console.error('Error deleting product', err);
+      toast.error('Không thể xóa sản phẩm. Vui lòng kiểm tra lại.');
     }
   };
 
@@ -519,6 +527,42 @@ export function ProductsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingProductId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-sm shadow-2xl relative">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 bg-red-50 border border-red-100 rounded-full flex items-center justify-center text-red-600 shadow-sm">
+                <Icons.AlertWarning className="w-6 h-6 text-red-500" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-heading font-extrabold text-slate-900">Xác nhận xóa</h3>
+                <p className="text-sm text-slate-500 font-semibold leading-relaxed">
+                  Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này sẽ loại bỏ hoàn toàn sản phẩm khỏi hệ thống và không thể hoàn tác.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeletingProductId(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDelete(deletingProductId)}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-red-500/10 transition-all cursor-pointer"
+              >
+                Xóa ngay
+              </button>
+            </div>
           </div>
         </div>
       )}

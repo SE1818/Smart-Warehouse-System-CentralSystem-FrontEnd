@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { promotionService } from '../services/promotion';
 import type { PromotionDto, CreatePromotionRequest } from '../types/promotion';
 import { Icons } from '@/components/Icons';
+import { toast } from 'react-toastify';
 
 export function PromotionsPage() {
   const [promotions, setPromotions] = useState<PromotionDto[]>([]);
@@ -9,6 +10,7 @@ export function PromotionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<PromotionDto | null>(null);
+  const [deletingPromoId, setDeletingPromoId] = useState<string | null>(null);
   const [form, setForm] = useState<CreatePromotionRequest>({
     code: '',
     description: '',
@@ -48,8 +50,10 @@ export function PromotionsPage() {
     try {
       if (editingPromotion) {
         await promotionService.updatePromotion(editingPromotion.id, form);
+        toast.success('Cập nhật khuyến mãi thành công!');
       } else {
         await promotionService.createPromotion(form);
+        toast.success('Thêm khuyến mãi mới thành công!');
       }
       setShowModal(false);
       setEditingPromotion(null);
@@ -68,8 +72,30 @@ export function PromotionsPage() {
       loadPromotions();
     } catch (err) {
       console.error('Error saving promotion:', err);
-      const axiosError = err as { response?: { data?: { message?: string } }; message?: string };
-      alert('Lỗi khi lưu khuyến mãi: ' + (axiosError.response?.data?.message || axiosError.message));
+      const axiosError = err as { response?: { data?: { message?: string; Message?: string } }; message?: string };
+      const serverMsg =
+        axiosError.response?.data?.Message ||
+        axiosError.response?.data?.message ||
+        axiosError.message ||
+        'Lỗi không xác định';
+      toast.error('Lỗi khi lưu khuyến mãi: ' + serverMsg);
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    setDeletingPromoId(id);
+  };
+
+  const confirmDelete = async (id: string) => {
+    try {
+      await promotionService.deletePromotion(id);
+      setDeletingPromoId(null);
+      toast.success('Xóa khuyến mãi thành công!');
+      loadPromotions();
+    } catch (err) {
+      console.error('Error deleting promotion:', err);
+      toast.error('Lỗi khi xóa khuyến mãi');
+      setDeletingPromoId(null);
     }
   };
 
@@ -90,16 +116,6 @@ export function PromotionsPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Xóa khuyến mãi này?')) return;
-    try {
-      await promotionService.deletePromotion(id);
-      loadPromotions();
-    } catch (err) {
-      console.error('Error deleting promotion:', err);
-      alert('Lỗi khi xóa khuyến mãi');
-    }
-  };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -331,6 +347,40 @@ export function PromotionsPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+        {deletingPromoId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-sm shadow-2xl relative">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="w-12 h-12 bg-red-50 border border-red-100 rounded-full flex items-center justify-center text-red-600 shadow-sm">
+                  <Icons.AlertWarning className="w-6 h-6 text-red-500" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-heading font-extrabold text-slate-900">Xác nhận xóa</h3>
+                  <p className="text-sm text-slate-500 font-semibold leading-relaxed">
+                    Bạn có chắc chắn muốn xóa khuyến mãi này? Hành động này sẽ loại bỏ hoàn toàn mã khuyến mãi khỏi hệ thống và không thể hoàn tác.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDeletingPromoId(null)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmDelete(deletingPromoId)}
+                  className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-red-500/10 transition-all cursor-pointer"
+                >
+                  Xóa ngay
+                </button>
+              </div>
             </div>
           </div>
         )}

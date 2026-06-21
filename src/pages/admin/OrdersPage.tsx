@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DEFAULT_PRODUCTS, STATUS_COLORS, STATUS_LABELS } from '@/constants';
 import { orderService } from '@/services';
 import { Icons } from '@/components/Icons';
+import { toast } from 'react-toastify';
 
 interface OrderItem {
   name: string;
@@ -22,6 +23,7 @@ export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
 
   const getProductName = (productId: string) => {
     const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
@@ -74,25 +76,29 @@ export function OrdersPage() {
   const handleConfirm = async (orderId: string) => {
     try {
       await orderService.confirmOrder(orderId);
-      alert('Đã duyệt đơn và phát lệnh Robot AMR thành công!');
+      toast.success('Đã duyệt đơn và phát lệnh Robot AMR thành công!');
       loadOrders();
     } catch (err) {
       console.error('Error confirming order:', err);
       const apiError = err as { response?: { data?: { message?: string } } };
-      alert(apiError.response?.data?.message || 'Có lỗi xảy ra khi duyệt đơn hàng.');
+      toast.error(apiError.response?.data?.message || 'Có lỗi xảy ra khi duyệt đơn hàng.');
     }
   };
 
-  const handleCancel = async (orderId: string) => {
-    if (!window.confirm('Bạn có chắc muốn hủy đơn hàng này?')) return;
+  const handleCancelClick = (orderId: string) => {
+    setCancellingOrderId(orderId);
+  };
+
+  const confirmCancel = async (orderId: string) => {
     try {
       await orderService.refundOrder(orderId);
-      alert('Đã hủy và hoàn tiền đơn hàng thành công!');
+      setCancellingOrderId(null);
+      toast.success('Đã hủy và hoàn tiền đơn hàng thành công!');
       loadOrders();
     } catch (err) {
       console.error('Error cancelling order:', err);
       const apiError = err as { response?: { data?: { message?: string } } };
-      alert(apiError.response?.data?.message || 'Có lỗi xảy ra khi hủy đơn hàng.');
+      toast.error(apiError.response?.data?.message || 'Có lỗi xảy ra khi hủy đơn hàng.');
     }
   };
 
@@ -198,8 +204,8 @@ export function OrdersPage() {
             {/* Actions workflow control */}
             <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 lg:border-t-0 lg:pt-0 shrink-0">
               <button
-                onClick={() => handleCancel(o.id)}
-                className="px-5 py-2.5 border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-650 rounded-xl text-xs font-bold transition-all active:scale-98 cursor-pointer"
+                onClick={() => handleCancelClick(o.id)}
+                className="px-5 py-2.5 border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-655 rounded-xl text-xs font-bold transition-all active:scale-98 cursor-pointer"
               >
                 Hủy đơn
               </button>
@@ -263,6 +269,42 @@ export function OrdersPage() {
           </div>
         )}
       </div>
+
+      {/* Cancel Order Confirmation Modal */}
+      {cancellingOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-sm shadow-2xl relative">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 bg-red-50 border border-red-100 rounded-full flex items-center justify-center text-red-655 shadow-sm">
+                <Icons.AlertWarning className="w-6 h-6 text-red-500" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-heading font-extrabold text-slate-900">Hủy đơn hàng</h3>
+                <p className="text-sm text-slate-500 font-semibold leading-relaxed">
+                  Bạn có chắc chắn muốn hủy đơn hàng này và hoàn lại tiền? Hành động này sẽ dừng lệnh điều phối Robot AMR và không thể hoàn tác.
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setCancellingOrderId(null)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmCancel(cancellingOrderId)}
+                className="flex-1 px-4 py-2.5 bg-red-655 hover:bg-red-550 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-red-550/10 transition-all cursor-pointer"
+              >
+                Xác nhận hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

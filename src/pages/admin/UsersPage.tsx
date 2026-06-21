@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { userService } from '@/services';
 import { Icons } from '@/components/Icons';
+import { toast } from 'react-toastify';
 
 interface User {
   id: string;
@@ -60,12 +61,12 @@ export function UsersPage() {
     const targetActive = currentStatus !== 'Active';
     try {
       await userService.updateUserStatus(id, targetActive);
-      alert('Cập nhật trạng thái người dùng thành công!');
+      toast.success('Cập nhật trạng thái người dùng thành công!');
       fetchUsers();
     } catch (err) {
       console.error('Error updating status:', err);
       const apiError = err as { response?: { data?: { message?: string } }; message?: string };
-      alert('Lỗi cập nhật trạng thái: ' + (apiError.response?.data?.message || apiError.message));
+      toast.error('Lỗi cập nhật trạng thái: ' + (apiError.response?.data?.message || apiError.message));
     }
   };
 
@@ -75,13 +76,13 @@ export function UsersPage() {
 
     try {
       await userService.updateUserRole(editingUser.id, editingUser.role);
-      alert('Cập nhật vai trò thành công!');
+      toast.success('Cập nhật vai trò thành công!');
       setEditingUser(null);
       fetchUsers();
     } catch (err) {
       console.error('Error saving user role:', err);
       const apiError = err as { response?: { data?: { message?: string } }; message?: string };
-      alert('Lỗi cập nhật vai trò: ' + (apiError.response?.data?.message || apiError.message));
+      toast.error('Lỗi cập nhật vai trò: ' + (apiError.response?.data?.message || apiError.message));
       setEditingUser(null);
     }
   };

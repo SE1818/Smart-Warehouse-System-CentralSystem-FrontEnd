@@ -3,6 +3,7 @@ import { robotService } from '../services/robot';
 import type { Robot, MoveRequest, StatusRequest, FulfillmentRequest } from '../types/robot';
 import { Icons } from '@/components/Icons';
 import type { Order } from '../types/product';
+import { toast } from 'react-toastify';
 
 export function RobotManagementPage() {
   const [robots, setRobots] = useState<Robot[]>([]);
@@ -87,7 +88,7 @@ export function RobotManagementPage() {
       if (orders.length > 0) {
         setShowFulfillmentModal(true);
       } else {
-        alert('Không có đơn hàng nào chờ xử lý');
+        toast.info('Không có đơn hàng nào chờ xử lý');
       }
     } catch (err) {
       setError('Không thể tải danh sách đơn hàng chờ');

@@ -10,9 +10,35 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const validateForm = (): boolean => {
+    if (!email.trim()) {
+      setError('Email không được để trống.');
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Email không đúng định dạng.');
+      return false;
+    }
+    if (!password) {
+      setError('Mật khẩu không được để trống.');
+      return false;
+    }
+    if (password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự.');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!validateForm()) {
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await authService.login({ email, password });

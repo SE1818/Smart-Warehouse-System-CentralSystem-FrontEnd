@@ -1,6 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icons } from './Icons';
+import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
+import { toast } from 'react-toastify';
 
 export function AdminLayout() {
   const location = useLocation();
@@ -10,6 +12,33 @@ export function AdminLayout() {
   // Retrieve user info
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'warehouse_manager' };
+
+  useEffect(() => {
+    if (!user || !user.id) return;
+
+    const connection = new HubConnectionBuilder()
+      .withUrl(`http://localhost:5000/api/notifications/hub?userId=${user.id}`)
+      .configureLogging(LogLevel.Information)
+      .withAutomaticReconnect()
+      .build();
+
+    connection.on('ReceiveNotification', (notification: { title: string; message: string }) => {
+      toast.info(
+        <div>
+          <div className="font-bold text-slate-900 text-sm mb-0.5">{notification.title}</div>
+          <div className="text-xs text-slate-600 font-semibold">{notification.message}</div>
+        </div>
+      );
+    });
+
+    connection.start()
+      .then(() => console.log('[SignalR] Connected to Notification Hub for user:', user.id))
+      .catch((err) => console.error('[SignalR] Connection failed: ', err));
+
+    return () => {
+      connection.stop();
+    };
+  }, [user?.id]);
 
   const navItems = [
     { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" /> },
