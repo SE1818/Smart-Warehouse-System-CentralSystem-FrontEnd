@@ -1,5 +1,5 @@
 import apiClient from './api';
-import type { LoginRequest, RegisterRequest, AuthResponse, User } from '@/types/auth';
+import type { LoginRequest, RegisterRequest, ExternalLoginRequest, AuthResponse, User } from '@/types/auth';
 
 export const authService = {
   async login(data: LoginRequest): Promise<AuthResponse> {
@@ -8,6 +8,10 @@ export const authService = {
   },
   async register(data: RegisterRequest): Promise<AuthResponse> {
     const res = await apiClient.post('/auth/register', data);
+    return res.data;
+  },
+  async externalLogin(data: ExternalLoginRequest): Promise<AuthResponse> {
+    const res = await apiClient.post('/auth/external-login', data);
     return res.data;
   },
   async refreshToken(refreshToken: string): Promise<AuthResponse> {

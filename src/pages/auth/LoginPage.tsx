@@ -1,14 +1,93 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services';
 import { Icons } from '@/components/Icons';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+if (!GOOGLE_CLIENT_ID) {
+  throw new Error('VITE_GOOGLE_CLIENT_ID is not set in .env');
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+
+  // Load Google Identity Services and render button
+  useEffect(() => {
+    const loadGoogleScript = () => {
+      return new Promise<void>((resolve, reject) => {
+        if ((window as any).google) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Google script'));
+        document.head.appendChild(script);
+      });
+    };
+
+    const initializeGoogle = async () => {
+      try {
+        await loadGoogleScript();
+        const google = (window as any).google;
+        if (!google) return;
+
+        // Define callback for Google credential response
+        const handleGoogleCredentialResponse = async (response: { credential?: string }) => {
+          if (!response.credential) {
+            setError('Không nhận được thông tin xác thực từ Google.');
+            return;
+          }
+
+          setGoogleLoading(true);
+          setError('');
+          try {
+            const res = await authService.externalLogin({ provider: 'Google', idToken: response.credential });
+            // Store tokens and role
+            localStorage.setItem('authToken', res.accessToken);
+            localStorage.setItem('authRole', res.role);
+            // Fetch full user profile
+            const user = await authService.getProfile();
+            localStorage.setItem('user', JSON.stringify(user));
+            navigate(user.role === 'warehouse_manager' || user.role === 'Warehouse_Admin' || user.role === 'Admin' ? '/admin/dashboard' : '/');
+          } catch (err) {
+            console.error('Google login error:', err);
+            const apiError = err as { response?: { data?: { message?: string } } };
+            setError(apiError.response?.data?.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+          } finally {
+            setGoogleLoading(false);
+          }
+        };
+
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredentialResponse,
+          auto_select: false,
+        });
+
+        if (googleButtonRef.current) {
+          google.accounts.id.renderButton(
+            googleButtonRef.current,
+            { theme: 'outline', size: 'large', width: 320, text: 'signin_with' }
+          );
+        }
+      } catch (err) {
+        console.error('Google init error:', err);
+      }
+    };
+
+    initializeGoogle();
+  }, [navigate]); // navigate is stable
 
   const validateForm = (): boolean => {
     if (!email.trim()) {
@@ -115,6 +194,25 @@ export function LoginPage() {
             )}
           </button>
         </form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-200"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-slate-50 text-slate-500">Hoặc</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          <div ref={googleButtonRef}></div>
+          {googleLoading && (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <Icons.Spinner className="w-4 h-4 animate-spin" />
+              <span>Đang xác thực Google...</span>
+            </div>
+          )}
+        </div>
 
         <p className="text-center text-xs text-slate-500 font-medium">
           Chưa có tài khoản đăng ký?{' '}
