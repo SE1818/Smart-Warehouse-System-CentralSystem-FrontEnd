@@ -1,5 +1,5 @@
 export type PromotionType = 'percentage' | 'fixed' | 'flashSale';
-export type PromotionStatus = 'active' | 'inactive' | 'expired';
+export type PromotionStatus = 'active' | 'inactive' | 'expired' | 'upcoming';
 
 export interface FlashSaleProductItem {
   productId: string;
