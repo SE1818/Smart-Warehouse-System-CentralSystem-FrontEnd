@@ -62,6 +62,7 @@ npm run lint         # Run ESLint
 - Create `.env` file with:
   ```
   VITE_API_BASE_URL=http://localhost:5000/api
+  VITE_GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
   ```
 
 ## API Endpoints (Backend)
