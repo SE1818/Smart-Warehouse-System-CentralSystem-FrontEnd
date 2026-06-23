@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { robotService } from '../services/robot';
-import type { Robot, MoveRequest, StatusRequest, FulfillmentRequest } from '../types/robot';
+import type { Robot, MoveRequest } from '../types/robot';
 import { Icons } from '@/components/Icons';
 import type { Order } from '../types/product';
 import { toast } from 'react-toastify';
@@ -36,12 +36,20 @@ export function RobotManagementPage() {
     return () => clearTimeout(timer);
   }, [loadRobots]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadRobots();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
+  }, [loadRobots]);
+
   const handleMove = async (request: MoveRequest) => {
     if (!selectedRobot) return;
 
     try {
       setActionLoading(true);
-      await robotService.moveRobot(selectedRobot.id, request);
+      await robotService.moveRobot(selectedRobot.id, request.x, request.y, selectedRobot);
       await loadRobots();
       setShowMoveModal(false);
     } catch (err) {
@@ -52,12 +60,10 @@ export function RobotManagementPage() {
     }
   };
 
-  const handleStatusUpdate = async (request: StatusRequest) => {
-    if (!selectedRobot) return;
-
+  const handleStatusUpdate = async (robot: Robot, status: string) => {
     try {
       setActionLoading(true);
-      await robotService.updateRobotStatus(selectedRobot.id, request);
+      await robotService.updateRobotStatus(robot.id, status, robot);
       await loadRobots();
     } catch (err) {
       setError('Không thể cập nhật trạng thái robot');
@@ -67,10 +73,29 @@ export function RobotManagementPage() {
     }
   };
 
-  const handleFulfillOrder = async (request: FulfillmentRequest) => {
+  const handleFulfillOrder = async (orderId: string, robotId: string) => {
     try {
       setActionLoading(true);
-      await robotService.fulfillOrder(request);
+
+      const order = pendingOrders.find(o => o.id === orderId);
+      if (!order) {
+        toast.error('Không tìm thấy thông tin đơn hàng');
+        return;
+      }
+
+      // Map deliveryNodeId to Guid
+      const stationMap: Record<string, string> = {
+        'ST01': '11111111-1111-1111-1111-111111111111',
+        'ST02': '22222222-2222-2222-2222-222222222222',
+        'ST03': '33333333-3333-3333-3333-333333333333',
+        'ST04': '44444444-4444-4444-4444-444444444444',
+        'ST05': '55555555-5555-5555-5555-555555555555'
+      };
+
+      const toStationId = stationMap[order.deliveryNodeId || ''] || stationMap['ST01'];
+      const fromStationId = stationMap['ST05']; // Trạm E (pickup)
+
+      await robotService.fulfillOrder(robotId, orderId, fromStationId, toStationId);
       setShowFulfillmentModal(false);
       await loadRobots();
     } catch (err) {
@@ -210,11 +235,10 @@ export function RobotManagementPage() {
                       </button>
                       <button
                         onClick={() => {
-                          setSelectedRobot(robot);
                           if (robot.status === 'Idle') {
-                            handleStatusUpdate({ status: 'Charging' });
+                            handleStatusUpdate(robot, 'Charging');
                           } else if (robot.status === 'Charging') {
-                            handleStatusUpdate({ status: 'Idle' });
+                            handleStatusUpdate(robot, 'Idle');
                           }
                         }}
                         className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
@@ -228,7 +252,7 @@ export function RobotManagementPage() {
                       <button
                         onClick={() => {
                           if (window.confirm('Bạn có chắc muốn cập nhật trạng thái lỗi cho robot này?')) {
-                            handleStatusUpdate({ status: 'Error' });
+                            handleStatusUpdate(robot, 'Error');
                           }
                         }}
                         className="px-3 py-1.5 bg-red-50 hover:bg-red-100/80 text-red-650 text-xs font-bold rounded-lg border border-red-200/40 transition-all cursor-pointer"
@@ -357,7 +381,7 @@ function MoveModal({ robot, onMove, onClose }: MoveModalProps) {
 interface FulfillmentModalProps {
   orders: Order[];
   robots: Robot[];
-  onFulfill: (request: FulfillmentRequest) => Promise<void>;
+  onFulfill: (orderId: string, robotId: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -372,10 +396,7 @@ function FulfillmentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onFulfill({
-      orderId: selectedOrderId,
-      robotId: selectedRobotId,
-    });
+    await onFulfill(selectedOrderId, selectedRobotId);
     setSelectedOrderId('');
     setSelectedRobotId('');
   };

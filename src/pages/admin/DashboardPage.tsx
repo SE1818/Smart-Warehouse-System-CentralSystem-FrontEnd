@@ -141,9 +141,9 @@ export function DashboardPage() {
       loadDashboardData();
     }, 0);
 
-    // SignalR Connection
+    // SignalR Connection to Gateway
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl('http://localhost:5002/hubs/robot-tracking')
+      .withUrl('http://localhost:5000/api/robots/hub')
       .withAutomaticReconnect()
       .build();
 
@@ -156,9 +156,15 @@ export function DashboardPage() {
         console.warn('SignalR offline on Dashboard. Running with static fleet representation.', err);
       });
 
+    const handleRefresh = () => {
+      loadDashboardData();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+
     return () => {
       clearTimeout(timer);
       connection.stop().catch(() => {});
+      window.removeEventListener('smartwarehouse-notification', handleRefresh);
     };
   }, [loadDashboardData, handleRobotLocationUpdate]);
 

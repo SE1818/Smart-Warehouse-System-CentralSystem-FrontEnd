@@ -29,6 +29,7 @@ export function AdminLayout() {
           <div className="text-xs text-slate-600 font-semibold">{notification.message}</div>
         </div>
       );
+      window.dispatchEvent(new CustomEvent('smartwarehouse-notification', { detail: notification }));
     });
 
     connection.start()

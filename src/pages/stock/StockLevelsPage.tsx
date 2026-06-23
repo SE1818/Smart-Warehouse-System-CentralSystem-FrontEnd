@@ -61,6 +61,14 @@ export function StockLevelsPage() {
     return () => clearTimeout(timer);
   }, [fetchStockLevels]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchStockLevels();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
+  }, [fetchStockLevels]);
+
   // Group stock levels by warehouse
   const grouped = stockLevels.reduce((acc, level) => {
     const warehouseName = level.warehouse?.name || 'Không xác định';

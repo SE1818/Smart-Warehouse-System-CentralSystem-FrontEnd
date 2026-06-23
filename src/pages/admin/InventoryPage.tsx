@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { secureRandom } from '@/utils/crypto';
 import { Icons } from '@/components/Icons';
+import { robotService } from '@/services/robot';
 
 interface Robot {
   id: string;
@@ -9,7 +10,7 @@ interface Robot {
   x: number;
   y: number;
   battery: number;
-  status: 'Idle' | 'Moving' | 'Error' | 'Charging';
+  status: 'Idle' | 'Moving' | 'Error' | 'Charging' | 'Offline';
   destination?: string;
 }
 
@@ -39,25 +40,30 @@ const chargingDocks = [
 ];
 
 export function InventoryPage() {
-  const [robots, setRobots] = useState<Robot[]>([
-    { id: 'AMR-01', name: 'AMR-01 (Mantis)', x: 2, y: 3, battery: 84, status: 'Moving', destination: 'Trạm A' },
-    { id: 'AMR-02', name: 'AMR-02 (Scarab)', x: 7, y: 1, battery: 95, status: 'Idle' },
-    { id: 'AMR-03', name: 'AMR-03 (Hornet)', x: 0, y: 9, battery: 18, status: 'Charging' }
-  ]);
+  const [robots, setRobots] = useState<Robot[]>([]);
   const [selectedRobot, setSelectedRobot] = useState<string | null>(null);
   const [signalRConnected, setSignalRConnected] = useState(false);
 
+  const loadRobotsFromApi = () => {
+    robotService.listRobots()
+      .then(data => setRobots(data))
+      .catch(err => console.error('Error loading robots in InventoryPage:', err));
+  };
+
   useEffect(() => {
-    // Attempt SignalR connection to AMR service
+    // Load initial robot list
+    loadRobotsFromApi();
+
+    // Attempt SignalR connection to Gateway
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl('http://localhost:5002/hubs/robot-tracking')
+      .withUrl('http://localhost:5000/api/robots/hub')
       .withAutomaticReconnect()
       .build();
 
     connection.start()
       .then(() => {
         setSignalRConnected(true);
-        console.log('SignalR connected to AMR service');
+        console.log('SignalR connected to AMR service via gateway');
         connection.on('ReceiveRobotLocation', (updatedRobot: Robot) => {
           setRobots(prev => {
             const idx = prev.findIndex(r => r.id === updatedRobot.id);
@@ -74,6 +80,18 @@ export function InventoryPage() {
         console.warn('SignalR fallback. Operating in simulation mode.', err);
       });
 
+    const handleRefresh = () => {
+      loadRobotsFromApi();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+
+    return () => {
+      connection.stop().catch(() => {});
+      window.removeEventListener('smartwarehouse-notification', handleRefresh);
+    };
+  }, [signalRConnected]);
+
+  useEffect(() => {
     // Fallback simulation timer to make the robots move around
     const interval = setInterval(() => {
       if (signalRConnected) return; // Ignore simulation if real SignalR is online
@@ -103,7 +121,7 @@ export function InventoryPage() {
           }
 
           // Arrive at destination check
-          let status: 'Idle' | 'Moving' | 'Error' | 'Charging' = robot.status;
+          let status: 'Idle' | 'Moving' | 'Error' | 'Charging' | 'Offline' = robot.status;
           let dest = robot.destination;
           if (robot.id === 'AMR-01' && nextX === 0 && nextY === 2) {
             status = 'Idle';
@@ -124,7 +142,6 @@ export function InventoryPage() {
 
     return () => {
       clearInterval(interval);
-      connection.stop().catch(() => {});
     };
   }, [signalRConnected]);
 

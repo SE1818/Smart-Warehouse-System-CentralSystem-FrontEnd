@@ -41,6 +41,14 @@ export function StockMovementsPage() {
     return () => clearTimeout(timer);
   }, [fetchMovements]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchMovements();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
+  }, [fetchMovements]);
+
   const getTypeLabel = (type: StockMovementType) => {
     switch (type) {
       case StockMovementType.In:

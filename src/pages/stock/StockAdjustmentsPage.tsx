@@ -66,6 +66,15 @@ export function StockAdjustmentsPage() {
     return () => clearTimeout(timer);
   }, [fetchStockLevel]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchInitialData();
+      fetchStockLevel();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
+  }, [fetchInitialData, fetchStockLevel]);
+
   const currentStockLevel = stockLevels[0];
   const currentQuantity = currentStockLevel?.quantity || 0;
   const newQuantity = currentQuantity + quantity;

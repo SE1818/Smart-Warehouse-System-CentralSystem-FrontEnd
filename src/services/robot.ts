@@ -1,27 +1,54 @@
 import apiClient from './api';
-import type { Robot, MoveRequest, StatusRequest, FulfillmentRequest } from '@/types/robot';
+import type { Robot } from '@/types/robot';
 import type { Order } from '@/types/product';
 
 export const robotService = {
   // Get all robots
   async listRobots(): Promise<Robot[]> {
-    const response = await apiClient.get<Robot[]>('/v1/robots');
-    return response.data;
+    const response = await apiClient.get<any[]>('/v1/robots');
+    return response.data.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      x: r.currentX ?? r.x ?? 0,
+      y: r.currentY ?? r.y ?? 0,
+      battery: r.batteryLevel ?? r.battery ?? 0,
+      status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) as any : 'Idle',
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt
+    }));
   },
 
-  // Move robot to coordinates
-  async moveRobot(robotId: string, request: MoveRequest): Promise<void> {
-    await apiClient.post(`/v1/robots/${robotId}/move`, request);
+  // Move robot to coordinates via PUT
+  async moveRobot(robotId: string, x: number, y: number, currentRobot: Robot): Promise<void> {
+    await apiClient.put(`/v1/robots/${robotId}`, {
+      name: currentRobot.name,
+      batteryLevel: currentRobot.battery,
+      status: 'moving',
+      currentX: x,
+      currentY: y,
+      currentAreaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2'
+    });
   },
 
-  // Update robot status
-  async updateRobotStatus(robotId: string, request: StatusRequest): Promise<void> {
-    await apiClient.put(`/v1/robots/${robotId}/status`, request);
+  // Update robot status via PUT
+  async updateRobotStatus(robotId: string, status: string, currentRobot: Robot): Promise<void> {
+    await apiClient.put(`/v1/robots/${robotId}`, {
+      name: currentRobot.name,
+      batteryLevel: currentRobot.battery,
+      status: status.toLowerCase(),
+      currentX: currentRobot.x,
+      currentY: currentRobot.y,
+      currentAreaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2'
+    });
   },
 
-  // Fulfill order with robot
-  async fulfillOrder(request: FulfillmentRequest): Promise<void> {
-    await apiClient.post('/v1/robots/fulfill', request);
+  // Fulfill order with robot via task assignment
+  async fulfillOrder(robotId: string, orderId: string, fromStationId: string, toStationId: string): Promise<void> {
+    await apiClient.post(`/v1/robots/${robotId}/tasks`, {
+      orderId,
+      fromStationId,
+      toStationId
+    });
   },
 
   // Get pending orders

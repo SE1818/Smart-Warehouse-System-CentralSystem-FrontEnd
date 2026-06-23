@@ -58,8 +58,8 @@ export function LoginPage() {
             localStorage.setItem('authRole', res.role);
             localStorage.setItem('user', JSON.stringify({
               role: res.role,
-              name: res.email.split('@')[0] || 'Nhân viên',
-              email: res.email
+              name: (res.email || '').split('@')[0] || 'Nhân viên',
+              email: res.email || ''
             }));
             navigate(res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin' ? '/admin/dashboard' : '/');
           } catch (err) {

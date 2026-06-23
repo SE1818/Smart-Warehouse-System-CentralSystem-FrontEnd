@@ -218,7 +218,7 @@ export function FileManagementPage() {
           <Icons.Spinner className="h-10 w-10 text-brand-600 mx-auto mb-4" />
           <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách file...</p>
         </div>
-      ) : files && files.count === 0 ? (
+      ) : files && files.files.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center shadow-sm">
           <Icons.Folder className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-450 italic text-sm">Thư mục hiện tại đang trống</p>

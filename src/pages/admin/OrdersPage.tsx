@@ -73,6 +73,14 @@ export function OrdersPage() {
     return () => clearTimeout(timer);
   }, [loadOrders]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadOrders();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
+  }, [loadOrders]);
+
   const handleConfirm = async (orderId: string) => {
     try {
       await orderService.confirmOrder(orderId);

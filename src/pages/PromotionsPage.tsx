@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { promotionService } from '../services/promotion';
 import { productService } from '../services/productService';
-import type { PromotionDto, CreatePromotionRequest, PromotionStatus } from '../types/promotion';
+import type { PromotionDto, CreatePromotionRequest } from '../types/promotion';
 import type { Product } from '@/types/stock';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
@@ -63,6 +63,14 @@ export function PromotionsPage() {
       loadPromotions();
     }, 0);
     return () => clearTimeout(timer);
+  }, [loadPromotions]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadPromotions();
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
   }, [loadPromotions]);
 
   useEffect(() => {
