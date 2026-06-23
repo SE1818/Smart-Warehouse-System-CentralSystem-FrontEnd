@@ -53,13 +53,15 @@ export function LoginPage() {
           setError('');
           try {
             const res = await authService.externalLogin({ provider: 'Google', idToken: response.credential });
-            // Store tokens and role
+            // Store tokens and user info (no profile fetch needed - data from login response)
             localStorage.setItem('authToken', res.accessToken);
             localStorage.setItem('authRole', res.role);
-            // Fetch full user profile
-            const user = await authService.getProfile();
-            localStorage.setItem('user', JSON.stringify(user));
-            navigate(user.role === 'warehouse_manager' || user.role === 'Warehouse_Admin' || user.role === 'Admin' ? '/admin/dashboard' : '/');
+            localStorage.setItem('user', JSON.stringify({
+              role: res.role,
+              name: res.email.split('@')[0] || 'Nhân viên',
+              email: res.email
+            }));
+            navigate(res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin' ? '/admin/dashboard' : '/');
           } catch (err) {
             console.error('Google login error:', err);
             const apiError = err as { response?: { data?: { message?: string } } };
