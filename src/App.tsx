@@ -16,6 +16,7 @@ const AdminInventory = lazy(() => import('./pages/admin/InventoryPage').then(m =
 const AdminProducts = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
 const AdminOrders = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ default: m.OrdersPage })));
 const AdminUsers = lazy(() => import('./pages/admin/UsersPage').then(m => ({ default: m.UsersPage })));
+const AdminComplaints = lazy(() => import('./pages/admin/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })));
 const AdminReports = lazy(() => import('./pages/admin/ReportsPage').then(m => ({ default: m.ReportsPage })));
 
 // Stock pages
@@ -109,6 +110,7 @@ function App() {
             <Route path="products" element={<AdminProducts />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="complaints" element={<AdminComplaints />} />
             <Route path="reports" element={<AdminReports />} />
           </Route>
 

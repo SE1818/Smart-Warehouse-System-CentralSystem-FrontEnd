@@ -60,6 +60,7 @@ export function AdminLayout() {
     { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" /> },
     { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" /> },
     { path: '/admin/users', label: 'Quản lý người dùng', icon: <Icons.UsersGroup className="w-5 h-5" /> },
+    { path: '/admin/complaints', label: 'Quản lý khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" /> },
     { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" /> },
   ];
 
