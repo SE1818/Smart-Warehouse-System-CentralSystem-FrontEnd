@@ -35,6 +35,7 @@ const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default:
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const MetricsPage = lazy(() => import('./pages/MetricsPage').then(m => ({ default: m.MetricsPage })));
 const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
+const SchedulerPage = lazy(() => import('./pages/admin/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
 
 function UnauthorizedPage() {
   return (
@@ -107,6 +108,7 @@ function App() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="metrics" element={<MetricsPage />} />
             <Route path="logs" element={<AuditLogsPage />} />
+            <Route path="scheduler" element={<SchedulerPage />} />
             <Route path="products" element={<AdminProducts />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="users" element={<AdminUsers />} />

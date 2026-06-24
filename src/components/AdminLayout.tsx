@@ -57,6 +57,11 @@ export function AdminLayout() {
     { path: '/admin/profile', label: 'Hồ sơ', icon: <Icons.Profile className="w-5 h-5" /> },
     { path: '/admin/metrics', label: 'Giám sát môi trường', icon: <Icons.Metrics className="w-5 h-5" /> },
     { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
+    { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+      </svg>
+    ) },
     { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" /> },
     { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" /> },
     { path: '/admin/users', label: 'Quản lý người dùng', icon: <Icons.UsersGroup className="w-5 h-5" /> },
