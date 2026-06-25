@@ -4,6 +4,15 @@ WORKDIR /app
 
 # Cài dependencies trước (tận dụng Docker layer cache)
 COPY package*.json ./
+
+# 🚀 BỘ BA BIỆN PHÁP CHỐNG NGHẼN MẠNG NPM TRÊN IPV6:
+# 1. Ép npm chỉ phân giải và tải gói qua IPv4 sạch
+RUN npm config set fetch-ipv4 true
+# 2. Định nghĩa lại Registry chuẩn chính thống
+RUN npm config set registry https://registry.npmjs.org/
+# 3. Nâng thời gian chờ (timeout) lên 5 phút để tránh rớt gói tin trên HP Server
+RUN npm config set fetch-retry-maxtimeout 300000
+
 RUN npm ci --no-audit --no-fund
 
 # Copy toàn bộ source code
