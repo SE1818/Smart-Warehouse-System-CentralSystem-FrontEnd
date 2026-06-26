@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services';
 import { Icons } from '@/components/Icons';
 
 export function RegisterPage() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,7 +14,6 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState('');
   const [showOtpInput, setShowOtpInput] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState('');
   const [otpError, setOtpError] = useState('');
   const [otpSuccess, setOtpSuccess] = useState(false);
 
@@ -113,7 +113,6 @@ export function RegisterPage() {
     try {
       await authService.register({ username, email, password });
       setSuccess(true);
-      setRegisteredEmail(email);
       setShowOtpInput(true);
       setLoading(false);
     } catch (err) {
