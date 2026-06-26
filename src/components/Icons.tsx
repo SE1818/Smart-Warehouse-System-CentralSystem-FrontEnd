@@ -126,6 +126,12 @@ export const Icons = {
     </svg>
   ),
 
+  Check: (props: IconProps) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+    </svg>
+  ),
+
   Info: (props: IconProps) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 1 1 1.059.95l-.5 1.5H12M12 8.25h.008v.008H12V8.25Zm0 13.5a9.75 9.75 0 1 1 0-19.5 9.75 9.75 0 0 1 0 19.5Z" />
@@ -204,10 +210,16 @@ export const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
     </svg>
   ),
-  
+
   Plus: (props: IconProps) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5" {...props}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  ),
+
+  LockReset: (props: IconProps) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.983 3v7.038a3 3 0 1 0 3.034 3.034A8.001 8.001 0 0 1 9 20a8.001 8.001 0 0 1-5.017-2.962A3 3 0 0 0 3.75 16.018V3m0 0a3 3 0 0 1 3-3v.001a3 3 0 0 1-3 3v.009a3 3 0 0 1 3-3h.006c1.116.88 2.608 1.44 4.394 1.441a5.25 5.25 0 0 1-4.394-1.44" />
     </svg>
   )
 };

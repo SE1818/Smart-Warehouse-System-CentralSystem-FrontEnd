@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '@/services';
 import { Icons } from '@/components/Icons';
 
@@ -13,10 +13,27 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const googleButtonRef = useRef<HTMLDivElement>(null);
+
+  // Check for password reset success message from navigation state
+  useEffect(() => {
+    const state = location.state as { passwordResetSuccess?: boolean } | null;
+    if (state?.passwordResetSuccess) {
+      setError('');
+      setEmailNotVerified(false);
+      // Show a success message temporarily
+      setError('Password reset successfully. You can now log in with your new password.');
+    }
+    // Clear state after showing
+    if (state) {
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   // Load Google Identity Services and render button
   useEffect(() => {
@@ -115,7 +132,8 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+    setEmailNotVerified(false);
+
     if (!validateForm()) {
       return;
     }
@@ -129,10 +147,30 @@ export function LoginPage() {
       navigate(isAdmin ? '/admin/dashboard' : '/');
     } catch (err) {
       console.error('API error during login', err);
-      const apiError = err as { response?: { data?: { message?: string } } };
-      setError(apiError.response?.data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ API Gateway.');
+      const apiError = err as { response?: { data?: { message?: string, code?: string } } };
+      const data = apiError.response?.data;
+      if (data?.code === 'EMAIL_NOT_VERIFIED') {
+        setEmailNotVerified(true);
+        setError(data.message || 'Please verify your email before logging in.');
+      } else {
+        setError(data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ API Gateway.');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError('Please enter your email address first.');
+      return;
+    }
+    try {
+      await authService.resendVerification({ email });
+      setError('');
+      alert('A new verification email has been sent. Please check your inbox.'); // todo: replace with inline message
+    } catch (err) {
+      setError('Failed to send verification email. Please try again.');
     }
   };
 
@@ -152,9 +190,20 @@ export function LoginPage() {
         </div>
         
         {error && (
-          <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed flex items-start gap-2.5">
-            <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
-            <span>{error}</span>
+          <div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed flex flex-col gap-2">
+            <div className="flex items-start gap-2.5">
+              <Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+            {emailNotVerified && (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                className="self-start text-red-600 font-bold hover:text-red-700 underline text-xs"
+              >
+                Gửi lại email xác minh
+              </button>
+            )}
           </div>
         )}
         
@@ -180,6 +229,11 @@ export function LoginPage() {
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
               required
             />
+          </div>
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-xs text-brand-600 font-bold hover:text-brand-700 transition-colors">
+              Quên mật khẩu?
+            </Link>
           </div>
           <button
             type="submit"

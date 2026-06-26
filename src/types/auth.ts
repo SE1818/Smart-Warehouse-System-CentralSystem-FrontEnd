@@ -3,3 +3,7 @@ export interface RegisterRequest { username: string; email: string; password: st
 export interface ExternalLoginRequest { provider: 'Google'; idToken: string; }
 export interface AuthResponse { accessToken: string; refreshToken: string; accessTokenExpiresIn: string; role: string; email?: string; }
 export interface User { id: string; username: string; email: string; role: string; isActive: boolean; createdAt: string; }
+
+export interface ForgotPasswordRequest { email: string; }
+export interface ResetPasswordRequest { email: string; token: string; newPassword: string; }
+export interface ResendVerificationRequest { email: string; }

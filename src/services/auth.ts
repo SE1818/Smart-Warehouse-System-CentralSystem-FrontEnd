@@ -1,5 +1,5 @@
 import apiClient from './api';
-import type { LoginRequest, RegisterRequest, ExternalLoginRequest, AuthResponse, User } from '@/types/auth';
+import type { LoginRequest, RegisterRequest, ExternalLoginRequest, AuthResponse, User, ForgotPasswordRequest, ResetPasswordRequest, ResendVerificationRequest } from '@/types/auth';
 
 export const authService = {
   async login(data: LoginRequest): Promise<AuthResponse> {
@@ -23,6 +23,22 @@ export const authService = {
   },
   async getProfile(): Promise<User> {
     const res = await apiClient.get('/auth/profile');
+    return res.data;
+  },
+  async forgotPassword(data: ForgotPasswordRequest): Promise<{ message: string }> {
+    const res = await apiClient.post('/auth/forgot-password', data);
+    return res.data;
+  },
+  async resetPassword(data: ResetPasswordRequest): Promise<{ message: string }> {
+    const res = await apiClient.post('/auth/reset-password', data);
+    return res.data;
+  },
+  async resendVerification(data: ResendVerificationRequest): Promise<{ message: string }> {
+    const res = await apiClient.post('/auth/resend-verification', data);
+    return res.data;
+  },
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    const res = await apiClient.get('/auth/verify-email', { params: { token } });
     return res.data;
   },
 };
