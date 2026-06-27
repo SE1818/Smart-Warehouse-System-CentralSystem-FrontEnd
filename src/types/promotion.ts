@@ -47,6 +47,7 @@ export interface CreatePromotionRequest {
 }
 
 export interface UpdatePromotionRequest {
+  id?: string;
   description?: string;
   type?: PromotionType;
   value?: number;

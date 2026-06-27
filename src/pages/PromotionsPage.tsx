@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { promotionService } from '../services/promotion';
 import { productService } from '../services/productService';
 import type { PromotionDto, CreatePromotionRequest } from '../types/promotion';
@@ -16,6 +16,210 @@ const statusToNumber = (status?: string): number | undefined => {
     default: return undefined;
   }
 };
+
+interface DatePickerProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}
+
+function DatePicker({ label, value, onChange, required }: DatePickerProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const selectedDate = value ? new Date(value) : null;
+  const [viewDate, setViewDate] = useState(() => selectedDate || new Date());
+
+  useEffect(() => {
+    if (selectedDate) {
+      setViewDate(selectedDate);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handlePrevMonth = () => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+  };
+
+  const handleSelectDay = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    onChange(`${y}-${m}-${d}`);
+    setIsOpen(false);
+  };
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  
+  const firstDay = new Date(year, month, 1);
+  let startDay = firstDay.getDay();
+  startDay = startDay === 0 ? 6 : startDay - 1;
+
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const prevTotalDays = new Date(year, month, 0).getDate();
+
+  const calendarDays: { date: Date; isCurrentMonth: boolean }[] = [];
+
+  for (let i = startDay - 1; i >= 0; i--) {
+    calendarDays.push({
+      date: new Date(year, month - 1, prevTotalDays - i),
+      isCurrentMonth: false
+    });
+  }
+
+  for (let i = 1; i <= totalDays; i++) {
+    calendarDays.push({
+      date: new Date(year, month, i),
+      isCurrentMonth: true
+    });
+  }
+
+  const remaining = 42 - calendarDays.length;
+  for (let i = 1; i <= remaining; i++) {
+    calendarDays.push({
+      date: new Date(year, month + 1, i),
+      isCurrentMonth: false
+    });
+  }
+
+  const formatDisplay = (dateStr: string) => {
+    if (!dateStr) return 'Chọn ngày...';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'Chọn ngày...';
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  };
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear();
+  };
+
+  const isSelected = (date: Date) => {
+    if (!selectedDate) return false;
+    return date.getDate() === selectedDate.getDate() &&
+      date.getMonth() === selectedDate.getMonth() &&
+      date.getFullYear() === selectedDate.getFullYear();
+  };
+
+  const weekDays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+  return (
+    <div className="relative space-y-1.5" ref={containerRef}>
+      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
+        <Icons.HistoryLogs className="w-3.5 h-3.5 text-brand-500" />
+        <span>{label}</span>
+      </label>
+      
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100/50 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold text-slate-700 cursor-pointer"
+      >
+        <span className={value ? 'text-slate-800' : 'text-slate-400 font-medium'}>
+          {formatDisplay(value)}
+        </span>
+        <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 space-y-3 animate-fade-in max-w-sm mx-auto">
+          <div className="flex justify-between items-center select-none">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all cursor-pointer border-0 bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="text-sm font-extrabold text-slate-850">
+              Tháng {month + 1}, {year}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-all cursor-pointer border-0 bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center select-none">
+            {weekDays.map(d => (
+              <span key={d} className="text-[10px] font-bold text-slate-400 uppercase py-1">
+                {d}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {calendarDays.map((cd, idx) => {
+              const selected = isSelected(cd.date);
+              const today = isToday(cd.date);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectDay(cd.date)}
+                  className={`
+                    py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer select-none active:scale-90 border-0 bg-transparent
+                    ${cd.isCurrentMonth ? 'text-slate-800' : 'text-slate-300'}
+                    ${selected ? 'bg-brand-600 text-white hover:bg-brand-500 shadow-sm' : ''}
+                    ${today && !selected ? 'border border-brand-500 text-brand-600' : ''}
+                    ${!selected && !today ? 'hover:bg-slate-100' : ''}
+                  `}
+                >
+                  {cd.date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          
+          <div className="flex justify-between items-center border-t border-slate-100 pt-2 select-none">
+            <button
+              type="button"
+              onClick={() => handleSelectDay(new Date())}
+              className="text-[11px] font-bold text-brand-650 hover:text-brand-500 cursor-pointer border-0 bg-transparent"
+            >
+              Hôm nay
+            </button>
+            {required !== true && (
+              <button
+                type="button"
+                onClick={() => { onChange(''); setIsOpen(false); }}
+                className="text-[11px] font-bold text-slate-400 hover:text-slate-650 cursor-pointer border-0 bg-transparent"
+              >
+                Xóa
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PromotionsPage() {
   const [promotions, setPromotions] = useState<PromotionDto[]>([]);
@@ -93,6 +297,7 @@ export function PromotionsPage() {
       
       if (editingPromotion) {
         await promotionService.updatePromotion(editingPromotion.id, {
+          id: editingPromotion.id,
           description: form.description,
           type: form.type,
           value: submitValue,
@@ -447,58 +652,62 @@ export function PromotionsPage() {
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Icons.HistoryLogs className="w-3.5 h-3.5 text-brand-500" />
-                      <span>Ngày bắt đầu</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={form.startDate ? form.startDate.slice(0, 10) : ''}
-                        onChange={(e) => setForm({ ...form, startDate: e.target.value ? e.target.value + 'T00:00:00' : '' })}
-                        required
-                        className="custom-datepicker w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold text-slate-800 cursor-pointer"
-                      />
-                      <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-slate-400">
-                        <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Icons.HistoryLogs className="w-3.5 h-3.5 text-brand-500" />
-                      <span>Ngày kết thúc</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={form.endDate ? form.endDate.slice(0, 10) : ''}
-                        onChange={(e) => setForm({ ...form, endDate: e.target.value ? e.target.value + 'T23:59:59' : '' })}
-                        required
-                        className="custom-datepicker w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold text-slate-800 cursor-pointer"
-                      />
-                      <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-slate-400">
-                        <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
+                  <DatePicker
+                    label="Ngày bắt đầu"
+                    value={form.startDate ? form.startDate.slice(0, 10) : ''}
+                    onChange={(val) => setForm({ ...form, startDate: val ? val + 'T00:00:00' : '' })}
+                    required
+                  />
+                  <DatePicker
+                    label="Ngày kết thúc"
+                    value={form.endDate ? form.endDate.slice(0, 10) : ''}
+                    onChange={(val) => setForm({ ...form, endDate: val ? val + 'T23:59:59' : '' })}
+                    required
+                  />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giới hạn số lần sử dụng (0 = Không giới hạn)</label>
-                  <input
-                    type="number"
-                    value={form.usageLimit}
-                    onChange={(e) => setForm({ ...form, usageLimit: Number(e.target.value) })}
-                    required
-                    min={0}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-semibold"
-                  />
+                  <div className="flex justify-between items-center">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      Giới hạn số lần sử dụng
+                    </label>
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 select-none">
+                      <input
+                        type="checkbox"
+                        checked={form.usageLimit === 0}
+                        onChange={(e) => setForm({ ...form, usageLimit: e.target.checked ? 0 : 10 })}
+                        className="rounded border-slate-300 text-brand-600 focus:ring-brand-500/20 w-4 h-4 cursor-pointer"
+                      />
+                      <span>Không giới hạn (∞)</span>
+                    </label>
+                  </div>
+                  
+                  {form.usageLimit > 0 && (
+                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-brand-500/20 focus-within:border-brand-500 transition-all max-w-[200px]">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, usageLimit: Math.max(1, form.usageLimit - 1) })}
+                        className="px-3.5 py-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-bold transition-all text-lg cursor-pointer select-none active:scale-95 border-r border-slate-200"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        value={form.usageLimit}
+                        onChange={(e) => setForm({ ...form, usageLimit: Math.max(1, Number(e.target.value)) })}
+                        required
+                        min={1}
+                        className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-0 text-sm font-extrabold text-slate-800 p-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, usageLimit: form.usageLimit + 1 })}
+                        className="px-3.5 py-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-bold transition-all text-lg cursor-pointer select-none active:scale-95 border-l border-slate-200"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {form.type === 'flashSale' && (
@@ -509,58 +718,72 @@ export function PromotionsPage() {
                     </h3>
 
                     {form.flashSaleProducts && form.flashSaleProducts.length > 0 ? (
-                      <div className="border border-slate-200 rounded-xl overflow-hidden text-xs max-h-48 overflow-y-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold">
-                              <th className="p-2">Tên sản phẩm</th>
-                              <th className="p-2 text-right">Giá bán FS</th>
-                              <th className="p-2 text-right">Giới hạn kho</th>
-                              {!editingPromotion && <th className="p-2 text-right">Xóa</th>}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                            {form.flashSaleProducts.map((fp) => {
-                              const prod = availableProducts.find(p => p.id === fp.productId);
-                              return (
-                                <tr key={fp.productId}>
-                                  <td className="p-2 truncate max-w-[150px]" title={prod?.name || fp.productId}>
+                      <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-1">
+                        {form.flashSaleProducts.map((fp) => {
+                          const prod = availableProducts.find(p => p.id === fp.productId);
+                          const discountPercent = prod ? Math.round(((prod.price - fp.flashSalePrice) / prod.price) * 100) : 0;
+                          return (
+                            <div key={fp.productId} className="flex justify-between items-center bg-slate-50 border border-slate-150 p-3 rounded-xl hover:shadow-sm transition-all">
+                              <div className="min-w-0 flex-1 pr-2 space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <Icons.StockBox className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="text-xs font-bold text-slate-800 truncate" title={prod?.name || fp.productId}>
                                     {prod?.name || 'Sản phẩm không tìm thấy'}
-                                  </td>
-                                  <td className="p-2 text-right font-bold text-slate-900">{fp.flashSalePrice.toLocaleString()}đ</td>
-                                  <td className="p-2 text-right">{fp.stockLimit > 0 ? fp.stockLimit : 'Không giới hạn'}</td>
-                                  {!editingPromotion && (
-                                    <td className="p-2 text-right">
-                                      <button
-                                        type="button"
-                                        onClick={() => setForm({
-                                          ...form,
-                                          flashSaleProducts: form.flashSaleProducts?.filter(p => p.productId !== fp.productId) || []
-                                        })}
-                                        className="text-red-500 hover:text-red-700 font-bold px-1"
-                                      >
-                                        ✕
-                                      </button>
-                                    </td>
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2.5 text-[10px] text-slate-500 font-semibold">
+                                  <span>Gốc: <span className="line-through">{prod?.price.toLocaleString()}đ</span></span>
+                                  <span className="text-amber-600 font-bold">FS: {fp.flashSalePrice.toLocaleString()}đ</span>
+                                  {discountPercent > 0 && (
+                                    <span className="bg-amber-100 border border-amber-250 text-amber-800 px-1 py-0.2 rounded font-black">
+                                      -{discountPercent}%
+                                    </span>
                                   )}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                </div>
+                                <div className="text-[10px] text-slate-450 font-bold">
+                                  Giới hạn kho: {fp.stockLimit > 0 ? `${fp.stockLimit} sản phẩm` : 'Không giới hạn'}
+                                </div>
+                              </div>
+                              
+                              {!editingPromotion && (
+                                <button
+                                  type="button"
+                                  onClick={() => setForm({
+                                    ...form,
+                                    flashSaleProducts: form.flashSaleProducts?.filter(p => p.productId !== fp.productId) || []
+                                  })}
+                                  className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-750 flex items-center justify-center transition-all cursor-pointer border border-red-150"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic text-center py-2">Chưa chọn sản phẩm nào cho Flash Sale.</p>
+                      <div className="text-xs text-slate-400 italic text-center py-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                        Chưa chọn sản phẩm nào cho Flash Sale
+                      </div>
                     )}
 
                     {!editingPromotion && (
-                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/50 space-y-2.5">
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/50 space-y-4">
                         <div className="space-y-1">
-                          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Chọn sản phẩm</label>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <Icons.StockBox className="w-3.5 h-3.5 text-brand-500" />
+                            <span>Chọn sản phẩm</span>
+                          </label>
                           <select
                             value={selectedProductId}
-                            onChange={(e) => setSelectedProductId(e.target.value)}
-                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
+                            onChange={(e) => {
+                              setSelectedProductId(e.target.value);
+                              const prod = availableProducts.find(p => p.id === e.target.value);
+                              if (prod) {
+                                setFlashSalePrice(prod.price * 0.8); // Suggest 20% discount by default
+                              }
+                            }}
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold cursor-pointer"
                           >
                             <option value="">-- Chọn sản phẩm --</option>
                             {availableProducts
@@ -573,28 +796,45 @@ export function PromotionsPage() {
                             }
                           </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        
+                        <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Giá Flash Sale (đ)</label>
-                            <input
-                              type="number"
-                              value={flashSalePrice}
-                              onChange={(e) => setFlashSalePrice(Number(e.target.value))}
-                              min={1}
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
-                            />
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                              <Icons.TagDiscount className="w-3.5 h-3.5 text-brand-500" />
+                              <span>Giá Flash Sale</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                value={flashSalePrice || ''}
+                                onChange={(e) => setFlashSalePrice(Number(e.target.value))}
+                                min={1}
+                                className="w-full pl-4 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold"
+                                placeholder="VD: 50000"
+                              />
+                              <span className="absolute inset-y-0 right-3.5 flex items-center text-xs font-bold text-slate-450 pointer-events-none">đ</span>
+                            </div>
                           </div>
+                          
                           <div className="space-y-1">
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">Giới hạn kho</label>
-                            <input
-                              type="number"
-                              value={flashSaleStockLimit}
-                              onChange={(e) => setFlashSaleStockLimit(Number(e.target.value))}
-                              min={0}
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
-                            />
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                              <Icons.Warehouse className="w-3.5 h-3.5 text-brand-500" />
+                              <span>Giới hạn kho</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                value={flashSaleStockLimit || ''}
+                                onChange={(e) => setFlashSaleStockLimit(Number(e.target.value))}
+                                min={0}
+                                className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold"
+                                placeholder="0 = Không giới hạn"
+                              />
+                              <span className="absolute inset-y-0 right-3.5 flex items-center text-[10px] font-bold text-slate-400 pointer-events-none">sản phẩm</span>
+                            </div>
                           </div>
                         </div>
+                        
                         <button
                           type="button"
                           onClick={() => {
@@ -617,9 +857,10 @@ export function PromotionsPage() {
                             setFlashSalePrice(0);
                             setFlashSaleStockLimit(0);
                           }}
-                          className="w-full py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                          className="w-full py-2.5 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 border border-brand-200/40"
                         >
-                          + Thêm sản phẩm
+                          <Icons.Plus className="w-4 h-4" />
+                          <span>Thêm vào danh sách</span>
                         </button>
                       </div>
                     )}
