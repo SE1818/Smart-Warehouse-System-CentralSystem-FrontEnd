@@ -493,7 +493,7 @@ export function PromotionsPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider">
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider whitespace-nowrap">
                           <th className="px-6 py-4">Mã</th>
                           <th className="px-6 py-4">Mô tả</th>
                           <th className="px-6 py-4">Loại</th>
@@ -512,14 +512,14 @@ export function PromotionsPage() {
                             </td>
                             <td className="px-6 py-4 text-slate-600 max-w-[220px] truncate font-medium text-sm">{promo.description}</td>
                             <td className="px-6 py-4">
-                              <span className="bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg">
+                              <span className="bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-lg whitespace-nowrap">
                                 {promo.type === 'percentage' ? '% Phần trăm' : 'Cố định đ'}
                               </span>
                             </td>
-                            <td className="px-6 py-4 font-black text-slate-900 text-base">
+                            <td className="px-6 py-4 font-black text-slate-900 text-base whitespace-nowrap">
                               {promo.type === 'percentage' ? `${promo.value}%` : `${promo.value.toLocaleString()}đ`}
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-base font-bold text-slate-700">{promo.usedCount}</span>
                                 <span className="text-slate-300">/</span>
@@ -530,7 +530,7 @@ export function PromotionsPage() {
                               {fmtDate(promo.startDate)} – {fmtDate(promo.endDate)}
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`px-3 py-1 text-xs font-bold rounded-full border ${getStatusColor(promo.status)}`}>
+                              <span className={`px-3 py-1 text-xs font-bold rounded-full border whitespace-nowrap ${getStatusColor(promo.status)}`}>
                                 {getStatusLabel(promo.status)}
                               </span>
                             </td>
