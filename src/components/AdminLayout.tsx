@@ -41,33 +41,62 @@ export function AdminLayout() {
     };
   }, [user?.id]);
 
-  const navItems = [
-    { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" /> },
-    { path: '/admin/inventory', label: 'Sơ đồ robot', icon: <Icons.Dashboard className="w-5 h-5" /> },
-    { path: '/admin/warehouses', label: 'Quản lý kho', icon: <Icons.Warehouse className="w-5 h-5" /> },
-    { path: '/admin/stocklevels', label: 'Tồn kho hiện tại', icon: <Icons.StockBox className="w-5 h-5" /> },
-    { path: '/admin/stockmovements', label: 'Lịch sử di chuyển', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
-    { path: '/admin/stockadjustments', label: 'Điều chỉnh tồn kho', icon: <Icons.AdjustmentSettings className="w-5 h-5" /> },
-    { path: '/admin/search', label: 'Tìm kiếm & AI', icon: <Icons.Search className="w-5 h-5" /> },
-    { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" /> },
-    { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" /> },
-    { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" /> },
-    { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" /> },
-    { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" /> },
-    { path: '/admin/profile', label: 'Hồ sơ', icon: <Icons.Profile className="w-5 h-5" /> },
-    { path: '/admin/metrics', label: 'Giám sát môi trường', icon: <Icons.Metrics className="w-5 h-5" /> },
-    { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
-    { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-      </svg>
-    ) },
-    { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" /> },
-    { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" /> },
-    { path: '/admin/users', label: 'Quản lý người dùng', icon: <Icons.UsersGroup className="w-5 h-5" /> },
-    { path: '/admin/complaints', label: 'Quản lý khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" /> },
-    { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" /> },
+  const navGroups = [
+    {
+      label: 'Tổng quan',
+      items: [
+        { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" /> },
+        { path: '/admin/inventory', label: 'Sơ đồ robot', icon: <Icons.Dashboard className="w-5 h-5" /> },
+      ],
+    },
+    {
+      label: 'Kho hàng',
+      items: [
+        { path: '/admin/warehouses', label: 'Quản lý kho', icon: <Icons.Warehouse className="w-5 h-5" /> },
+        { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" /> },
+        { path: '/admin/stocklevels', label: 'Tồn kho hiện tại', icon: <Icons.StockBox className="w-5 h-5" /> },
+        { path: '/admin/stockmovements', label: 'Lịch sử di chuyển', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
+        { path: '/admin/stockadjustments', label: 'Điều chỉnh tồn kho', icon: <Icons.AdjustmentSettings className="w-5 h-5" /> },
+      ],
+    },
+    {
+      label: 'Kinh doanh',
+      items: [
+        { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" /> },
+        { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" /> },
+        { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" /> },
+        { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" /> },
+      ],
+    },
+    {
+      label: 'Vận hành',
+      items: [
+        { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" /> },
+        { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        ) },
+        { path: '/admin/metrics', label: 'Giám sát môi trường', icon: <Icons.Metrics className="w-5 h-5" /> },
+        { path: '/admin/search', label: 'Tìm kiếm & AI', icon: <Icons.Search className="w-5 h-5" /> },
+      ],
+    },
+    {
+      label: 'Hệ thống',
+      items: [
+        { path: '/admin/users', label: 'Người dùng', icon: <Icons.UsersGroup className="w-5 h-5" /> },
+        { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" /> },
+        { path: '/admin/complaints', label: 'Khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" /> },
+        { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" /> },
+        { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
+        { path: '/admin/profile', label: 'Hồ sơ cá nhân', icon: <Icons.Profile className="w-5 h-5" /> },
+      ],
+    },
   ];
+
+  // Flatten for mobile (reuse same structure)
+  const allNavItems = navGroups.flatMap(g => g.items);
+
 
   const handleLogout = () => {
     navigate('/login');
@@ -93,25 +122,40 @@ export function AdminLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group border ${isActive
-                    ? 'bg-gradient-to-r from-brand-50 to-brand-100/20 text-brand-700 border-brand-100/50 font-bold shadow-xs'
-                    : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-              >
-                <span className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-brand-650' : 'text-slate-400 group-hover:text-slate-650'}`}>
-                  {item.icon}
-                </span>
-                <span className="text-sm font-semibold">{item.label}</span>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-0.5">
+          {navGroups.map((group, gi) => (
+            <div key={group.label}>
+              {/* Group separator + label */}
+              {gi > 0 && <div className="mx-1 my-3 h-px bg-slate-100" />}
+              <p className="px-3 mb-1.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.12em] select-none">
+                {group.label}
+              </p>
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group border mb-0.5 ${
+                      isActive
+                        ? 'bg-gradient-to-r from-brand-50 to-brand-100/20 text-brand-700 border-brand-100/50 font-bold shadow-xs'
+                        : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className={`transition-transform duration-200 group-hover:scale-110 shrink-0 ${
+                      isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600'
+                    }`}>
+                      {item.icon}
+                    </span>
+                    <span className="text-sm font-semibold truncate">{item.label}</span>
+                    {isActive && (
+                      <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* User profile & Logout */}
@@ -157,18 +201,19 @@ export function AdminLayout() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto">
-              {navItems.map((item) => {
+            <nav className="flex-1 space-y-0.5 overflow-y-auto">
+              {allNavItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsMobileOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all border ${isActive
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all border ${
+                      isActive
                         ? 'bg-gradient-to-r from-brand-50 to-brand-100/20 text-brand-700 border-brand-100/50 font-bold'
                         : 'text-slate-500 border-transparent hover:bg-slate-50 hover:text-slate-900'
-                      }`}
+                    }`}
                   >
                     <span className={isActive ? 'text-brand-650' : 'text-slate-400'}>{item.icon}</span>
                     <span className="text-sm font-semibold">{item.label}</span>
