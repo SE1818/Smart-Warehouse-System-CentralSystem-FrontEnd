@@ -2,6 +2,7 @@ import apiClient from './api';
 import type {
   PromotionDto,
   CreatePromotionRequest,
+  CreateFlashSaleRequest,
   UpdatePromotionRequest,
   FlashSaleValidationResult,
   ValidateFlashSaleRequest,
@@ -17,11 +18,17 @@ export const promotionService = {
     return response.data.id;
   },
 
+  // Flash Sales use a SEPARATE endpoint: POST /v1/public/flashsales
+  async createFlashSale(request: CreateFlashSaleRequest): Promise<string> {
+    const response = await apiClient.post<string>('/v1/public/flashsales', request);
+    return response.data;
+  },
+
   async listPromotions(params?: {
-    type?: string;
     status?: string;
-    fromDate?: string;
-    toDate?: string;
+    code?: string;
+    page?: number;
+    pageSize?: number;
   }): Promise<PromotionDto[]> {
     const response = await apiClient.get<PromotionDto[]>('/v1/admin/promotions', { params });
     return response.data;

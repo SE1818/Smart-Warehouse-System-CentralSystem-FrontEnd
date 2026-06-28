@@ -33,16 +33,25 @@ export interface PromotionDto {
   flashSaleProducts: FlashSaleProductDto[];
 }
 
+// Used for creating percentage / fixed promotions -- maps to CreatePromotionCommand
 export interface CreatePromotionRequest {
   code: string;
   description: string;
-  type: PromotionType;
+  type: 'percentage' | 'fixed';
   value: number;
   startDate: string;
   endDate: string;
   minOrderAmount?: number;
   maxDiscount?: number;
   usageLimit: number;
+}
+
+// Used for creating Flash Sales -- maps to CreateFlashSaleCommand (separate endpoint)
+export interface CreateFlashSaleRequest {
+  code: string;
+  description: string;
+  startDate: string;
+  endDate: string;
   flashSaleProducts?: FlashSaleProductItem[];
 }
 
