@@ -17,7 +17,7 @@ export function AdminLayout() {
     if (!user || !user.id) return;
 
     const connection = new HubConnectionBuilder()
-      .withUrl(`http://localhost:5000/api/notifications/hub?userId=${user.id}`)
+      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/notifications/hub?userId=${user.id}`)
       .configureLogging(LogLevel.Information)
       .withAutomaticReconnect()
       .build();
