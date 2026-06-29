@@ -41,58 +41,68 @@ export function AdminLayout() {
     };
   }, [user?.id]);
 
-  const navGroups = [
+  const isStoreManager = user?.role === 'store_manager';
+
+  const rawNavGroups = [
     {
       label: 'Tổng quan',
       items: [
-        { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" /> },
-        { path: '/admin/inventory', label: 'Sơ đồ robot', icon: <Icons.Dashboard className="w-5 h-5" /> },
+        { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" />, visible: true },
+        { path: '/admin/inventory', label: 'Sơ đồ robot', icon: <Icons.Dashboard className="w-5 h-5" />, visible: !isStoreManager },
       ],
     },
     {
       label: 'Kho hàng',
       items: [
-        { path: '/admin/warehouses', label: 'Quản lý kho', icon: <Icons.Warehouse className="w-5 h-5" /> },
-        { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" /> },
-        { path: '/admin/stocklevels', label: 'Tồn kho hiện tại', icon: <Icons.StockBox className="w-5 h-5" /> },
-        { path: '/admin/stockmovements', label: 'Lịch sử di chuyển', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
-        { path: '/admin/stockadjustments', label: 'Điều chỉnh tồn kho', icon: <Icons.AdjustmentSettings className="w-5 h-5" /> },
+        { path: '/admin/warehouses', label: 'Quản lý kho', icon: <Icons.Warehouse className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" />, visible: true },
+        { path: '/admin/stocklevels', label: 'Tồn kho hiện tại', icon: <Icons.StockBox className="w-5 h-5" />, visible: true },
+        { path: '/admin/stockmovements', label: 'Lịch sử di chuyển', icon: <Icons.HistoryLogs className="w-5 h-5" />, visible: true },
+        { path: '/admin/stockadjustments', label: 'Điều chỉnh tồn kho', icon: <Icons.AdjustmentSettings className="w-5 h-5" />, visible: true },
       ],
     },
     {
       label: 'Kinh doanh',
       items: [
-        { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" /> },
-        { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" /> },
-        { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" /> },
-        { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" /> },
+        { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" />, visible: true },
+        { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isStoreManager },
       ],
     },
     {
       label: 'Vận hành',
       items: [
-        { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" /> },
+        { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
-        ) },
-        { path: '/admin/metrics', label: 'Giám sát môi trường', icon: <Icons.Metrics className="w-5 h-5" /> },
-        { path: '/admin/search', label: 'Tìm kiếm & AI', icon: <Icons.Search className="w-5 h-5" /> },
+        ), visible: !isStoreManager },
+        { path: '/admin/metrics', label: 'Giám sát môi trường', icon: <Icons.Metrics className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/search', label: 'Tìm kiếm & AI', icon: <Icons.Search className="w-5 h-5" />, visible: !isStoreManager },
       ],
     },
     {
       label: 'Hệ thống',
       items: [
-        { path: '/admin/users', label: 'Người dùng', icon: <Icons.UsersGroup className="w-5 h-5" /> },
-        { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" /> },
-        { path: '/admin/complaints', label: 'Khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" /> },
-        { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" /> },
-        { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" /> },
-        { path: '/admin/profile', label: 'Hồ sơ cá nhân', icon: <Icons.Profile className="w-5 h-5" /> },
+        { path: '/admin/users', label: 'Người dùng', icon: <Icons.UsersGroup className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/storeregistrations', label: 'Yêu cầu mở cửa hàng', icon: <Icons.Warehouse className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/complaints', label: 'Khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/profile', label: 'Hồ sơ cá nhân', icon: <Icons.Profile className="w-5 h-5" />, visible: true },
       ],
     },
   ];
+
+  const navGroups = rawNavGroups
+    .map(g => ({
+      ...g,
+      items: g.items.filter(item => item.visible)
+    }))
+    .filter(g => g.items.length > 0);
 
   // Flatten for mobile (reuse same structure)
   const allNavItems = navGroups.flatMap(g => g.items);

@@ -56,4 +56,16 @@ export const robotService = {
     const response = await apiClient.get<Order[]>('/v1/orders/pending');
     return response.data;
   },
+
+  // Get areas
+  async getAreas(): Promise<{ id: string; name: string }[]> {
+    const response = await apiClient.get<any[]>('/v1/robots/areas');
+    return response.data;
+  },
+
+  // Get stations
+  async getStations(): Promise<{ id: string; name: string; areaId: string }[]> {
+    const response = await apiClient.get<any[]>('/v1/robots/stations');
+    return response.data;
+  }
 };

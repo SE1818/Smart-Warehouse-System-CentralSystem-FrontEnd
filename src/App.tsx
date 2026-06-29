@@ -11,6 +11,8 @@ const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ defau
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
+const StoreRegistrationPage = lazy(() => import('./pages/auth/StoreRegistrationPage').then(m => ({ default: m.StoreRegistrationPage })));
+const StoreRegistrationsPage = lazy(() => import('./pages/admin/StoreRegistrationsPage').then(m => ({ default: m.StoreRegistrationsPage })));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -80,6 +82,7 @@ function App() {
           {/* Auth routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register-store" element={<StoreRegistrationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
@@ -91,7 +94,7 @@ function App() {
           <Route
             path="/admin"
             element={
-              <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager']}>
+              <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager', 'store_manager']}>
                 <AdminLayout />
               </ProtectedRoute>
             }
@@ -116,6 +119,7 @@ function App() {
             <Route path="products" element={<AdminProducts />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="storeregistrations" element={<StoreRegistrationsPage />} />
             <Route path="complaints" element={<AdminComplaints />} />
             <Route path="reports" element={<AdminReports />} />
           </Route>

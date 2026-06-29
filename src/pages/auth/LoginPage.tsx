@@ -143,7 +143,7 @@ export function LoginPage() {
       const res = await authService.login({ email, password });
       localStorage.setItem('authToken', res.accessToken);
       localStorage.setItem('user', JSON.stringify({ role: res.role, name: email.split('@')[0] || 'Nhân viên', email: email }));
-      const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin';
+      const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin' || res.role === 'store_manager';
       navigate(isAdmin ? '/admin/dashboard' : '/');
     } catch (err) {
       console.error('API error during login', err);
@@ -274,6 +274,12 @@ export function LoginPage() {
           Chưa có tài khoản đăng ký?{' '}
           <Link to="/register" className="text-brand-600 font-bold hover:text-brand-700 transition-colors">
             Tạo tài khoản mới
+          </Link>
+        </p>
+        <p className="text-center text-xs text-slate-550 font-medium mt-2">
+          Bạn muốn mở cửa hàng kinh doanh?{' '}
+          <Link to="/register-store" className="text-brand-600 font-bold hover:text-brand-700 transition-colors underline">
+            Đăng ký mở cửa hàng
           </Link>
         </p>
       </div>

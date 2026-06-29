@@ -7,3 +7,5 @@ export { userService } from './userService';
 export { productService } from './productService';
 export { stockService } from './stock';
 export { complaintService } from './complaintService';
+export { storeService } from './storeService';
+export { robotService } from './robot';
