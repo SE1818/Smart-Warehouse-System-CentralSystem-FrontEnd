@@ -143,7 +143,11 @@ export function DashboardPage() {
 
     // SignalR Connection to Gateway
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/hub`)
+      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/hub`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      })
       .withAutomaticReconnect()
       .build();
 
