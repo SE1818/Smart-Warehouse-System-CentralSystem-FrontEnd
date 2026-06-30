@@ -182,15 +182,6 @@ export function DashboardPage() {
   const statusColors = STATUS_COLORS;
   const statusLabels = STATUS_LABELS;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 flex flex-col items-center justify-center space-y-4">
-        <Icons.Spinner className="h-10 w-10 text-brand-600" />
-        <p className="text-slate-500 text-xs font-semibold">Đang tổng hợp dữ liệu bảng điều khiển...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
