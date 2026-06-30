@@ -16,13 +16,13 @@ export function useAuth() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('authToken');
       const userData = localStorage.getItem('user');
       if (token && userData) {
         try {
           setUser(JSON.parse(userData));
         } catch {
-          localStorage.removeItem('token');
+          localStorage.removeItem('authToken');
           localStorage.removeItem('user');
         }
       }
@@ -32,13 +32,13 @@ export function useAuth() {
   }, []);
 
   const login = (token: string, userData: User) => {
-    localStorage.setItem('token', token);
+    localStorage.setItem('authToken', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
     localStorage.removeItem('user');
     setUser(null);
   };

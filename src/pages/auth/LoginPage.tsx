@@ -73,7 +73,20 @@ export function LoginPage() {
             // Store tokens and user info (no profile fetch needed - data from login response)
             localStorage.setItem('authToken', res.accessToken);
             localStorage.setItem('authRole', res.role);
+
+            let userId = '';
+            try {
+              const tokenParts = res.accessToken.split('.');
+              if (tokenParts.length > 1) {
+                const payload = JSON.parse(atob(tokenParts[1]));
+                userId = payload.sub || payload.nameid || payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || '';
+              }
+            } catch (e) {
+              console.error('Failed to parse external JWT token:', e);
+            }
+
             localStorage.setItem('user', JSON.stringify({
+              id: userId,
               role: res.role,
               name: (res.email || '').split('@')[0] || 'Nhân viên',
               email: res.email || ''
@@ -142,7 +155,24 @@ export function LoginPage() {
     try {
       const res = await authService.login({ email, password });
       localStorage.setItem('authToken', res.accessToken);
-      localStorage.setItem('user', JSON.stringify({ role: res.role, name: email.split('@')[0] || 'Nhân viên', email: email }));
+
+      let userId = '';
+      try {
+        const tokenParts = res.accessToken.split('.');
+        if (tokenParts.length > 1) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          userId = payload.sub || payload.nameid || payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || '';
+        }
+      } catch (e) {
+        console.error('Failed to parse JWT token:', e);
+      }
+
+      localStorage.setItem('user', JSON.stringify({
+        id: userId,
+        role: res.role,
+        name: email.split('@')[0] || 'Nhân viên',
+        email: email
+      }));
       const isAdmin = res.role === 'warehouse_manager' || res.role === 'Warehouse_Admin' || res.role === 'Admin' || res.role === 'store_manager';
       navigate(isAdmin ? '/admin/dashboard' : '/');
     } catch (err) {
