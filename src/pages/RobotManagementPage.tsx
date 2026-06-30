@@ -140,9 +140,11 @@ export function RobotManagementPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
-        <Icons.Spinner className="h-10 w-10 text-brand-600" />
-        <p className="text-slate-505 text-xs font-semibold">Đang tải danh sách robot...</p>
+      <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tải danh sách robot...</p>
+        </div>
       </div>
     );
   }

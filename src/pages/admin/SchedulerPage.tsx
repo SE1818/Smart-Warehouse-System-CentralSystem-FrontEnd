@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { schedulerService } from '@/services/scheduler';
 import type { SchedulerResponse, SchedulerJob } from '@/services/scheduler';
 import { toast } from 'react-toastify';
+import { Icons } from '@/components/Icons';
 
 export function SchedulerPage() {
   const [data, setData] = useState<SchedulerResponse | null>(null);
@@ -183,8 +184,15 @@ export function SchedulerPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {loading && !data ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tải cấu hình scheduler...</p>
+        </div>
+      ) : (
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="space-y-2">
@@ -410,6 +418,8 @@ export function SchedulerPage() {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

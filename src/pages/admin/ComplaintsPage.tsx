@@ -138,8 +138,8 @@ export function ComplaintsPage() {
       {/* Grid Layout: List + Detail Pane */}
       {loading ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <Icons.Spinner className="h-10 w-10 text-brand-600" />
-          <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách khiếu nại...</p>
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tải danh sách khiếu nại...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

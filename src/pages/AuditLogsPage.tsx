@@ -119,9 +119,9 @@ export function AuditLogsPage() {
 
       {/* Loading state */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <Icons.Spinner className="h-10 w-10 text-brand-600" />
-          <p className="text-slate-500 text-xs font-medium">Đang truy xuất thông tin nhật ký...</p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tải lịch sử nhật ký...</p>
         </div>
       ) : (
         <>

@@ -212,8 +212,15 @@ export function DashboardPage() {
         </button>
       </div>
 
-      {/* Cards stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tải bảng điều khiển...</p>
+        </div>
+      ) : (
+        <>
+          {/* Cards stats grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cardConfig.map((c) => (
           <div key={c.title} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300/80">
             <div className="space-y-2">
@@ -354,7 +361,9 @@ export function DashboardPage() {
           </table>
         </div>
       </div>
-    </div>
-  );
+    </>
+  )}
+</div>
+);
 }
 

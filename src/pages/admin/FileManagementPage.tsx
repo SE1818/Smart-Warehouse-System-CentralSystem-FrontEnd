@@ -214,9 +214,9 @@ export function FileManagementPage() {
 
       {/* File List */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center shadow-sm">
-          <Icons.Spinner className="h-10 w-10 text-brand-600 mx-auto mb-4" />
-          <p className="text-slate-500 text-sm font-semibold">Đang tải danh sách file...</p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tải danh sách file...</p>
         </div>
       ) : files && files.files.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center shadow-sm">

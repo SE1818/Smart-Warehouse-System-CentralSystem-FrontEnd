@@ -20,7 +20,20 @@ export function useAuth() {
       const userData = localStorage.getItem('user');
       if (token && userData) {
         try {
-          setUser(JSON.parse(userData));
+          const parsed = JSON.parse(userData);
+          if (!parsed.id) {
+            try {
+              const tokenParts = token.split('.');
+              if (tokenParts.length > 1) {
+                const payload = JSON.parse(atob(tokenParts[1]));
+                parsed.id = payload.sub || payload.nameid || payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || '';
+                localStorage.setItem('user', JSON.stringify(parsed));
+              }
+            } catch (e) {
+              console.error('Error auto-decoding token in useAuth:', e);
+            }
+          }
+          setUser(parsed);
         } catch {
           localStorage.removeItem('authToken');
           localStorage.removeItem('user');
