@@ -204,9 +204,10 @@ export function DashboardPage() {
         </div>
         <button
           onClick={loadDashboardData}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-55 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-98 cursor-pointer"
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-55 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-98 cursor-pointer disabled:opacity-50"
         >
-          <Icons.Refresh className="w-4 h-4 text-slate-500" />
+          <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
           <span>Làm mới</span>
         </button>
       </div>

@@ -150,9 +150,10 @@ export function OrdersPage() {
         </div>
         <button 
           onClick={loadOrders}
-          className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-98 cursor-pointer"
+          disabled={loading}
+          className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-55 hover:border-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-98 cursor-pointer disabled:opacity-50"
         >
-          <Icons.Refresh className="w-4 h-4 text-slate-500" />
+          <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
           <span>Làm mới</span>
         </button>
       </div>

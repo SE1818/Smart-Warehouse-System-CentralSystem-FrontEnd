@@ -103,9 +103,10 @@ export function StockMovementsPage() {
         </div>
         <button
           onClick={fetchMovements}
-          className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-98 cursor-pointer shadow-xs"
+          disabled={loading}
+          className="px-4 py-2.5 bg-white hover:bg-slate-55 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-98 cursor-pointer shadow-xs disabled:opacity-50"
         >
-          <Icons.Refresh className="w-3.5 h-3.5 text-slate-550" />
+          <Icons.Refresh className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
           <span>Làm mới</span>
         </button>
       </div>
