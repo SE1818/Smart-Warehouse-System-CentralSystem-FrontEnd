@@ -87,9 +87,9 @@ export function ReportsPage() {
       </div>
 
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
-          <p className="text-slate-500 text-xs font-medium">Đang tạo báo cáo hoạt động...</p>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-16 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">
+          <Icons.Spinner className="h-10 w-10 text-brand-600 animate-spin" />
+          <p className="text-slate-550 text-sm font-semibold">Đang tạo báo cáo hoạt động...</p>
         </div>
       ) : (
         <>
