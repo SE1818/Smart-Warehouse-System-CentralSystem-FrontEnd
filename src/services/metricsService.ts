@@ -45,15 +45,14 @@ export const metricsService = {
   },
 
   async getMetrics(filters?: WarehouseMetricFilters): Promise<WarehouseMetric[]> {
+    const warehouseId = filters?.warehouseId || 'WH001';
     const params = new URLSearchParams();
-    if (filters?.warehouseId) params.append('warehouseId', filters.warehouseId);
-    if (filters?.metricType) params.append('metricType', filters.metricType);
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
 
     const queryString = params.toString();
     const response = await apiClient.get<WarehouseMetric[]>(
-      `/admin/metrics${queryString ? `?${queryString}` : ''}`
+      `/admin/metrics/warehouse/${warehouseId}${queryString ? `?${queryString}` : ''}`
     );
     return response.data;
   },
