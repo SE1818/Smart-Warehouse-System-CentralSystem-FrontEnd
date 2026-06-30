@@ -104,12 +104,22 @@ export function UsersPage() {
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
 
       {/* Header */}
-      <div className="border-b border-slate-200 pb-6">
-        <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-          <Icons.UsersGroup className="w-8 h-8 text-brand-600 glow-blue" />
-          <span>Quản lý người dùng</span>
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">Phân quyền vai trò (warehouse_manager, Customer) và điều khiển trạng thái truy cập</p>
+      <div className="border-b border-slate-200 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.UsersGroup className="w-8 h-8 text-brand-600 glow-blue" />
+            <span>Quản lý người dùng</span>
+          </h1>
+          <p className="mt-1 text-sm text-slate-550">Phân quyền vai trò (warehouse_manager, Customer) và điều khiển trạng thái truy cập</p>
+        </div>
+        <button
+          onClick={fetchUsers}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-98 cursor-pointer disabled:opacity-50 self-start sm:self-auto"
+        >
+          <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+          <span>Làm mới</span>
+        </button>
       </div>
 
       {/* Filter bar */}

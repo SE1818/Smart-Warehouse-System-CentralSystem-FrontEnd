@@ -121,3 +121,10 @@ tr {
 .Toastify__close-button:hover {
   opacity: 1 !important;
 }
+
+/* Ensure enough vertical space for Vietnamese accents to prevent diacritics clipping */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.35 !important;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}

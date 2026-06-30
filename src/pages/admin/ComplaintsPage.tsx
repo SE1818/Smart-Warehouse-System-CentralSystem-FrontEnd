@@ -89,10 +89,11 @@ export function ComplaintsPage() {
         </div>
         <button
           onClick={fetchComplaints}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-slate-350 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-slate-350 hover:bg-slate-50 text-slate-700 rounded-xl text-sm font-semibold shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50"
         >
-          <Icons.Refresh className="w-4 h-4 text-slate-500" />
-          <span>Tải lại</span>
+          <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+          <span>Làm mới</span>
         </button>
       </div>
 

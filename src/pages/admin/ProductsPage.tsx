@@ -150,13 +150,23 @@ export function ProductsPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Điều khiển danh mục hàng hóa, giá bán và số lượng tồn kho</p>
         </div>
-        <button
-          onClick={() => setIsAdding(true)}
-          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 self-start sm:self-auto transition-all cursor-pointer"
-        >
-          <Icons.Plus className="w-4 h-4 text-white" />
-          <span>Thêm sản phẩm mới</span>
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <button
+            onClick={fetchProducts}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-98 cursor-pointer disabled:opacity-50"
+          >
+            <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <span>Làm mới</span>
+          </button>
+          <button
+            onClick={() => setIsAdding(true)}
+            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Icons.Plus className="w-4 h-4 text-white" />
+            <span>Thêm sản phẩm mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -389,13 +399,13 @@ export function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+                  className="px-5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
+                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Lưu thay đổi
                 </button>
@@ -515,13 +525,13 @@ export function ProductsPage() {
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+                  className="px-5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
+                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Tạo sản phẩm
                 </button>

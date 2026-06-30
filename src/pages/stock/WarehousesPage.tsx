@@ -131,13 +131,23 @@ export function WarehousesPage() {
             Quản lý danh sách các kho hàng và trung tâm phân phối
           </p>
         </div>
-        <button
-          onClick={() => setIsAdding(true)}
-          className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 self-start sm:self-auto transition-all cursor-pointer"
-        >
-          <Icons.Plus className="w-4 h-4 text-white" />
-          <span>Thêm kho mới</span>
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <button
+            onClick={fetchWarehouses}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-98 cursor-pointer disabled:opacity-50"
+          >
+            <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+            <span>Làm mới</span>
+          </button>
+          <button
+            onClick={() => setIsAdding(true)}
+            className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Icons.Plus className="w-4 h-4 text-white" />
+            <span>Thêm kho mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -308,13 +318,13 @@ export function WarehousesPage() {
                 <button
                   type="button"
                   onClick={() => setEditingWarehouse(null)}
-                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+                  className="px-5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
+                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Lưu thay đổi
                 </button>
@@ -401,13 +411,13 @@ export function WarehousesPage() {
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="px-4.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+                  className="px-5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
+                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
                 >
                   Tạo kho hàng
                 </button>
