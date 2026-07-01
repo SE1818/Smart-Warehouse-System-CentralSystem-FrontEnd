@@ -10,6 +10,7 @@ import type {
 import type { Product } from '@/types/stock';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
+import { CustomSelect } from '@/components/CustomSelect';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -674,16 +675,17 @@ export function PromotionsPage() {
               </div>
               {/* Type + Value */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loại chiết khấu</label>
-                  <select value={promoForm.type}
-                    onChange={e => setPromoForm({...promoForm, type: e.target.value as 'percentage'|'fixed'})}
-                    disabled={!!editingPromotion}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold cursor-pointer disabled:opacity-60">
-                    <option value="percentage">Phần trăm (%)</option>
-                    <option value="fixed">Cố định (đ)</option>
-                  </select>
-                </div>
+                <CustomSelect
+                  label="Loại chiết khấu"
+                  value={promoForm.type}
+                  onChange={v => setPromoForm({...promoForm, type: v as 'percentage'|'fixed'})}
+                  options={[
+                    { value: 'percentage', label: 'Phần trăm (%)' },
+                    { value: 'fixed', label: 'Cố định (đ)' }
+                  ]}
+                  placeholder="Chọn loại chiết khấu..."
+                  disabled={!!editingPromotion}
+                />
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     {promoForm.type === 'percentage' ? 'Mức giảm (%)' : 'Số tiền giảm (đ)'}
@@ -750,17 +752,18 @@ export function PromotionsPage() {
               </div>
               {/* Status (edit only) */}
               {editingPromotion && (
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Trạng thái</label>
-                  <select value={promoForm.status}
-                    onChange={e => setPromoForm({...promoForm, status: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold cursor-pointer">
-                    <option value="active">Hoạt động</option>
-                    <option value="inactive">Tắt</option>
-                    <option value="expired">Hết hạn</option>
-                    <option value="upcoming">Sắp diễn ra</option>
-                  </select>
-                </div>
+                <CustomSelect
+                  label="Trạng thái"
+                  value={promoForm.status || ''}
+                  onChange={v => setPromoForm({...promoForm, status: v})}
+                  options={[
+                    { value: 'active', label: 'Hoạt động' },
+                    { value: 'inactive', label: 'Tắt' },
+                    { value: 'expired', label: 'Hết hạn' },
+                    { value: 'upcoming', label: 'Sắp diễn ra' }
+                  ]}
+                  placeholder="Chọn trạng thái..."
+                />
               )}
               <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
                 <button type="button" onClick={() => { setShowPromoModal(false); setEditingPromotion(null); }}

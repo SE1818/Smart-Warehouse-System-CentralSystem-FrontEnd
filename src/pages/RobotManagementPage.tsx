@@ -4,6 +4,7 @@ import type { Robot, MoveRequest } from '../types/robot';
 import { Icons } from '@/components/Icons';
 import type { Order } from '../types/product';
 import { toast } from 'react-toastify';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function RobotManagementPage() {
   const [robots, setRobots] = useState<Robot[]>([]);
@@ -414,39 +415,21 @@ function FulfillmentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Chọn đơn hàng</label>
-            <select
-              value={selectedOrderId}
-              onChange={(e) => setSelectedOrderId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-              required
-            >
-              <option value="">-- Chọn đơn hàng --</option>
-              {orders.map((order) => (
-                <option key={order.id} value={order.id}>
-                  {order.id} - {order.userId} - {(order.totalAmount as number).toLocaleString('vi-VN')}đ
-                </option>
-              ))}
-            </select>
-          </div>
+          <CustomSelect
+            label="Chọn đơn hàng"
+            value={selectedOrderId}
+            onChange={setSelectedOrderId}
+            options={orders.map(order => ({ value: order.id, label: `${order.id} - ${order.userId} - ${(order.totalAmount as number).toLocaleString('vi-VN')}đ` }))}
+            placeholder="-- Chọn đơn hàng --"
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Chọn Robot</label>
-            <select
-              value={selectedRobotId}
-              onChange={(e) => setSelectedRobotId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-              required
-            >
-              <option value="">-- Chọn robot --</option>
-              {robots.map((robot) => (
-                <option key={robot.id} value={robot.id}>
-                  {robot.name} (Pin: {robot.battery.toFixed(0)}%)
-                </option>
-              ))}
-            </select>
-          </div>
+          <CustomSelect
+            label="Chọn Robot"
+            value={selectedRobotId}
+            onChange={setSelectedRobotId}
+            options={robots.map(robot => ({ value: robot.id, label: `${robot.name} (Pin: ${robot.battery.toFixed(0)}%)` }))}
+            placeholder="-- Chọn robot --"
+          />
 
           <div className="flex justify-end gap-3 pt-4">
             <button

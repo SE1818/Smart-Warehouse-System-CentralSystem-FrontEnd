@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { metricsService } from '@/services';
 import { MetricType } from '@/types';
 import { Icons } from '@/components/Icons';
+import { CustomSelect } from '@/components/CustomSelect';
 
 interface MetricCardProps {
   title: string;
@@ -105,18 +106,20 @@ export function MetricsPage() {
           </p>
         </div>
         <div>
-          <select
+          <CustomSelect
             value={selectedWarehouse}
-            onChange={(e) => {
-              setSelectedWarehouse(e.target.value);
+            onChange={(v) => {
+              setSelectedWarehouse(v);
               setLoading(true);
             }}
-            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-xs font-bold text-slate-700 shadow-xs cursor-pointer"
-          >
-            <option value="WH001">WH001 - Kho A (Đồ uống)</option>
-            <option value="WH002">WH002 - Kho B (Vật tư)</option>
-            <option value="WH003">WH003 - Kho C (Linh kiện)</option>
-          </select>
+            options={[
+              { value: 'WH001', label: 'WH001 - Kho A (Đồ uống)' },
+              { value: 'WH002', label: 'WH002 - Kho B (Vật tư)' },
+              { value: 'WH003', label: 'WH003 - Kho C (Linh kiện)' }
+            ]}
+            placeholder="Chọn kho..."
+            className="min-w-[200px]"
+          />
         </div>
       </div>
 

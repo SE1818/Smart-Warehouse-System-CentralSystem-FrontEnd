@@ -7,9 +7,11 @@ interface CustomSelectProps {
   options: { value: string; label: string }[];
   placeholder: string;
   className?: string;
+  disabled?: boolean;
+  icon?: React.ReactNode;
 }
 
-export function CustomSelect({ label, value, onChange, options, placeholder, className = '' }: CustomSelectProps) {
+export function CustomSelect({ label, value, onChange, options, placeholder, className = '', disabled = false, icon }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,18 +34,26 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
           {label}
         </label>
       )}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-350 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold text-slate-700 cursor-pointer"
-      >
-        <span className={value ? 'text-slate-855 font-semibold text-slate-800' : 'text-slate-400 font-medium'}>
-          {selectedOption ? selectedOption.label : placeholder}
-        </span>
-        <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-brand-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full flex items-center justify-between ${icon ? 'pl-11' : 'px-4'} py-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-350 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold text-slate-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          <span className={value ? 'text-slate-855 font-semibold text-slate-800' : 'text-slate-400 font-medium'}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-brand-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {icon && (
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none flex items-center">
+            {icon}
+          </div>
+        )}
+      </div>
       {isOpen && (
         <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1">
           {options.length === 0 ? (
