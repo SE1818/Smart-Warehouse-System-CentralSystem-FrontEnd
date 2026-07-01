@@ -54,6 +54,18 @@ export function ProductsPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Lock body scroll when modal is open to prevent background scrolling and layout shift
+  useEffect(() => {
+    if (isAdding || editingProduct || deletingProductId) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isAdding, editingProduct, deletingProductId]);
+
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
@@ -305,96 +317,100 @@ export function ProductsPage() {
       {/* Edit Modal */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
-            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl relative">
+            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
               <Icons.Product className="w-5 h-5 text-brand-600" />
               <span>Chỉnh sửa sản phẩm</span>
             </h3>
 
-            <form onSubmit={handleEditSave} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
-                <input
-                  type="text"
-                  value={editingProduct.name}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                  required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
-                <input
-                  type="text"
-                  value={editingProduct.sku || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, sku: e.target.value })}
-                  required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleEditSave} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1 min-h-0 pb-1">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
                   <input
-                    type="number"
-                    value={editingProduct.price}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
+                    type="text"
+                    value={editingProduct.name}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
                     required
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
+
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
                   <input
-                    type="number"
-                    value={editingProduct.stockQuantity}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, stockQuantity: Number(e.target.value) })}
+                    type="text"
+                    value={editingProduct.sku || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, sku: e.target.value })}
+                    required
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
+                    <input
+                      type="number"
+                      value={editingProduct.price}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
+                    <input
+                      type="number"
+                      value={editingProduct.stockQuantity}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, stockQuantity: Number(e.target.value) })}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
+                  <input
+                    type="text"
+                    placeholder="https://example.com/image.png"
+                    value={editingProduct.imageUrl || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <CustomSelect
+                    label="Phân loại"
+                    value={editingProduct.category || ''}
+                    onChange={v => setEditingProduct(prev => prev ? { ...prev, category: v } : null)}
+                    options={[
+                      { value: 'Đồ uống', label: 'Đồ uống' },
+                      { value: 'Vật tư y tế', label: 'Vật tư y tế' },
+                      { value: 'Linh kiện', label: 'Linh kiện' },
+                      { value: 'Khác', label: 'Khác' }
+                    ]}
+                    placeholder="Chọn phân loại..."
+                  />
+
+                  <CustomSelect
+                    label="Đơn vị"
+                    value={editingProduct.unit || ''}
+                    onChange={v => setEditingProduct(prev => prev ? { ...prev, unit: v } : null)}
+                    options={[
+                      { value: 'chiếc', label: 'chiếc' },
+                      { value: 'hộp', label: 'hộp' },
+                      { value: 'thùng', label: 'thùng' },
+                      { value: 'lít', label: 'lít' },
+                      { value: 'kg', label: 'kg' }
+                    ]}
+                    placeholder="Chọn đơn vị..."
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
-                <input
-                  type="text"
-                  placeholder="https://example.com/image.png"
-                  value={editingProduct.imageUrl || ''}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                />
-              </div>
-
-              <CustomSelect
-                label="Phân loại"
-                value={editingProduct.category || ''}
-                onChange={v => setEditingProduct(prev => prev ? { ...prev, category: v } : null)}
-                options={[
-                  { value: 'Đồ uống', label: 'Đồ uống' },
-                  { value: 'Vật tư y tế', label: 'Vật tư y tế' },
-                  { value: 'Linh kiện', label: 'Linh kiện' },
-                  { value: 'Khác', label: 'Khác' }
-                ]}
-                placeholder="Chọn phân loại..."
-              />
-
-              <CustomSelect
-                label="Đơn vị"
-                value={editingProduct.unit || ''}
-                onChange={v => setEditingProduct(prev => prev ? { ...prev, unit: v } : null)}
-                options={[
-                  { value: 'chiếc', label: 'chiếc' },
-                  { value: 'hộp', label: 'hộp' },
-                  { value: 'thùng', label: 'thùng' },
-                  { value: 'lít', label: 'lít' },
-                  { value: 'kg', label: 'kg' }
-                ]}
-                placeholder="Chọn đơn vị..."
-              />
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
@@ -417,108 +433,112 @@ export function ProductsPage() {
       {/* Add Modal */}
       {isAdding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
-            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl relative">
+            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
               <Icons.Plus className="w-5 h-5 text-brand-600" />
               <span>Thêm sản phẩm mới</span>
             </h3>
 
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: Nước uống đóng chai"
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                  required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: SKU-WATER-01"
-                  value={newProduct.sku || ''}
-                  onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                  required
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleAddSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1 min-h-0 pb-1">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
                   <input
-                    type="number"
-                    value={newProduct.price || ''}
-                    onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
+                    type="text"
+                    placeholder="Ví dụ: Nước uống đóng chai"
+                    value={newProduct.name}
+                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                     required
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
                   />
                 </div>
+
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
                   <input
-                    type="number"
-                    value={newProduct.stockQuantity || 0}
-                    onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: Number(e.target.value) })}
+                    type="text"
+                    placeholder="Ví dụ: SKU-WATER-01"
+                    value={newProduct.sku || ''}
+                    onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
+                    required
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
+                    <input
+                      type="number"
+                      value={newProduct.price || ''}
+                      onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
+                      required
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
+                    <input
+                      type="number"
+                      value={newProduct.stockQuantity || 0}
+                      onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: Number(e.target.value) })}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
+                  <input
+                    type="text"
+                    placeholder="https://example.com/image.png"
+                    value={newProduct.imageUrl || ''}
+                    onChange={(e) => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <CustomSelect
+                    label="Phân loại"
+                    value={newProduct.category || ''}
+                    onChange={v => setNewProduct({ ...newProduct, category: v })}
+                    options={[
+                      { value: 'Đồ uống', label: 'Đồ uống' },
+                      { value: 'Vật tư y tế', label: 'Vật tư y tế' },
+                      { value: 'Linh kiện', label: 'Linh kiện' },
+                      { value: 'Khác', label: 'Khác' }
+                    ]}
+                    placeholder="Chọn phân loại..."
+                  />
+
+                  <CustomSelect
+                    label="Đơn vị"
+                    value={newProduct.unit || ''}
+                    onChange={v => setNewProduct({ ...newProduct, unit: v })}
+                    options={[
+                      { value: 'chiếc', label: 'chiếc' },
+                      { value: 'hộp', label: 'hộp' },
+                      { value: 'thùng', label: 'thùng' },
+                      { value: 'lít', label: 'lít' },
+                      { value: 'kg', label: 'kg' }
+                    ]}
+                    placeholder="Chọn đơn vị..."
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả ngắn</label>
+                  <textarea
+                    placeholder="Mô tả công dụng..."
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 h-20 resize-none"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
-                <input
-                  type="text"
-                  placeholder="https://example.com/image.png"
-                  value={newProduct.imageUrl || ''}
-                  onChange={(e) => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                />
-              </div>
-
-              <CustomSelect
-                label="Phân loại"
-                value={newProduct.category || ''}
-                onChange={v => setNewProduct({ ...newProduct, category: v })}
-                options={[
-                  { value: 'Đồ uống', label: 'Đồ uống' },
-                  { value: 'Vật tư y tế', label: 'Vật tư y tế' },
-                  { value: 'Linh kiện', label: 'Linh kiện' },
-                  { value: 'Khác', label: 'Khác' }
-                ]}
-                placeholder="Chọn phân loại..."
-              />
-
-              <CustomSelect
-                label="Đơn vị"
-                value={newProduct.unit || ''}
-                onChange={v => setNewProduct({ ...newProduct, unit: v })}
-                options={[
-                  { value: 'chiếc', label: 'chiếc' },
-                  { value: 'hộp', label: 'hộp' },
-                  { value: 'thùng', label: 'thùng' },
-                  { value: 'lít', label: 'lít' },
-                  { value: 'kg', label: 'kg' }
-                ]}
-                placeholder="Chọn đơn vị..."
-              />
-
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả ngắn</label>
-                <textarea
-                  placeholder="Mô tả công dụng..."
-                  value={newProduct.description}
-                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 h-20 resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
