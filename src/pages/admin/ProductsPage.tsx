@@ -54,17 +54,6 @@ export function ProductsPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Lock body scroll when modal is open to prevent background scrolling and layout shift
-  useEffect(() => {
-    if (isAdding || editingProduct || deletingProductId) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isAdding, editingProduct, deletingProductId]);
 
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();

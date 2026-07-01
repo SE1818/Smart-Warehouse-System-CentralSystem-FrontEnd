@@ -284,7 +284,7 @@ export function AdminLayout() {
           </button>
         </header>
         {/* Content Outlet */}
-        <main className="flex-1 overflow-y-auto tech-grid bg-slate-50 text-slate-800">
+        <main className="flex-1 overflow-y-auto tech-grid bg-slate-50 text-slate-800" style={{ scrollbarGutter: 'stable' }}>
           <Outlet />
         </main>
       </div>
