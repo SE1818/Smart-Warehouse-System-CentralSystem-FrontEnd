@@ -108,8 +108,8 @@ export function DashboardPage() {
 
       // Fetch stock levels to get total quantity
       try {
-        const stockLevels = await stockService.getStockLevels().catch(() => []);
-        const totalStockQty = stockLevels.reduce((sum, l) => sum + (l.quantity || 0), 0);
+        const stockLevels = await stockService.getStockLevels();
+        const totalStockQty = stockLevels.reduce<number>((sum, l) => sum + (l.quantity || 0), 0);
         setTotalStock(totalStockQty);
       } catch {
         setTotalStock(stockSum || 0);
