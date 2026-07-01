@@ -3,6 +3,7 @@ import { metricsService, productService } from '@/services';
 import { MetricType } from '@/types';
 import type { Product } from '@/types';
 import { Icons } from '@/components/Icons';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function ReportsPage() {
   const [timePeriod, setTimePeriod] = useState('7days');
@@ -65,16 +66,18 @@ export function ReportsPage() {
           <p className="mt-1 text-sm text-slate-550 font-medium">Phân tích tần suất giao nhận, chỉ số môi trường và thống kê hàng hóa tồn kho</p>
         </div>
         <div className="flex items-center gap-3">
-          <select
+          <CustomSelect
             value={timePeriod}
-            onChange={(e) => setTimePeriod(e.target.value)}
-            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-xs text-xs font-bold text-slate-700"
-          >
-            <option value="today">Hôm nay</option>
-            <option value="7days">7 ngày qua</option>
-            <option value="30days">30 ngày qua</option>
-            <option value="year">Năm nay</option>
-          </select>
+            onChange={setTimePeriod}
+            options={[
+              { value: 'today', label: 'Hôm nay' },
+              { value: '7days', label: '7 ngày qua' },
+              { value: '30days', label: '30 ngày qua' },
+              { value: 'year', label: 'Năm nay' }
+            ]}
+            placeholder="Chọn khoảng thời gian..."
+            className="min-w-[140px]"
+          />
           <button
             onClick={loadReportData}
             disabled={loading}

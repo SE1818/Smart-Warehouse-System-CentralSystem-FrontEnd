@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { StockMovement } from '@/types/stock';
+import type { StockMovement, Warehouse } from '@/types/stock';
 import { StockMovementType } from '@/types/stock';
 import { stockService } from '@/services/stock';
 import { Icons } from '@/components/Icons';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function StockMovementsPage() {
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -11,6 +12,11 @@ export function StockMovementsPage() {
   const [filterWarehouse, setFilterWarehouse] = useState<string>('');
   const [filterProduct, setFilterProduct] = useState<string>('');
   const [filterType, setFilterType] = useState<string>('');
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+
+  useEffect(() => {
+    stockService.getWarehouses().then(setWarehouses).catch(console.error);
+  }, []);
 
   const fetchMovements = useCallback(async () => {
     setLoading(true);
@@ -114,17 +120,16 @@ export function StockMovementsPage() {
       {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <select
-              value={filterWarehouse}
-              onChange={(e) => setFilterWarehouse(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-semibold"
-            >
-              <option value="">Tất cả kho</option>
-              {/* Note: Populated dynamically in real apps */}
-            </select>
-            <Icons.Warehouse className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          </div>
+          <CustomSelect
+            value={filterWarehouse}
+            onChange={setFilterWarehouse}
+            options={[
+              { value: '', label: 'Tất cả kho' },
+              ...warehouses.map(w => ({ value: w.id, label: `${w.code} - ${w.name}` }))
+            ]}
+            placeholder="Tất cả kho"
+            icon={<Icons.Warehouse className="w-5 h-5 text-slate-400" />}
+          />
           <div className="relative">
             <input
               type="text"
@@ -135,19 +140,18 @@ export function StockMovementsPage() {
             />
             <Icons.Product className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           </div>
-          <div className="relative">
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-semibold"
-            >
-              <option value="">Tất cả loại</option>
-              <option value="0">Nhập kho</option>
-              <option value="1">Xuất kho</option>
-              <option value="2">Điều chỉnh</option>
-            </select>
-            <Icons.Filter className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          </div>
+          <CustomSelect
+            value={filterType}
+            onChange={setFilterType}
+            options={[
+              { value: '', label: 'Tất cả loại' },
+              { value: '0', label: 'Nhập kho' },
+              { value: '1', label: 'Xuất kho' },
+              { value: '2', label: 'Điều chỉnh' }
+            ]}
+            placeholder="Tất cả loại"
+            icon={<Icons.Filter className="w-5 h-5 text-slate-400" />}
+          />
         </div>
       </div>
 

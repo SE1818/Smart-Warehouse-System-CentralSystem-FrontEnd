@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { StockLevel, Warehouse, Product } from '@/types/stock';
 import { stockService } from '@/services/stock';
 import { Icons } from '@/components/Icons';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function StockLevelsPage() {
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
@@ -112,36 +113,26 @@ export function StockLevelsPage() {
       {/* Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <select
-              value={filterWarehouse}
-              onChange={(e) => setFilterWarehouse(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-semibold"
-            >
-              <option value="">Tất cả kho</option>
-              {warehouses.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} - {w.name}
-                </option>
-              ))}
-            </select>
-            <Icons.Warehouse className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          </div>
-          <div className="relative">
-            <select
-              value={filterProduct}
-              onChange={(e) => setFilterProduct(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-semibold"
-            >
-              <option value="">Tất cả sản phẩm</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.sku} - {p.name}
-                </option>
-              ))}
-            </select>
-            <Icons.Product className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          </div>
+          <CustomSelect
+            value={filterWarehouse}
+            onChange={setFilterWarehouse}
+            options={[
+              { value: '', label: 'Tất cả kho' },
+              ...warehouses.map(w => ({ value: w.id, label: `${w.code} - ${w.name}` }))
+            ]}
+            placeholder="Tất cả kho"
+            icon={<Icons.Warehouse className="w-5 h-5 text-slate-400" />}
+          />
+          <CustomSelect
+            value={filterProduct}
+            onChange={setFilterProduct}
+            options={[
+              { value: '', label: 'Tất cả sản phẩm' },
+              ...products.map(p => ({ value: p.id, label: `${p.sku} - ${p.name}` }))
+            ]}
+            placeholder="Tất cả sản phẩm"
+            icon={<Icons.Product className="w-5 h-5 text-slate-400" />}
+          />
         </div>
       </div>
 

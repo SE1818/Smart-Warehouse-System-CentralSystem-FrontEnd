@@ -3,6 +3,7 @@ import type { Product } from '@/types';
 import { productService } from '@/services';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -366,34 +367,32 @@ export function ProductsPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phân loại</label>
-                <select
-                  value={editingProduct.category}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
-                >
-                  <option value="Đồ uống">Đồ uống</option>
-                  <option value="Vật tư y tế">Vật tư y tế</option>
-                  <option value="Linh kiện">Linh kiện</option>
-                  <option value="Khác">Khác</option>
-                </select>
-              </div>
+              <CustomSelect
+                label="Phân loại"
+                value={editingProduct.category || ''}
+                onChange={v => setEditingProduct(prev => prev ? { ...prev, category: v } : null)}
+                options={[
+                  { value: 'Đồ uống', label: 'Đồ uống' },
+                  { value: 'Vật tư y tế', label: 'Vật tư y tế' },
+                  { value: 'Linh kiện', label: 'Linh kiện' },
+                  { value: 'Khác', label: 'Khác' }
+                ]}
+                placeholder="Chọn phân loại..."
+              />
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Đơn vị</label>
-                <select
-                  value={editingProduct.unit}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, unit: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
-                >
-                  <option value="chiếc">chiếc</option>
-                  <option value="hộp">hộp</option>
-                  <option value="thùng">thùng</option>
-                  <option value="lít">lít</option>
-                  <option value="kg">kg</option>
-                </select>
-              </div>
+              <CustomSelect
+                label="Đơn vị"
+                value={editingProduct.unit || ''}
+                onChange={v => setEditingProduct(prev => prev ? { ...prev, unit: v } : null)}
+                options={[
+                  { value: 'chiếc', label: 'chiếc' },
+                  { value: 'hộp', label: 'hộp' },
+                  { value: 'thùng', label: 'thùng' },
+                  { value: 'lít', label: 'lít' },
+                  { value: 'kg', label: 'kg' }
+                ]}
+                placeholder="Chọn đơn vị..."
+              />
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
@@ -482,34 +481,32 @@ export function ProductsPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phân loại</label>
-                <select
-                  value={newProduct.category}
-                  onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
-                >
-                  <option value="Đồ uống">Đồ uống</option>
-                  <option value="Vật tư y tế">Vật tư y tế</option>
-                  <option value="Linh kiện">Linh kiện</option>
-                  <option value="Khác">Khác</option>
-                </select>
-              </div>
+              <CustomSelect
+                label="Phân loại"
+                value={newProduct.category || ''}
+                onChange={v => setNewProduct({ ...newProduct, category: v })}
+                options={[
+                  { value: 'Đồ uống', label: 'Đồ uống' },
+                  { value: 'Vật tư y tế', label: 'Vật tư y tế' },
+                  { value: 'Linh kiện', label: 'Linh kiện' },
+                  { value: 'Khác', label: 'Khác' }
+                ]}
+                placeholder="Chọn phân loại..."
+              />
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Đơn vị</label>
-                <select
-                  value={newProduct.unit}
-                  onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm text-slate-700"
-                >
-                  <option value="chiếc">chiếc</option>
-                  <option value="hộp">hộp</option>
-                  <option value="thùng">thùng</option>
-                  <option value="lít">lít</option>
-                  <option value="kg">kg</option>
-                </select>
-              </div>
+              <CustomSelect
+                label="Đơn vị"
+                value={newProduct.unit || ''}
+                onChange={v => setNewProduct({ ...newProduct, unit: v })}
+                options={[
+                  { value: 'chiếc', label: 'chiếc' },
+                  { value: 'hộp', label: 'hộp' },
+                  { value: 'thùng', label: 'thùng' },
+                  { value: 'lít', label: 'lít' },
+                  { value: 'kg', label: 'kg' }
+                ]}
+                placeholder="Chọn đơn vị..."
+              />
 
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả ngắn</label>
