@@ -3,6 +3,7 @@ import type { Warehouse, Product, StockLevel } from '@/types/stock';
 import { StockMovementType } from '@/types/stock';
 import { stockService as stockApi } from '@/services/stock';
 import { Icons } from '@/components/Icons';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function StockAdjustmentsPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -159,43 +160,23 @@ export function StockAdjustmentsPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Kho hàng
-                  </label>
-                  <select
-                    value={selectedWarehouse}
-                    onChange={(e) => setSelectedWarehouse(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
-                  >
-                    <option value="">Chọn kho...</option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.code} - {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <CustomSelect
+                  label="Kho hàng"
+                  value={selectedWarehouse}
+                  onChange={setSelectedWarehouse}
+                  options={warehouses.map(w => ({ value: w.id, label: `${w.code} - ${w.name}` }))}
+                  placeholder="Chọn kho..."
+                  className="w-full"
+                />
 
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Sản phẩm
-                  </label>
-                  <select
-                    value={selectedProduct}
-                    onChange={(e) => setSelectedProduct(e.target.value)}
-                    required
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
-                  >
-                    <option value="">Chọn sản phẩm...</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.sku} - {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <CustomSelect
+                  label="Sản phẩm"
+                  value={selectedProduct}
+                  onChange={setSelectedProduct}
+                  options={products.map(p => ({ value: p.id, label: `${p.sku} - ${p.name}` }))}
+                  placeholder="Chọn sản phẩm..."
+                  className="w-full"
+                />
               </div>
 
               {currentStockLevel && (
@@ -219,20 +200,17 @@ export function StockAdjustmentsPage() {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  Loại điều chỉnh
-                </label>
-                <select
-                  value={adjustmentType}
-                  onChange={(e) => setAdjustmentType(parseInt(e.target.value) as StockMovementType)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-semibold"
-                >
-                  <option value={StockMovementType.Adjust}>Điều chỉnh (Adjust)</option>
-                  <option value={StockMovementType.In}>Nhập kho (In)</option>
-                  <option value={StockMovementType.Out}>Xuất kho (Out)</option>
-                </select>
-              </div>
+              <CustomSelect
+                label="Loại điều chỉnh"
+                value={adjustmentType.toString()}
+                onChange={(v) => setAdjustmentType(parseInt(v) as StockMovementType)}
+                options={[
+                  { value: StockMovementType.Adjust.toString(), label: 'Điều chỉnh (Adjust)' },
+                  { value: StockMovementType.In.toString(), label: 'Nhập kho (In)' },
+                  { value: StockMovementType.Out.toString(), label: 'Xuất kho (Out)' },
+                ]}
+                placeholder="Chọn loại điều chỉnh..."
+              />
 
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">

@@ -807,14 +807,14 @@ export function PromotionsPage() {
                     onChange={e => setFlashForm({...flashForm, code: e.target.value.toUpperCase()})}
                     required placeholder="VD: FLASH28"
                     disabled={!!editingFlashSale}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:bg-white transition-all text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed" />
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-bold disabled:opacity-60 disabled:cursor-not-allowed" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả</label>
                   <input type="text" value={flashForm.description}
                     onChange={e => setFlashForm({...flashForm, description: e.target.value})}
                     required placeholder="Tên chương trình Flash Sale"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:bg-white transition-all text-sm font-medium" />
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm font-medium" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -876,7 +876,7 @@ export function PromotionsPage() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chọn sản phẩm</label>
                     <select value={selProductId}
                       onChange={e => { setSelProductId(e.target.value); const p = availableProducts.find(p=>p.id===e.target.value); if(p) setSelFlashPrice(Math.round(p.price*0.8)); }}
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all text-sm font-semibold cursor-pointer">
+                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold cursor-pointer">
                       <option value="">-- Chọn sản phẩm --</option>
                       {availableProducts.filter(p => !(flashForm.flashSaleProducts||[]).some((fp:FlashSaleProductItem)=>fp.productId===p.id)).map(p => (
                         <option key={p.id} value={p.id}>{p.name} — {p.price.toLocaleString()}đ</option>
@@ -890,7 +890,7 @@ export function PromotionsPage() {
                         <input type="number" min={1} value={selFlashPrice || ''}
                           onChange={e => setSelFlashPrice(Number(e.target.value))}
                           placeholder="VD: 50000"
-                          className="w-full pl-4 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all text-sm font-semibold" />
+                          className="w-full pl-4 pr-8 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold" />
                         <span className="absolute inset-y-0 right-3 flex items-center text-xs font-bold text-slate-400 pointer-events-none">đ</span>
                       </div>
                     </div>
@@ -900,7 +900,7 @@ export function PromotionsPage() {
                         <input type="number" min={0} value={selStockLimit || ''}
                           onChange={e => setSelStockLimit(Number(e.target.value))}
                           placeholder="0 = Không giới hạn"
-                          className="w-full pl-4 pr-16 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all text-sm font-semibold" />
+                          className="w-full pl-4 pr-16 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold" />
                         <span className="absolute inset-y-0 right-3 flex items-center text-[10px] font-bold text-slate-400 pointer-events-none">sản phẩm</span>
                       </div>
                     </div>
