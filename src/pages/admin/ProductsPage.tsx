@@ -305,7 +305,7 @@ export function ProductsPage() {
 
       {/* Edit Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl relative">
             <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
               <Icons.Product className="w-5 h-5 text-brand-600" />
@@ -421,7 +421,7 @@ export function ProductsPage() {
 
       {/* Add Modal */}
       {isAdding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl relative">
             <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
               <Icons.Plus className="w-5 h-5 text-brand-600" />
@@ -549,7 +549,7 @@ export function ProductsPage() {
 
       {/* Delete Confirmation Modal */}
       {deletingProductId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-sm shadow-2xl relative">
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="w-12 h-12 bg-red-50 border border-red-100 rounded-full flex items-center justify-center text-red-600 shadow-sm">

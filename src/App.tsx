@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { AdminLayout } from './components/AdminLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ToastContainer } from 'react-toastify';
+import { Icons } from './components/Icons';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
@@ -42,94 +43,111 @@ const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ de
 const SchedulerPage = lazy(() => import('./pages/admin/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
 
 function UnauthorizedPage() {
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center space-y-4 text-slate-800">
-      <span className="text-6xl">🚫</span>
-      <h1 className="text-2xl font-heading font-bold text-slate-900">Không có quyền truy cập</h1>
-      <p className="text-slate-500 max-w-sm">Tài khoản của bạn không được phân quyền để xem trang này.</p>
-      <button 
-        onClick={() => window.history.back()}
-        className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all active:scale-98 shadow-md shadow-brand-500/10"
-      >
-        Quay lại trang trước
-      </button>
-    </div>
-  );
+	return (
+		<div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center space-y-4 text-slate-800">
+			<span className="text-6xl">🚫</span>
+			<h1 className="text-2xl font-heading font-bold text-slate-900">Không có quyền truy cập</h1>
+			<p className="text-slate-500 max-w-sm">Tài khoản của bạn không được phân quyền để xem trang này.</p>
+			<button
+				onClick={() => window.history.back()}
+				className="px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all active:scale-98 shadow-md shadow-brand-500/10"
+			>
+				Quay lại trang trước
+			</button>
+		</div>
+	);
 }
 
 function App() {
-  return (
-    <BrowserRouter>
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
-      <Suspense fallback={
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-800">
-          <div className="w-10 h-10 border-4 border-slate-300 border-t-brand-600 rounded-full animate-spin"></div>
-          <p className="mt-4 text-slate-500 text-sm font-semibold">Đang tải trang...</p>
-        </div>
-      }>
-        <Routes>
-          {/* Auth routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/register-store" element={<StoreRegistrationPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+	return (
+		<BrowserRouter>
+			<ToastContainer
+				position="top-right"
+				autoClose={3000}
+				hideProgressBar={false}
+				newestOnTop={false}
+				closeOnClick
+				rtl={false}
+				pauseOnFocusLoss
+				draggable
+				pauseOnHover
+				theme="light"
+			/>
+			<Suspense
+				fallback={
+					<div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-800">
+						<div className="relative mb-8">
+							<div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-500 flex items-center justify-center shadow-xl shadow-brand-500/25 animate-bounce-in">
+								<Icons.Robot className="w-10 h-10 text-white" />
+							</div>
+							<div className="absolute -inset-4 rounded-3xl bg-brand-500/10 animate-ping-slow" />
+						</div>
+						<h1 className="text-2xl font-heading font-extrabold text-slate-900 tracking-tight animate-fade-up">
+							SmartWarehouse
+						</h1>
+						<p className="mt-2 text-sm text-slate-500 font-semibold animate-fade-up-delay">
+							Đang tải hệ thống...
+						</p>
+						<div className="mt-6 flex gap-1.5">
+							<span className="w-2 h-2 rounded-full bg-brand-600 animate-dot-bounce" style={{ animationDelay: '0ms' }} />
+							<span className="w-2 h-2 rounded-full bg-brand-600 animate-dot-bounce" style={{ animationDelay: '150ms' }} />
+							<span className="w-2 h-2 rounded-full bg-brand-600 animate-dot-bounce" style={{ animationDelay: '300ms' }} />
+						</div>
+					</div>
+				}
+			>
+				<Routes>
+					{/* Auth routes */}
+					<Route path="/login" element={<LoginPage />} />
+					<Route path="/register" element={<RegisterPage />} />
+					<Route path="/register-store" element={<StoreRegistrationPage />} />
+					<Route path="/forgot-password" element={<ForgotPasswordPage />} />
+					<Route path="/reset-password" element={<ResetPasswordPage />} />
+					<Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-          {/* Redirect Root to Admin */}
-          <Route path="/" element={<Navigate to="/admin" replace />} />
+					{/* Redirect Root to Admin */}
+					<Route path="/" element={<Navigate to="/admin" replace />} />
 
-          {/* Admin routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager', 'store_manager']}>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="inventory" element={<AdminInventory />} />
-            <Route path="warehouses" element={<WarehousesPage />} />
-            <Route path="stocklevels" element={<StockLevelsPage />} />
-            <Route path="stockmovements" element={<StockMovementsPage />} />
-            <Route path="stockadjustments" element={<StockAdjustmentsPage />} />
-            <Route path="search" element={<SearchPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="files" element={<FileManagementPage />} />
-            <Route path="promotions" element={<PromotionsPage />} />
-            <Route path="robots" element={<RobotManagementPage />} />
-            <Route path="wallet" element={<WalletPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="metrics" element={<MetricsPage />} />
-            <Route path="logs" element={<AuditLogsPage />} />
-            <Route path="scheduler" element={<SchedulerPage />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="storeregistrations" element={<StoreRegistrationsPage />} />
-            <Route path="complaints" element={<AdminComplaints />} />
-            <Route path="reports" element={<AdminReports />} />
-          </Route>
+					{/* Admin routes */}
+					<Route
+						path="/admin"
+						element={
+							<ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager', 'store_manager']}>
+								<AdminLayout />
+							</ProtectedRoute>
+						}
+					>
+						<Route index element={<Navigate to="/admin/dashboard" replace />} />
+						<Route path="dashboard" element={<AdminDashboard />} />
+						<Route path="inventory" element={<AdminInventory />} />
+						<Route path="warehouses" element={<WarehousesPage />} />
+						<Route path="stocklevels" element={<StockLevelsPage />} />
+						<Route path="stockmovements" element={<StockMovementsPage />} />
+						<Route path="stockadjustments" element={<StockAdjustmentsPage />} />
+						<Route path="search" element={<SearchPage />} />
+						<Route path="notifications" element={<NotificationsPage />} />
+						<Route path="files" element={<FileManagementPage />} />
+						<Route path="promotions" element={<PromotionsPage />} />
+						<Route path="robots" element={<RobotManagementPage />} />
+						<Route path="wallet" element={<WalletPage />} />
+						<Route path="profile" element={<ProfilePage />} />
+						<Route path="metrics" element={<MetricsPage />} />
+						<Route path="logs" element={<AuditLogsPage />} />
+						<Route path="scheduler" element={<SchedulerPage />} />
+						<Route path="products" element={<AdminProducts />} />
+						<Route path="orders" element={<AdminOrders />} />
+						<Route path="users" element={<AdminUsers />} />
+						<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
+						<Route path="complaints" element={<AdminComplaints />} />
+						<Route path="reports" element={<AdminReports />} />
+					</Route>
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </BrowserRouter>
-  );
+					{/* Fallback */}
+					<Route path="*" element={<Navigate to="/" replace />} />
+				</Routes>
+			</Suspense>
+		</BrowserRouter>
+	);
 }
 
 export default App;
