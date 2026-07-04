@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import type { StockMovement, Warehouse } from '@/types/stock';
 import { StockMovementType } from '@/types/stock';
 import { stockService } from '@/services/stock';
@@ -104,7 +104,6 @@ export function StockMovementsPage() {
             <span>Lịch sử di chuyển tồn kho</span>
           </h1>
           <p className="mt-1 text-sm text-slate-550">
-            Theo dõi tất cả các giao dịch nhập/xuất/điều chỉnh tồn kho
           </p>
         </div>
         <button
@@ -229,3 +228,4 @@ export function StockMovementsPage() {
     </div>
   );
 }
+

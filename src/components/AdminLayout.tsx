@@ -58,11 +58,7 @@ export function AdminLayout() {
     {
       label: 'Kho hàng',
       items: [
-        { path: '/admin/warehouses', label: 'Quản lý kho', icon: <Icons.Warehouse className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" />, visible: true },
-        { path: '/admin/stocklevels', label: 'Tồn kho hiện tại', icon: <Icons.StockBox className="w-5 h-5" />, visible: true },
-        { path: '/admin/stockmovements', label: 'Lịch sử di chuyển', icon: <Icons.HistoryLogs className="w-5 h-5" />, visible: true },
-        { path: '/admin/stockadjustments', label: 'Điều chỉnh tồn kho', icon: <Icons.AdjustmentSettings className="w-5 h-5" />, visible: true },
       ],
     },
     {
@@ -285,7 +281,7 @@ export function AdminLayout() {
           </button>
         </header>
         {/* Content Outlet */}
-        <main className="flex-1 overflow-y-auto tech-grid bg-slate-50 text-slate-800" style={{ scrollbarGutter: 'stable' }}>
+        <main className="flex-1 overflow-y-auto tech-grid bg-slate-50 text-slate-800">
           <Outlet />
         </main>
       </div>
