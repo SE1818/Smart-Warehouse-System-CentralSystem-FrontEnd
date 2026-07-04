@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+﻿import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Icons } from './Icons';
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
@@ -11,7 +11,7 @@ export function AdminLayout() {
 
   // Retrieve user info
   const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'warehouse_manager' };
+  const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'admin' };
 
   useEffect(() => {
     if (!user || !user.id) return;
@@ -291,3 +291,4 @@ export function AdminLayout() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { userService } from '@/services';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
@@ -7,12 +7,12 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'warehouse_manager' | 'Customer';
+  role: 'admin' | 'Customer';
   status: 'Active' | 'Suspended';
 }
 
 const getUserRoleBadgeClass = (role: string) => {
-  if (role === 'warehouse_manager') {
+  if (role === 'admin') {
     return 'bg-red-50 text-red-700 border-red-200';
   }
   if (role === 'Customer') {
@@ -37,7 +37,7 @@ export function UsersPage() {
         id: u.id,
         name: u.username || 'Khách hàng',
         email: u.email,
-        role: (u.role === 'warehouse_manager' || u.role === 'Customer') ? u.role : 'Customer',
+        role: (u.role === 'admin' || u.role === 'Customer') ? u.role : 'Customer',
         status: u.isActive ? 'Active' : 'Suspended'
       }));
       setUsers(mapped);
@@ -110,7 +110,7 @@ export function UsersPage() {
             <Icons.UsersGroup className="w-8 h-8 text-brand-600 glow-blue" />
             <span>Quản lý người dùng</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-550">Phân quyền vai trò (warehouse_manager, Customer) và điều khiển trạng thái truy cập</p>
+          <p className="mt-1 text-sm text-slate-550">Phân quyền vai trò (admin, Customer) và điều khiển trạng thái truy cập</p>
         </div>
         <button
           onClick={fetchUsers}
@@ -346,25 +346,25 @@ export function UsersPage() {
                     </span>
                   </button>
 
-                  {/* Card: warehouse_manager */}
+                  {/* Card: admin */}
                   <button
                     type="button"
-                    onClick={() => setEditingUser({ ...editingUser, role: 'warehouse_manager' })}
+                    onClick={() => setEditingUser({ ...editingUser, role: 'admin' })}
                     className={`flex flex-col items-start p-4 rounded-2xl border text-left transition-all duration-200 relative group cursor-pointer ${
-                      editingUser.role === 'warehouse_manager'
+                      editingUser.role === 'admin'
                         ? 'border-red-500 bg-red-50/45 ring-2 ring-red-500/10'
                         : 'border-slate-200 bg-white hover:border-slate-350 hover:bg-slate-50/50'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-2">
                       <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-transform group-hover:scale-105 ${
-                        editingUser.role === 'warehouse_manager'
+                        editingUser.role === 'admin'
                           ? 'bg-red-100 text-red-600 border border-red-200/50'
                           : 'bg-slate-100 text-slate-500 border border-slate-200'
                       }`}>
                         <Icons.Warehouse className="w-5 h-5" />
                       </span>
-                      {editingUser.role === 'warehouse_manager' && (
+                      {editingUser.role === 'admin' && (
                         <span className="w-5 h-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
                           ✓
                         </span>
@@ -403,3 +403,4 @@ export function UsersPage() {
     </div>
   );
 }
+
