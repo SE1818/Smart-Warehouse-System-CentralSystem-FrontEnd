@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Icons } from '@/components/Icons';
 
 export function NotificationsPage() {
-  const { user } = useAuth();
+  useAuth();
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
