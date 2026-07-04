@@ -109,42 +109,6 @@ function App() {
 					{/* Redirect Root to Admin */}
 					<Route path="/" element={<Navigate to="/admin" replace />} />
 
-<<<<<<< HEAD
-          {/* Admin routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={['Operator', 'Admin', 'Warehouse_Admin', 'warehouse_manager', 'store_manager']}>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="inventory" element={<AdminInventory />} />
-            <Route path="warehouses" element={<WarehousesPage />} />
-            <Route path="stocklevels" element={<StockLevelsPage />} />
-            <Route path="stockmovements" element={<StockMovementsPage />} />
-            <Route path="stockadjustments" element={<StockAdjustmentsPage />} />
-            <Route path="search" element={<SearchPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="files" element={<FileManagementPage />} />
-            <Route path="promotions" element={<PromotionsPage />} />
-            <Route path="robots" element={<RobotManagementPage />} />
-            <Route path="wallet" element={<WalletPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="metrics" element={<MetricsPage />} />
-            <Route path="logs" element={<AuditLogsPage />} />
-            <Route path="scheduler" element={<SchedulerPage />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="storeregistrations" element={<StoreRegistrationsPage />} />
-            <Route path="stores" element={<StoresPage />} />
-            <Route path="complaints" element={<AdminComplaints />} />
-            <Route path="reports" element={<AdminReports />} />
-          </Route>
-=======
 					{/* Admin routes */}
 					<Route
 						path="/admin"
@@ -175,10 +139,10 @@ function App() {
 						<Route path="orders" element={<AdminOrders />} />
 						<Route path="users" element={<AdminUsers />} />
 						<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
+						<Route path="stores" element={<StoresPage />} />
 						<Route path="complaints" element={<AdminComplaints />} />
 						<Route path="reports" element={<AdminReports />} />
 					</Route>
->>>>>>> 1fa059045b35244bd1c9b8d50781479b61a21ad8
 
 					{/* Fallback */}
 					<Route path="*" element={<Navigate to="/" replace />} />
