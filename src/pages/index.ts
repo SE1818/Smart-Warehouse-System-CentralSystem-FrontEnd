@@ -27,3 +27,5 @@ export { PromotionsPage } from './PromotionsPage';
 export { RobotManagementPage } from './RobotManagementPage';
 export { WalletPage } from './WalletPage';
 export { ProfilePage } from './ProfilePage';
+export { StoresPage } from './admin/StoresPage';
+export { StoreRegistrationsPage } from './admin/StoreRegistrationsPage';

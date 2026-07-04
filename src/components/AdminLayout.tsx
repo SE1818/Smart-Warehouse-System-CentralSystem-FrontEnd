@@ -92,6 +92,7 @@ export function AdminLayout() {
       items: [
         { path: '/admin/users', label: 'Người dùng', icon: <Icons.UsersGroup className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/storeregistrations', label: 'Yêu cầu mở cửa hàng', icon: <Icons.Warehouse className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/stores', label: 'Cửa hàng', icon: <Icons.Store className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/complaints', label: 'Khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" />, visible: !isStoreManager },
