@@ -13,6 +13,28 @@ export interface StoreRegistrationDto {
   status: string;
   rejectionReason?: string;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreDto {
+  id: string;
+  name: string;
+  ownerEmail: string;
+  areaId: string;
+  stationId: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StoreRegistrationStatusDto {
+  id: string;
+  storeName: string;
+  ownerName: string;
+  ownerEmail: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const storeService = {
@@ -35,6 +57,29 @@ export const storeService = {
     return response.data;
   },
 
+  async getAllRegistrations(status?: string): Promise<StoreRegistrationDto[]> {
+    const params = status ? { status } : {};
+    const response = await apiClient.get<StoreRegistrationDto[]>('/v1/storeregistrations', { params });
+    return response.data;
+  },
+
+  async getMyRegistrationStatus(email: string): Promise<StoreRegistrationStatusDto> {
+    const response = await apiClient.get<StoreRegistrationStatusDto>('/v1/storeregistrations/my-status', {
+      params: { email },
+    });
+    return response.data;
+  },
+
+  async getAllStores(): Promise<StoreDto[]> {
+    const response = await apiClient.get<StoreDto[]>('/v1/storeregistrations/stores');
+    return response.data;
+  },
+
+  async getStoreById(id: string): Promise<StoreDto> {
+    const response = await apiClient.get<StoreDto>(`/v1/storeregistrations/stores/${id}`);
+    return response.data;
+  },
+
   async approveRegistration(id: string): Promise<{ message: string }> {
     const response = await apiClient.post<{ message: string }>(`/v1/storeregistrations/${id}/approve`);
     return response.data;
@@ -43,5 +88,5 @@ export const storeService = {
   async rejectRegistration(id: string, reason: string): Promise<{ message: string }> {
     const response = await apiClient.post<{ message: string }>(`/v1/storeregistrations/${id}/reject`, { reason });
     return response.data;
-  }
+  },
 };

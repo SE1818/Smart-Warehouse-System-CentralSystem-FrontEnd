@@ -13,6 +13,7 @@ const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const StoreRegistrationPage = lazy(() => import('./pages/auth/StoreRegistrationPage').then(m => ({ default: m.StoreRegistrationPage })));
 const StoreRegistrationsPage = lazy(() => import('./pages/admin/StoreRegistrationsPage').then(m => ({ default: m.StoreRegistrationsPage })));
+const StoresPage = lazy(() => import('./pages/admin/StoresPage').then(m => ({ default: m.StoresPage })));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
@@ -120,6 +121,7 @@ function App() {
             <Route path="orders" element={<AdminOrders />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="storeregistrations" element={<StoreRegistrationsPage />} />
+            <Route path="stores" element={<StoresPage />} />
             <Route path="complaints" element={<AdminComplaints />} />
             <Route path="reports" element={<AdminReports />} />
           </Route>
