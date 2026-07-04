@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
-import { orderService, metricsService, productService, userService } from '@/services';
-import { MetricType } from '@/types';
+import { orderService, productService, stockService } from '@/services';
 import { STATUS_COLORS, STATUS_LABELS, DEFAULT_PRODUCTS } from '@/constants';
 import { Icons } from '@/components/Icons';
 
@@ -68,7 +67,6 @@ export function DashboardPage() {
   const [productsCount, setProductsCount] = useState(0);
   const [pendingOrders, setPendingOrders] = useState<DashboardOrder[]>([]);
   const [totalStock, setTotalStock] = useState(0);
-  const [usersCount, setUsersCount] = useState(0);
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
@@ -106,16 +104,15 @@ export function DashboardPage() {
       }));
       setPendingOrders(mapped.slice(0, 5));
 
-      // Fetch users
-      const usersList = await userService.getAllUsers().catch(() => []);
-      setUsersCount(usersList.length);
 
-      // Fetch InventoryCount metric from service
+
+      // Fetch stock levels to get total quantity
       try {
-        const metric = await metricsService.getLatestMetric('WH001', MetricType.InventoryCount);
-        setTotalStock(metric.metricValue);
+        const stockLevels = await stockService.getStockLevels();
+        const totalStockQty = stockLevels.reduce<number>((sum, l) => sum + (l.quantity || 0), 0);
+        setTotalStock(totalStockQty);
       } catch {
-        setTotalStock(stockSum || 489);
+        setTotalStock(stockSum || 0);
       }
     } catch (err) {
       console.error('Error loading dashboard data:', err);
@@ -176,7 +173,7 @@ export function DashboardPage() {
     { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: <Icons.Product className="w-6 h-6" />, iconColor: 'text-blue-500 bg-blue-50/80 border-blue-100/50' },
     { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ quản lý', icon: <Icons.CartOrder className="w-6 h-6" />, iconColor: 'text-purple-500 bg-purple-50/80 border-purple-100/50' },
     { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: <Icons.Robot className="w-6 h-6" />, iconColor: 'text-emerald-500 bg-emerald-50/80 border-emerald-100/50' },
-    { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: `Số lượng từ ${usersCount} tài khoản`, icon: <Icons.StockBox className="w-6 h-6" />, iconColor: 'text-orange-500 bg-orange-50/80 border-orange-100/50' }
+    { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: 'Tổng sản phẩm trong các kho', icon: <Icons.StockBox className="w-6 h-6" />, iconColor: 'text-orange-500 bg-orange-50/80 border-orange-100/50' }
   ];
 
   const statusColors = STATUS_COLORS;

@@ -18,4 +18,11 @@ export const searchService = {
     const response = await apiClient.post<AskResponse>('/v1/search/ask', { question });
     return response.data;
   },
+
+  async suggestProducts(prefix: string, max: number = 10): Promise<string[]> {
+    const response = await apiClient.get<{ suggestions: string[] }>('/v1/search/suggest', {
+      params: { q: prefix, max },
+    });
+    return response.data.suggestions;
+  },
 };

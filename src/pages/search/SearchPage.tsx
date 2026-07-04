@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { ProductIndex, AskResponse } from '@/types/search';
 import { searchService } from '@/services/search';
 import { Icons } from '@/components/Icons';
@@ -9,10 +9,31 @@ export function SearchPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   const [question, setQuestion] = useState('');
   const [askResponse, setAskResponse] = useState<AskResponse | null>(null);
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!query.trim() || query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchService.suggestProducts(query);
+        setSuggestions(results);
+      } catch (err) {
+        console.error('Suggest error:', err);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +42,28 @@ export function SearchPage() {
     setSearchLoading(true);
     setSearchError(null);
     setSearchResults([]);
+    setShowSuggestions(false);
     try {
       const results = await searchService.searchProducts(query);
+      setSearchResults(results);
+    } catch (err) {
+      console.error('Search error:', err);
+      setSearchError('Không thể tìm kiếm sản phẩm. Vui lòng thử lại.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleSearchDirect = async (searchTerm: string) => {
+    setQuery(searchTerm);
+    setShowSuggestions(false);
+    if (!searchTerm.trim()) return;
+
+    setSearchLoading(true);
+    setSearchError(null);
+    setSearchResults([]);
+    try {
+      const results = await searchService.searchProducts(searchTerm);
       setSearchResults(results);
     } catch (err) {
       console.error('Search error:', err);
@@ -81,11 +122,31 @@ export function SearchPage() {
                 <input
                   type="text"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   placeholder="Nhập từ khóa, tên sản phẩm, SKU..."
                   className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium placeholder-slate-400"
                 />
                 <Icons.Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {suggestions.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleSearchDirect(suggestion)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-sm text-slate-700 font-medium transition-colors border-b border-slate-100 last:border-0"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 type="submit"

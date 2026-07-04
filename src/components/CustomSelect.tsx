@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 
 interface CustomSelectProps {
   label?: string;
@@ -13,7 +13,28 @@ interface CustomSelectProps {
 
 export function CustomSelect({ label, value, onChange, options, placeholder, className = '', disabled = false, icon }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Compute fixed-position dropdown coords to escape overflow:hidden/auto parents
+  useLayoutEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const dropdownHeight = Math.min(240, options.length * 42 + 12);
+    const openUpward = spaceBelow < dropdownHeight + 8 && rect.top > dropdownHeight + 8;
+    setDropdownStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+      ...(openUpward
+        ? { bottom: viewportHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+    });
+  }, [isOpen, options.length]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -36,6 +57,7 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
       )}
       <div className="relative">
         <button
+          ref={buttonRef}
           type="button"
           disabled={disabled}
           onClick={() => setIsOpen(!isOpen)}
@@ -55,7 +77,7 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
         )}
       </div>
       {isOpen && (
-        <div className="absolute left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1">
+        <div style={dropdownStyle} className="bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1">
           {options.length === 0 ? (
             <div className="px-3.5 py-2.5 text-xs text-slate-400 italic">Không có dữ liệu</div>
           ) : (
