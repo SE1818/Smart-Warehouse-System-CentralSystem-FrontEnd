@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => ({
     // Only active in dev mode — production uses Docker nginx
     proxy: mode === 'development' ? {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
         // Forward ngrok-skip-browser-warning header
