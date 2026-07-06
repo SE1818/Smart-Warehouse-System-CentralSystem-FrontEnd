@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { orderService, productService, stockService } from '@/services';
+import { transferService } from '@/services/transferService';
 import { STATUS_COLORS, STATUS_LABELS, DEFAULT_PRODUCTS } from '@/constants';
 import { Icons } from '@/components/Icons';
 
@@ -67,6 +68,7 @@ export function DashboardPage() {
   const [productsCount, setProductsCount] = useState(0);
   const [pendingOrders, setPendingOrders] = useState<DashboardOrder[]>([]);
   const [totalStock, setTotalStock] = useState(0);
+  const [activeTransfers, setActiveTransfers] = useState(0);
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
@@ -113,6 +115,14 @@ export function DashboardPage() {
         setTotalStock(totalStockQty);
       } catch {
         setTotalStock(stockSum || 0);
+      }
+
+      // Fetch active transfers
+      try {
+        const stats = await transferService.getTransferStats();
+        setActiveTransfers(stats.active);
+      } catch {
+        setActiveTransfers(0);
       }
     } catch (err) {
       console.error('Error loading dashboard data:', err);
@@ -173,6 +183,7 @@ export function DashboardPage() {
     { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: <Icons.Product className="w-6 h-6" />, iconColor: 'text-blue-500 bg-blue-50/80 border-blue-100/50' },
     { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ quản lý', icon: <Icons.CartOrder className="w-6 h-6" />, iconColor: 'text-purple-500 bg-purple-50/80 border-purple-100/50' },
     { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: <Icons.Robot className="w-6 h-6" />, iconColor: 'text-emerald-500 bg-emerald-50/80 border-emerald-100/50' },
+    { title: 'Vận chuyển đang chạy', value: activeTransfers.toString(), change: 'Số lượng chuyến hoạt động', icon: <Icons.Truck className="w-6 h-6" />, iconColor: 'text-indigo-500 bg-indigo-50/80 border-indigo-100/50' },
     { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: 'Tổng sản phẩm trong các kho', icon: <Icons.StockBox className="w-6 h-6" />, iconColor: 'text-orange-500 bg-orange-50/80 border-orange-100/50' }
   ];
 
@@ -208,7 +219,7 @@ export function DashboardPage() {
       ) : (
         <>
           {/* Cards stats grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
         {cardConfig.map((c) => (
           <div key={c.title} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300/80">
             <div className="space-y-2">

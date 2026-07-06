@@ -1,4 +1,4 @@
-﻿import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Icons } from './Icons';
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
@@ -74,6 +74,8 @@ export function AdminLayout() {
       label: 'Vận hành',
       items: [
         { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/transfers', label: 'Chuyến vận chuyển', icon: <Icons.Truck className="w-5 h-5" />, visible: !isStoreManager },
+        { path: '/admin/robot-monitor', label: 'AMR Monitor', icon: <Icons.Metrics className="w-5 h-5" />, visible: !isStoreManager },
         { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />

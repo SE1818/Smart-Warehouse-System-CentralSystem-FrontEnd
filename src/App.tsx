@@ -42,6 +42,9 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ defaul
 const MetricsPage = lazy(() => import('./pages/MetricsPage').then(m => ({ default: m.MetricsPage })));
 const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
 const SchedulerPage = lazy(() => import('./pages/admin/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
+const TransfersPage = lazy(() => import('./pages/admin/TransfersPage').then(m => ({ default: m.TransfersPage })));
+const RobotMonitorPage = lazy(() => import('./pages/admin/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
+
 
 function UnauthorizedPage() {
 	return (
@@ -142,6 +145,8 @@ function App() {
 						<Route path="stores" element={<StoresPage />} />
 						<Route path="complaints" element={<AdminComplaints />} />
 						<Route path="reports" element={<AdminReports />} />
+						<Route path="transfers" element={<TransfersPage />} />
+						<Route path="robot-monitor" element={<RobotMonitorPage />} />
 					</Route>
 
 					{/* Fallback */}
