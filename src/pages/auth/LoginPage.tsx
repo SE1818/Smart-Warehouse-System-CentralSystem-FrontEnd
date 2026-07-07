@@ -58,7 +58,15 @@ export function LoginPage() {
     const initializeGoogle = async () => {
       try {
         await loadGoogleScript();
-        const google = (window as Window & typeof globalThis & { google?: { accounts?: { id?: { initialize?: (cfg: Record<string, unknown>) => void; renderButton?: (el: HTMLElement, cfg: Record<string, unknown>) => void } } } }).google;
+        interface GoogleGsi {
+          accounts: {
+            id: {
+              initialize: (cfg: Record<string, unknown>) => void;
+              renderButton: (el: HTMLElement, cfg: Record<string, unknown>) => void;
+            };
+          };
+        }
+        const google = (window as Window & typeof globalThis & { google?: GoogleGsi }).google;
         if (!google) return;
 
         // Define callback for Google credential response
