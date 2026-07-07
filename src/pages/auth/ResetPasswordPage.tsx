@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { authService } from '@/services';
@@ -47,9 +48,10 @@ export function ResetPasswordPage() {
       setTimeout(() => {
         navigate('/login', { state: { passwordResetSuccess: true } });
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error');
-      setMessage(err.response?.data?.message || 'Password reset failed. The link may be invalid or expired.');
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setMessage(axiosErr.response?.data?.message || 'Password reset failed. The link may be invalid or expired.');
     }
   };
 

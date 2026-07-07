@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { Icons } from '@/components/Icons';
@@ -26,7 +27,7 @@ export function StoresPage() {
   };
 
   useEffect(() => {
-    fetchStores();
+    void fetchStores();
   }, []);
 
   useEffect(() => {

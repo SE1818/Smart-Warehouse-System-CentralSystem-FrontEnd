@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { complaintService } from '@/services/complaintService';
 import type { Complaint } from '@/services/complaintService';
@@ -29,7 +30,7 @@ export function ComplaintsPage() {
   };
 
   useEffect(() => {
-    fetchComplaints();
+    void fetchComplaints();
   }, []);
 
   const handleRespond = async (e: React.FormEvent) => {

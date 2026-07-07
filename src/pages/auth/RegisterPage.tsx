@@ -150,9 +150,10 @@ export function RegisterPage() {
       setOtpSuccess(true);
       setShowOtpInput(false);
       setTimeout(() => navigate('/login'), 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Verification error', err);
-      setOtpError(err.response?.data?.message || 'Mã xác minh không hợp lệ hoặc đã hết hạn.');
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setOtpError(axiosErr.response?.data?.message || 'Mã xác minh không hợp lệ hoặc đã hết hạn.');
     }
   };
 

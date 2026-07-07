@@ -19,7 +19,7 @@ export function ForgotPasswordPage() {
       await authService.forgotPassword({ email });
       setMessage('If an account with that email exists, you will receive a password reset link shortly.');
       setEmail('');
-    } catch (err: any) {
+    } catch {
       setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);

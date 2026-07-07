@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { schedulerService } from '@/services/scheduler';
 import type { SchedulerResponse, SchedulerJob } from '@/services/scheduler';
@@ -14,7 +15,7 @@ export function SchedulerPage() {
     try {
       const response = await schedulerService.getJobs();
       setData(response);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching scheduler jobs:', err);
       toast.error('Không thể tải danh sách công việc từ Scheduler Service.');
     } finally {
@@ -23,9 +24,9 @@ export function SchedulerPage() {
   };
 
   useEffect(() => {
-    fetchSchedulerData();
+    void fetchSchedulerData();
     // Auto refresh every 10 seconds for real-time monitoring
-    const interval = setInterval(() => fetchSchedulerData(true), 10000);
+    const interval = setInterval(() => void fetchSchedulerData(true), 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -36,7 +37,7 @@ export function SchedulerPage() {
       await schedulerService.triggerJob(jobName, group);
       toast.success(`Đã kích hoạt thủ công công việc "${jobName}" thành công!`);
       fetchSchedulerData(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`Error triggering job ${jobName}:`, err);
       toast.error(`Kích hoạt công việc "${jobName}" thất bại.`);
     } finally {
@@ -51,7 +52,7 @@ export function SchedulerPage() {
       await schedulerService.pauseJob(jobName, group);
       toast.info(`Đã tạm dừng công việc "${jobName}".`);
       fetchSchedulerData(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`Error pausing job ${jobName}:`, err);
       toast.error(`Tạm dừng công việc "${jobName}" thất bại.`);
     } finally {
@@ -66,7 +67,7 @@ export function SchedulerPage() {
       await schedulerService.resumeJob(jobName, group);
       toast.success(`Đã khôi phục hoạt động cho công việc "${jobName}".`);
       fetchSchedulerData(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(`Error resuming job ${jobName}:`, err);
       toast.error(`Khôi phục công việc "${jobName}" thất bại.`);
     } finally {

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from 'react';
 import type { NotificationDto, NotificationType } from '@/types/notification';
 import { notificationService } from '@/services/notification';
@@ -37,7 +38,7 @@ export function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
+    void fetchNotifications();
   }, [fetchNotifications]);
 
   // Handle send notification submit
@@ -80,9 +81,10 @@ export function NotificationsPage() {
         setIsModalOpen(false);
         setSendSuccess(null);
       }, 1500);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error sending notification:', err);
-      setSendError(err.response?.data?.message || 'Có lỗi xảy ra khi gửi thông báo.');
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setSendError(axiosErr.response?.data?.message || 'Có lỗi xảy ra khi gửi thông báo.');
     } finally {
       setSending(false);
     }

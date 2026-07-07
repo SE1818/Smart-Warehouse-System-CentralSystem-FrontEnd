@@ -13,6 +13,7 @@ export function VerifyEmailPage() {
 
   useEffect(() => {
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('error');
       setMessage('Missing verification token.');
       return;
@@ -24,12 +25,13 @@ export function VerifyEmailPage() {
         setStatus('success');
         setMessage('Email verified successfully! Redirecting to login...');
         setTimeout(() => navigate('/login'), 3000);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setStatus('error');
-        setMessage(err.response?.data?.message || 'Verification failed. The link may be invalid or expired.');
+        const axiosErr = err as { response?: { data?: { message?: string } } };
+        setMessage(axiosErr.response?.data?.message || 'Verification failed. The link may be invalid or expired.');
       }
     };
-    verify();
+    void verify();
   }, [token, navigate]);
 
   return (

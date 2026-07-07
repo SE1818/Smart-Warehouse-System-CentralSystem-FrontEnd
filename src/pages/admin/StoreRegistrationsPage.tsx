@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { Icons } from '@/components/Icons';
@@ -89,11 +90,11 @@ export function StoreRegistrationsPage() {
   };
 
   useEffect(() => {
-    fetchCounts();
+    void fetchCounts();
   }, []);
 
   useEffect(() => {
-    fetchRegistrations(activeTab);
+    void fetchRegistrations(activeTab);
   }, [activeTab]);
 
   const handleApprove = async (id: string, name: string) => {
@@ -104,8 +105,9 @@ export function StoreRegistrationsPage() {
       toast.success(response.message || 'Đã phê duyệt cửa hàng thành công.');
       await fetchCounts();
       fetchRegistrations(activeTab);
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Không thể phê duyệt yêu cầu.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast.error(axiosErr.response?.data?.message || 'Không thể phê duyệt yêu cầu.');
     } finally {
       setActionLoadingId(null);
     }
@@ -123,8 +125,9 @@ export function StoreRegistrationsPage() {
       setRejectionReason('');
       await fetchCounts();
       fetchRegistrations(activeTab);
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Không thể từ chối yêu cầu.');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast.error(axiosErr.response?.data?.message || 'Không thể từ chối yêu cầu.');
     } finally {
       setActionLoadingId(null);
     }

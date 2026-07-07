@@ -11,8 +11,8 @@ export interface AdminUserResponse {
 
 export const userService = {
   async getAllUsers(): Promise<AdminUserResponse[]> {
-    const res = await apiClient.get<any>('/admin/users');
-    if (res.data && res.data.items && Array.isArray(res.data.items)) {
+    const res = await apiClient.get<{ items?: AdminUserResponse[] } | AdminUserResponse[]>('/admin/users');
+    if (res.data && !Array.isArray(res.data) && Array.isArray(res.data.items)) {
       return res.data.items;
     }
     return Array.isArray(res.data) ? res.data : [];

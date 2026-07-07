@@ -2,17 +2,31 @@ import apiClient from './api';
 import type { Robot } from '@/types/robot';
 import type { Order } from '@/types/product';
 
+interface RobotRaw {
+  id: string;
+  name: string;
+  currentX?: number;
+  x?: number;
+  currentY?: number;
+  y?: number;
+  batteryLevel?: number;
+  battery?: number;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export const robotService = {
   // Get all robots
   async listRobots(): Promise<Robot[]> {
-    const response = await apiClient.get<any[]>('/v1/robots');
-    return response.data.map((r: any) => ({
+    const response = await apiClient.get<RobotRaw[]>('/v1/robots');
+    return response.data.map((r: RobotRaw) => ({
       id: r.id,
       name: r.name,
       x: r.currentX ?? r.x ?? 0,
       y: r.currentY ?? r.y ?? 0,
       battery: r.batteryLevel ?? r.battery ?? 0,
-      status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) as any : 'Idle',
+      status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) as Robot['status'] : 'Idle',
       createdAt: r.createdAt,
       updatedAt: r.updatedAt
     }));
@@ -59,13 +73,13 @@ export const robotService = {
 
   // Get areas
   async getAreas(): Promise<{ id: string; name: string }[]> {
-    const response = await apiClient.get<any[]>('/v1/robots/areas');
+    const response = await apiClient.get<{ id: string; name: string }[]>('/v1/robots/areas');
     return response.data;
   },
 
   // Get stations
   async getStations(): Promise<{ id: string; name: string; areaId: string }[]> {
-    const response = await apiClient.get<any[]>('/v1/robots/stations');
+    const response = await apiClient.get<{ id: string; name: string; areaId: string }[]>('/v1/robots/stations');
     return response.data;
   }
 };

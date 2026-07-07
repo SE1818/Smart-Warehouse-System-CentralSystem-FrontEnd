@@ -15,7 +15,7 @@ export interface CommandLog {
   commandId: string;
   robotId: string;
   commandType: string;
-  parameters: any;
+  parameters: Record<string, unknown>;
   status: string;
   createdAt: string;
 }
@@ -27,7 +27,7 @@ export const robotMonitorService = {
   getCommandLog(robotId: string) {
     return apiClient.get<CommandLog[]>(`/v1/commands/robot/${robotId}`);
   },
-  sendCommand(robotId: string, type: string, params: any) {
+  sendCommand(robotId: string, type: string, params: Record<string, unknown>) {
     return apiClient.post(`/v1/robots/${robotId}/commands`, { commandType: type, parameters: params });
   },
   emergencyStop(robotId: string) {

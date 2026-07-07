@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useRef } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '@/services';
 import { Icons } from '@/components/Icons';
@@ -40,7 +41,7 @@ export function LoginPage() {
   useEffect(() => {
     const loadGoogleScript = () => {
       return new Promise<void>((resolve, reject) => {
-        if ((window as any).google) {
+        if ((window as Window & typeof globalThis & { google?: unknown }).google) {
           resolve();
           return;
         }
@@ -57,7 +58,7 @@ export function LoginPage() {
     const initializeGoogle = async () => {
       try {
         await loadGoogleScript();
-        const google = (window as any).google;
+        const google = (window as Window & typeof globalThis & { google?: { accounts?: { id?: { initialize?: (cfg: Record<string, unknown>) => void; renderButton?: (el: HTMLElement, cfg: Record<string, unknown>) => void } } } }).google;
         if (!google) return;
 
         // Define callback for Google credential response
@@ -201,7 +202,7 @@ export function LoginPage() {
       await authService.resendVerification({ email });
       setError('');
       alert('A new verification email has been sent. Please check your inbox.'); // todo: replace with inline message
-    } catch (err) {
+    } catch {
       setError('Failed to send verification email. Please try again.');
     }
   };

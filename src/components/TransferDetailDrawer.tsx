@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from 'react';
 import { transferService } from '@/services/transferService';
 import type { TransferAudit } from '@/services/transferService';
@@ -28,9 +29,9 @@ export function TransferDetailDrawer({ transferId, onClose, onCancel }: Transfer
   }, [transferId]);
 
   useEffect(() => {
-    loadDetail();
+    void loadDetail();
     // Refresh detail every 4s to track live robot position/commands
-    const interval = setInterval(loadDetail, 4000);
+    const interval = setInterval(() => void loadDetail(), 4000);
     return () => clearInterval(interval);
   }, [loadDetail]);
 

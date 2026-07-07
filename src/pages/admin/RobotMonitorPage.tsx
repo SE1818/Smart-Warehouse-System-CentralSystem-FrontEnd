@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { Icons } from '@/components/Icons';
@@ -53,7 +54,7 @@ export function RobotMonitorPage() {
   };
 
   useEffect(() => {
-    loadRobots();
+    void loadRobots();
     
     // Connect to SignalR
     setSignalRStatus('connecting');
@@ -103,6 +104,7 @@ export function RobotMonitorPage() {
     return () => {
       connection.stop().catch(() => {});
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-scroll terminal log

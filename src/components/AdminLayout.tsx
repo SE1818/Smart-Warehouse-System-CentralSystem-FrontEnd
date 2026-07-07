@@ -13,11 +13,13 @@ export function AdminLayout() {
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'admin' };
 
+  const userId = user?.id;
+
   useEffect(() => {
-    if (!user || !user.id) return;
+    if (!userId) return;
 
     const connection = new HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/notifications/hub?userId=${user.id}`, {
+      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/notifications/hub?userId=${userId}`, {
         headers: {
           'ngrok-skip-browser-warning': 'true'
         }
@@ -37,13 +39,13 @@ export function AdminLayout() {
     });
 
     connection.start()
-      .then(() => console.log('[SignalR] Connected to Notification Hub for user:', user.id))
+      .then(() => console.log('[SignalR] Connected to Notification Hub for user:', userId))
       .catch((err) => console.error('[SignalR] Connection failed: ', err));
 
     return () => {
       connection.stop();
     };
-  }, [user?.id]);
+  }, [userId]);
 
   const isStoreManager = user?.role === 'store_manager';
 

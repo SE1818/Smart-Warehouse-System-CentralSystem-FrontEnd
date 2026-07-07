@@ -36,17 +36,17 @@ export const schedulerService = {
     return res.data;
   },
 
-  async triggerJob(jobName: string, group: string = 'DEFAULT'): Promise<any> {
+  async triggerJob(jobName: string, group: string = 'DEFAULT'): Promise<unknown> {
     const res = await apiClient.post(`/scheduler/jobs/${jobName}/trigger?group=${group}`);
     return res.data;
   },
 
-  async pauseJob(jobName: string, group: string = 'DEFAULT'): Promise<any> {
+  async pauseJob(jobName: string, group: string = 'DEFAULT'): Promise<unknown> {
     const res = await apiClient.post(`/scheduler/jobs/${jobName}/pause?group=${group}`);
     return res.data;
   },
 
-  async resumeJob(jobName: string, group: string = 'DEFAULT'): Promise<any> {
+  async resumeJob(jobName: string, group: string = 'DEFAULT'): Promise<unknown> {
     const res = await apiClient.post(`/scheduler/jobs/${jobName}/resume?group=${group}`);
     return res.data;
   }

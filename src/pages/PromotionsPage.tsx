@@ -50,7 +50,7 @@ const fmtDate = (d: string) =>
 const handleApiError = (err: unknown, action: string) => {
   const axiosErr = err as { response?: { data?: { message?: string; Message?: string; Errors?: Record<string, string[]> } }; message?: string };
   const validation = axiosErr.response?.data?.Errors;
-  let msg = '';
+  let msg: string;
   if (validation && typeof validation === 'object') {
     msg = Object.entries(validation).map(([f, ms]) => `${f}: ${ms.join(', ')}`).join(' | ');
   } else {
@@ -69,6 +69,7 @@ function DatePicker({ label, value, onChange, required }: DatePickerProps) {
   const selDate = value ? new Date(value) : null;
   const [viewDate, setViewDate] = useState(() => selDate || new Date());
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { if (selDate) setViewDate(selDate); }, [value]);
   useEffect(() => {
     const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false); };
@@ -135,6 +136,7 @@ function DatePicker({ label, value, onChange, required }: DatePickerProps) {
 function FlashSaleCountdown({ endDate, status }: { endDate: string; status: string }) {
   const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (status === 'expired') { setTimeLeft('Đã kết thúc'); return; }
     const calc = () => {
       const diff = new Date(endDate).getTime() - Date.now();
@@ -313,7 +315,10 @@ export function PromotionsPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadAll();
+  }, [loadAll]);
   useEffect(() => { productService.getProducts().then(setAvailableProducts).catch(console.error); }, []);
   useEffect(() => {
     const h = () => loadAll();

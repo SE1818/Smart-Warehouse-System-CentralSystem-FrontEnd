@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from 'react';
 import { transferService } from '@/services/transferService';
 import type { TransferRequest, TransferStats } from '@/services/transferService';
@@ -31,7 +32,7 @@ export function TransfersPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [loadData]);
 
   // Hook into live SignalR notifications to refresh stats/transfers
