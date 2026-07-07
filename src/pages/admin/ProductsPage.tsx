@@ -1,12 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Product } from '@/types';
 import { productService } from '@/services';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
 import { CustomSelect } from '@/components/CustomSelect';
 
+// Resolve a potentially-relative image URL against the API base.
+// File-Service returns relative paths (e.g. "/api/files/static/products/…")
+// but the browser resolves those against the frontend origin (5173), not the
+// API gateway (5000), so every image 404s unless we absolutise them here.
+function resolveImageUrl(url: string | undefined): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api')
+    .replace(/\/$/, ''); // strip trailing slash
+  const baseOrigin = apiBase.includes('://')
+    ? apiBase.substring(0, apiBase.lastIndexOf('/'))
+    : window.location.origin;
+  return `${baseOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -23,20 +39,20 @@ export function ProductsPage() {
     description: ''
   });
 
+  const editImageInputRef = useRef<HTMLInputElement>(null);
+  const addImageInputRef = useRef<HTMLInputElement>(null);
+
   const fetchProducts = async () => {
     setLoading(true);
     setError(null);
     try {
       const productsData = await productService.getProducts();
-
-      const mapped = productsData.map((p) => {
-        return {
-          ...p,
-          stockQuantity: p.stockQuantity ?? 0,
-          category: p.category || 'Đồ uống',
-          unit: p.unit || 'chiếc'
-        };
-      });
+      const mapped = productsData.map((p) => ({
+        ...p,
+        stockQuantity: p.stockQuantity ?? 0,
+        category: p.category || 'Đồ uống',
+        unit: p.unit || 'chiếc'
+      }));
       setProducts(mapped);
     } catch (err) {
       console.error('Error fetching products from API', err);
@@ -54,7 +70,6 @@ export function ProductsPage() {
     return () => clearTimeout(timer);
   }, []);
 
-
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
@@ -68,7 +83,7 @@ export function ProductsPage() {
         stockQuantity: Number(editingProduct.stockQuantity),
         category: editingProduct.category,
         unit: editingProduct.unit,
-        imageUrl: editingProduct.imageUrl || ''
+        imageUrl: editingProduct.imageUrl
       });
       setEditingProduct(null);
       toast.success('Cập nhật sản phẩm thành công!');
@@ -84,16 +99,26 @@ export function ProductsPage() {
     if (!newProduct.name || !newProduct.price || !newProduct.sku) return;
 
     try {
-      await productService.createProduct({
+      const created = await productService.createProduct({
         sku: newProduct.sku,
         name: newProduct.name,
         description: newProduct.description || '',
         price: Number(newProduct.price),
         stockQuantity: Number(newProduct.stockQuantity || 0),
         category: newProduct.category || 'Đồ uống',
-        unit: newProduct.unit || 'chiếc',
-        imageUrl: newProduct.imageUrl || ''
+        unit: newProduct.unit || 'chiếc'
       });
+
+      const pendingFile = (newProduct as any)?._pendingImage as File | undefined;
+      if (pendingFile) {
+        try {
+          const uploadResult = await productService.uploadImage(created.id, pendingFile);
+          await productService.updateProduct(created.id, { imageUrl: uploadResult.url });
+        } catch {
+          toast.error('Đã tạo sản phẩm nhưng không thể tải ảnh lên.');
+        }
+      }
+
       setIsAdding(false);
       setNewProduct({
         sku: '',
@@ -129,11 +154,38 @@ export function ProductsPage() {
     }
   };
 
+  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingProduct) return;
+    try {
+      const result = await productService.uploadImage(editingProduct.id, file);
+      setEditingProduct({ ...editingProduct, imageUrl: result.url });
+      toast.success('Đã tải ảnh lên thành công!');
+    } catch {
+      toast.error('Không thể tải ảnh lên. Vui lòng thử lại.');
+    }
+    e.target.value = '';
+  };
+
+  const handleAddImagePreview = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewProduct({
+        ...newProduct,
+        imageUrl: reader.result as string,
+        _pendingImage: file
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
-
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedProducts = filtered.slice(startIndex, startIndex + itemsPerPage);
@@ -218,9 +270,26 @@ export function ProductsPage() {
               <tbody className="divide-y divide-slate-100 text-slate-600 font-semibold">
                 {paginatedProducts.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 pl-6 font-bold text-slate-900">
-                      <div>{p.name}</div>
-                      {p.sku && <div className="text-[10px] text-slate-400 font-mono tracking-wider">{p.sku}</div>}
+                    <td className="p-4 pl-6">
+                      <div className="flex items-center gap-3">
+                        {p.imageUrl && !imageErrors[p.id] ? (
+                          <img
+                        src={resolveImageUrl(p.imageUrl)}
+                            alt={p.name}
+                            className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                            loading="lazy"
+                      onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                            <span className="text-xs font-bold text-slate-400">{p.name.charAt(0)}</span>
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 truncate">{p.name}</div>
+                          {p.sku && <div className="text-[10px] text-slate-400 font-mono tracking-wider">{p.sku}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td className="p-4">
                       <span className="text-xs font-bold bg-brand-50 border border-brand-100/50 text-brand-700 px-3 py-1 rounded-full">
@@ -262,8 +331,8 @@ export function ProductsPage() {
           {totalPages > 1 && (
             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
               <span className="text-xs text-slate-500 font-semibold">
-                Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{" "}
-                <span className="font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filtered.length)}</span>{" "}
+                Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{' '}
+                <span className="font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filtered.length)}</span>{' '}
                 trong <span className="font-bold text-slate-800">{filtered.length}</span> sản phẩm
               </span>
               <div className="flex items-center gap-2">
@@ -280,11 +349,10 @@ export function ProductsPage() {
                     key={page}
                     type="button"
                     onClick={() => setCurrentPage(page)}
-                    className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 cursor-pointer ${
-                      currentPage === page
-                        ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/10"
-                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                    }`}
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 cursor-pointer ${currentPage === page
+                      ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/10"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      }`}
                   >
                     {page}
                   </button>
@@ -359,14 +427,43 @@ export function ProductsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ảnh sản phẩm</label>
                   <input
-                    type="text"
-                    placeholder="https://example.com/image.png"
-                    value={editingProduct.imageUrl || ''}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    ref={editImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleEditImageUpload}
                   />
+                  {editingProduct.imageUrl && (
+                    <div className="mb-2">
+                      <img
+                        src={resolveImageUrl(editingProduct.imageUrl)}
+                        alt="Preview"
+                        className="w-16 h-16 rounded-lg object-cover border border-slate-200"
+                  onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editImageInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-brand-300 rounded-xl text-xs font-bold text-slate-600 hover:text-brand-600 transition-all cursor-pointer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                      </svg>
+                      Tải ảnh lên
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="hoặc dán link ảnh..."
+                      value={editingProduct.imageUrl || ''}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
+                      className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -382,7 +479,6 @@ export function ProductsPage() {
                     ]}
                     placeholder="Chọn phân loại..."
                   />
-
                   <CustomSelect
                     label="Đơn vị"
                     value={editingProduct.unit || ''}
@@ -477,14 +573,38 @@ export function ProductsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link ảnh sản phẩm</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ảnh sản phẩm</label>
                   <input
-                    type="text"
-                    placeholder="https://example.com/image.png"
-                    value={newProduct.imageUrl || ''}
-                    onChange={(e) => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
+                    ref={addImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAddImagePreview}
                   />
+                  {newProduct.imageUrl && newProduct.imageUrl.startsWith('data:') && (
+                    <div className="mb-2">
+                      <img
+                        src={newProduct.imageUrl}
+                        alt="Preview"
+                        className="w-16 h-16 rounded-lg object-cover border border-slate-200"
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => addImageInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-brand-300 rounded-xl text-xs font-bold text-slate-600 hover:text-brand-600 transition-all cursor-pointer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                      </svg>
+                      Tải ảnh lên
+                    </button>
+                    <span className="text-xs text-slate-400 self-center">
+                      {(newProduct as any)?._pendingImage ? (newProduct as any)._pendingImage.name : 'Chưa chọn ảnh'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -500,7 +620,6 @@ export function ProductsPage() {
                     ]}
                     placeholder="Chọn phân loại..."
                   />
-
                   <CustomSelect
                     label="Đơn vị"
                     value={newProduct.unit || ''}
@@ -562,7 +681,7 @@ export function ProductsPage() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
               <button
                 type="button"

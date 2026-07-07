@@ -1,9 +1,15 @@
-// File Service types
+// The File Service returns PascalCase JSON keys (Url, FileName, Size, Version, Sha256Hash)
+// We normalize to camelCase here for consistent frontend usage.
 export interface UploadResponse {
   url: string;
   fileName: string;
   originalName: string;
   size: number;
+  version: number;
+  sha256Hash: string;
+  metadataId?: string;
+  /** @deprecated Not returned by the File Service API */
+  fileId?: string;
 }
 
 export interface FileInfo {

@@ -11,3 +11,4 @@ export { storeService } from './storeService';
 export { robotService } from './robot';
 export { robotMonitorService } from './robotMonitorService';
 export { transferService } from './transferService';
+export { fileService } from './file';
