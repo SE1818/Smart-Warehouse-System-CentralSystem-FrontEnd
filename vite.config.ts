@@ -4,6 +4,9 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_ENV__: JSON.stringify(process.env.NODE_ENV || 'development'),
+  },
   plugins: [react()],
   resolve: {
     alias: {
@@ -30,5 +33,15 @@ export default defineConfig(({ mode }) => ({
         },
       },
     } : undefined,
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      reportsDirectory: './coverage/lcov',
+    },
   },
 }))

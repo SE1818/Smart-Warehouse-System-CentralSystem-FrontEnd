@@ -2,7 +2,9 @@ import { createContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '@/types/auth';
 import { authService } from '@/services/auth';
 
-interface AuthContextType {
+// AuthContextType must live in this file so consumer tests can import it.
+/* eslint-disable react-refresh/only-export-components */
+export interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -11,7 +13,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
