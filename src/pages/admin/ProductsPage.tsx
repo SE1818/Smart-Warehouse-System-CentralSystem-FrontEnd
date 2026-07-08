@@ -278,7 +278,7 @@ export function ProductsPage() {
                             alt={p.name}
                             className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
                             loading="lazy"
-                      onError={() => setImageErrors(prev => ({ ...prev, [editingProduct.id]: true }))}
+                      onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
