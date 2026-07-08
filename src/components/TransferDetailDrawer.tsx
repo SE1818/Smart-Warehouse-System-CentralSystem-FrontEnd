@@ -65,7 +65,14 @@ export function TransferDetailDrawer({ transferId, onClose, onCancel }: Transfer
   return (
     <div className="fixed inset-y-0 right-0 z-50 flex pl-10 max-w-full">
       {/* Backdrop overlay */}
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') onClose(); }}
+        role="button"
+        tabIndex={0}
+        aria-label="Đóng chi tiết chuyến vận chuyển"
+      />
 
       <div className="relative w-screen max-w-lg bg-white shadow-2xl border-l border-slate-200/80 flex flex-col h-full animate-slide-in">
         {/* Drawer Header */}

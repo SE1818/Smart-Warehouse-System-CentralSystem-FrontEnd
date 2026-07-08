@@ -279,6 +279,10 @@ export function NotificationsPage() {
             <div
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-300 ease-in-out"
               onClick={() => setIsModalOpen(false)}
+        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
+        role="button"
+        tabIndex={0}
+        aria-label="Ðóng modal g?i thông báo"
             />
 
             <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
@@ -292,6 +296,10 @@ export function NotificationsPage() {
                     </div>
                     <button
                       onClick={() => setIsModalOpen(false)}
+        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
+        role="button"
+        tabIndex={0}
+        aria-label="Ðóng modal g?i thông báo"
                       className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-655 transition-all cursor-pointer"
                     >
                       <Icons.Close className="w-5 h-5" />
@@ -412,6 +420,10 @@ export function NotificationsPage() {
                       <button
                         type="button"
                         onClick={() => setIsModalOpen(false)}
+        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
+        role="button"
+        tabIndex={0}
+        aria-label="Ðóng modal g?i thông báo"
                         className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
                       >
                         Há»§y

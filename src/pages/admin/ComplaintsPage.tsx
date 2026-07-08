@@ -161,6 +161,10 @@ export function ComplaintsPage() {
                       setSelectedComplaint(item);
                       setResponse('');
                     }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { setSelectedComplaint(item); setResponse(''); } }}
+        role="button"
+        tabIndex={0}
+        aria-label="Xem chi tiết khiếu nại"
                     className={`p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden group ${
                       isSelected
                         ? 'bg-brand-50/40 border-brand-300 shadow-xs'

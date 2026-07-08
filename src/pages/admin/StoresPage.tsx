@@ -144,6 +144,10 @@ export function StoresPage() {
             <div
               key={store.id}
               onClick={() => setSelectedStore(store)}
+        onKeyDown={(e) => { if (e.key === 'Enter') setSelectedStore(store); }}
+        role="button"
+        tabIndex={0}
+        aria-label="Xem sản phẩm cửa hàng"
               className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
             >
               {/* Card top accent bar */}
