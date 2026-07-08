@@ -1,36 +1,42 @@
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const apiClient = { get: vi.fn() as any, put: vi.fn() as any };
+vi.mock('@/services/api', () => ({
+  __esModule: true,
+  default: { get: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}));
 
-vi.mock('@/services/api', () => ({ __esModule: true, default: apiClient }));
-
+import apiClient from '@/services/api';
 import { userService } from '@/services/userService';
 
-const { get, put } = apiClient;
+const get = apiClient.get as ReturnType<typeof vi.fn>;
+const put = apiClient.put as ReturnType<typeof vi.fn>;
+const del = apiClient.delete as ReturnType<typeof vi.fn>;
 
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('userService', () => {
-  it('getUsers fetches list', async () => {
-    get.mockResolvedValue({ data: [{ id: 'u1', name: 'A' }] });
-    const res = await userService.getUsers();
+  it('getAllUsers returns array', async () => {
+    get.mockResolvedValue({ data: [{ id: 'u1', username: 'A', email: 'a@t.com', role: 'STAFF', isActive: true }] });
+    const res = await userService.getAllUsers();
     expect(get).toHaveBeenCalledWith('/admin/users');
-    expect(res).toHaveLength(1);
+    expect(Array.isArray(res)).toBe(true);
   });
-
-  it('updateUser puts data', async () => {
-    put.mockResolvedValue({ data: { id: 'u1', name: 'B' } });
-    const res = await userService.updateUser('u1', { name: 'B', role: 'STAFF' });
-    expect(put).toHaveBeenCalledWith('/admin/users/u1', {
-name: 'B',
-role: 'STAFF',
-    });
-    expect(res.name).toBe('B');
+  it('updateUserRole updates role', async () => {
+    put.mockResolvedValue({ data: { id: 'u1', username: 'B', role: 'ADMIN', isActive: true } });
+    const res = await userService.updateUserRole('u1', 'ADMIN');
+    expect(res.role).toBe('ADMIN');
+    expect(put).toHaveBeenCalledWith('/admin/users/u1/role', { role: 'ADMIN' });
   });
-
-  it('getUserDetail returns user', async () => {
-    get.mockResolvedValue({ data: { id: 'u1', name: 'C' } });
-    await userService.getUserDetail('u1');
-    expect(get).toHaveBeenCalledWith('/admin/users/u1');
+  it('updateUserStatus updates status', async () => {
+    put.mockResolvedValue({ data: { id: 'u1', username: 'B', isActive: false } });
+    const res = await userService.updateUserStatus('u1', false);
+    expect(res.isActive).toBe(false);
+    expect(put).toHaveBeenCalledWith('/admin/users/u1/status', { isActive: false });
+  });
+  it('deleteUser calls delete', async () => {
+    del.mockResolvedValue({ data: {} });
+    await userService.deleteUser('u1');
+    expect(del).toHaveBeenCalledWith('/admin/users/u1');
   });
 });

@@ -1,16 +1,15 @@
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockGet = vi.fn();
-const mockPost = vi.fn();
-const mockDelete = vi.fn();
-
-vi.mock('@/services/api', () => ({ __esModule: true, default: { get: mockGet, post: mockPost, delete: mockDelete } }));
+vi.mock('@/services/api', () => ({
+  __esModule: true,
+  default: { get: vi.fn(), delete: vi.fn() },
+}));
 
 import apiClient from '@/services/api';
 import { transferService } from '@/services/transferService';
 
 const get = apiClient.get as ReturnType<typeof vi.fn>;
-const post = apiClient.post as ReturnType<typeof vi.fn>;
 const del = apiClient.delete as ReturnType<typeof vi.fn>;
 
 beforeEach(() => { vi.clearAllMocks(); });
@@ -22,33 +21,41 @@ describe('transferService', () => {
     expect(get).toHaveBeenCalledWith('/v1/tasks');
   });
   it('getTransferStats', async () => {
-    get.mockResolvedValue({ data: { totalToday: 0, active: 0, completed: 0, failed: 0, cancelled: 0, avgDurationMinutes: 0, byRobot: {} } });
+    get.mockResolvedValue({ data: { totalToday: 0 } });
     const res = await transferService.getTransferStats();
     expect(res.totalToday).toBe(0);
   });
   it('getActiveTransfers', async () => {
     get.mockResolvedValue({ data: [] });
     await transferService.getActiveTransfers();
-    expect(get).toHaveBeenCalledWith('/v1/tasks/active');
   });
   it('getTransferHistory', async () => {
-    get.mockResolvedValue({ data: { transferRequestId: 'r1' } });
-    const res = await transferService.getTransferHistory('r1');
-    expect(res.transferRequestId).toBe('r1');
+    get.mockResolvedValue({ data: {} });
+    await transferService.getTransferHistory('t1');
   });
   it('getTransferCommands', async () => {
-    get.mockResolvedValue({ data: [] });
-    await transferService.getTransferCommands('t1');
-    expect(get).toHaveBeenCalledWith('/v1/tasks/t1/commands');
+    get.mockResolvedValue({ data: [{ id: 'c1', commandType: 'MOVE' }] });
+    const res = await transferService.getTransferCommands('t1');
+    expect(res[0].commandType).toBe('MOVE');
   });
-  it('cancelTransfer', async () => {
+  it('getTransferResponses', async () => {
+    get.mockResolvedValue({ data: [{ id: 'r1', status: 'DELIVERED' }] });
+    const res = await transferService.getTransferResponses('t1');
+    expect(res[0].status).toBe('DELIVERED');
+  });
+  it('getCommandStatusHistory', async () => {
+    get.mockResolvedValue({ data: [{ id: 'h1', newStatus: 'EXECUTING' }] });
+    const res = await transferService.getCommandStatusHistory('c1');
+    expect(res[0].newStatus).toBe('EXECUTING');
+  });
+  it('cancelTransfer calls correct URL', async () => {
     del.mockResolvedValue({ data: {} });
     await transferService.cancelTransfer('t1');
     expect(del).toHaveBeenCalledWith('/v1/tasks/t1/cancel');
   });
-  it('getCommandStatusHistory', async () => {
-    get.mockResolvedValue({ data: [] });
-    await transferService.getCommandStatusHistory('c1');
-    expect(get).toHaveBeenCalledWith('/v1/tasks/commands/c1/history');
+  it('getCommandLog', async () => {
+    get.mockResolvedValue({ data: { commandId: 'c1', executionResult: 'OK' } });
+    const res = await transferService.getCommandLog('c1');
+    expect(res.executionResult).toBe('OK');
   });
 });

@@ -1,21 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-vi.mock('@/services/api', () => {
-  const mockGet = vi.fn();
-  const mockPost = vi.fn();
-  const mockPut = vi.fn();
-  const mockDelete = vi.fn();
-  return { __esModule: true, default: { get: mockGet, post: mockPost, put: mockPut, delete: mockDelete } };
-});
+
+vi.mock('@/services/api', () => ({
+  __esModule: true,
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+  },
+}));
+
 import apiClient from '@/services/api';
+import { walletService } from '@/services/wallet';
+
 const get = apiClient.get as ReturnType<typeof vi.fn>;
 const post = apiClient.post as ReturnType<typeof vi.fn>;
-const put = apiClient.put as ReturnType<typeof vi.fn>;
-const del = apiClient.delete as ReturnType<typeof vi.fn>;
+
 beforeEach(() => { vi.clearAllMocks(); });
 
-import { walletService } from '@/services/wallet';
 describe('walletService', () => {
-  it('getMyWallet', async () => { get.mockResolvedValue({ data: { id: 'w1' } }); await walletService.getMyWallet(); expect(get).toHaveBeenCalledWith('/system/wallets/me'); });
-  it('getTransactions', async () => { get.mockResolvedValue({ data: [] }); await walletService.getTransactions(); expect(get).toHaveBeenCalledWith('/system/transactions'); });
-  it('deposit', async () => { post.mockResolvedValue({ data: { balance: 500 } }); await walletService.deposit(100); expect(post).toHaveBeenCalledWith('/system/deposit', 100); });
+  it('getBalance', async () => {
+    get.mockResolvedValue({ data: { userId: 'u1', balance: 1000 } });
+    const res = await walletService.getBalance('u1');
+    expect(res.balance).toBe(1000);
+  });
+
+  it('getTransactions', async () => {
+    get.mockResolvedValue({ data: [{ id: 't1', type: 'DEPOSIT', amount: 100 }] });
+    const res = await walletService.getTransactions('u1');
+    expect(res[0].type).toBe('DEPOSIT');
+  });
+
+  it('topUp', async () => {
+    post.mockResolvedValue({ data: { userId: 'u1', balance: 1500 } });
+    const res = await walletService.topUp({ userId: 'u1', amount: 500 });
+    expect(res.balance).toBe(1500);
+  });
 });

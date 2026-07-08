@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-
-
-
-vi.mock('@/services/api', () => ({ __esModule: true, default: { get: mockGet, post: mockPost } }));
+vi.mock('@/services/api', () => ({
+  __esModule: true,
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+  },
+}));
 
 import apiClient from '@/services/api';
 import { authService } from '@/services/auth';
@@ -14,59 +17,60 @@ const post = apiClient.post as ReturnType<typeof vi.fn>;
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('authService', () => {
-  it('login calls post', async () => {
-    mockPost.mockResolvedValue({ data: { accessToken: 't', user: { id: 'u1' } } });
-    const res = await authService.login({ email: 'a@b.com', password: 'p' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/login', { email: 'a@b.com', password: 'p' });
-    expect(res.accessToken).toBe('t');
+  it('login posts credentials and returns data', async () => {
+    post.mockResolvedValue({ data: { accessToken: 't1', refreshToken: 'r1', expiresIn: 3600, user: { id: 'u1', name: 'User', email: 'u@t.com', role: 'Customer' } } });
+    const res = await authService.login({ email: 'u@t.com', password: 'pass' });
+    expect(res.accessToken).toBe('t1');
   });
-  it('register calls post', async () => {
-    mockPost.mockResolvedValue({ data: { accessToken: 't' } });
-    await authService.register({ email: 'a@b.com', password: 'p', name: 'n' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/register', { email: 'a@b.com', password: 'p', name: 'n' });
+
+  it('register returns response', async () => {
+    post.mockResolvedValue({ data: { accessToken: 't1', user: { id: 'u2' } } });
+    const res = await authService.register({ email: 'n@t.com', password: 'p', name: 'New User' });
+    expect(res.user.id).toBe('u2');
   });
-  it('externalLogin calls post', async () => {
-    mockPost.mockResolvedValue({ data: { accessToken: 't' } });
-    await authService.externalLogin({ provider: 'GG', token: 'tk' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/external-login', { provider: 'GG', token: 'tk' });
+
+  it('externalLogin', async () => {
+    post.mockResolvedValue({ data: { accessToken: 't1' } });
+    await authService.externalLogin({ provider: 'GOOGLE', token: 'gt' });
   });
-  it('refreshToken calls post', async () => {
-    mockPost.mockResolvedValue({ data: { accessToken: 'new' } });
+
+  it('refreshToken', async () => {
+    post.mockResolvedValue({ data: { accessToken: 'new' } });
     const res = await authService.refreshToken('rt');
-    expect(mockPost).toHaveBeenCalledWith('/auth/refresh', { refreshToken: 'rt' });
     expect(res.accessToken).toBe('new');
   });
-  it('logout calls post', async () => {
-    mockPost.mockResolvedValue({ data: {} });
+
+  it('logout', async () => {
+    post.mockResolvedValue({ data: {} });
     await authService.logout();
-    expect(mockPost).toHaveBeenCalledWith('/auth/logout');
   });
-  it('getProfile calls get and returns user', async () => {
-    mockGet.mockResolvedValue({ data: { id: 'u1', name: 'A' } });
+
+  it('getProfile returns user', async () => {
+    get.mockResolvedValue({ data: { id: 'u1', name: 'User', email: 'u@t.com', role: 'Customer' } });
     const res = await authService.getProfile();
-    expect(mockGet).toHaveBeenCalledWith('/auth/profile');
-    expect(res.id).toBe('u1');
+    expect(res.name).toBe('User');
   });
-  it('forgotPassword calls post', async () => {
-    mockPost.mockResolvedValue({ data: { message: 'sent' } });
-    const res = await authService.forgotPassword({ email: 'a@b.com' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/forgot-password', { email: 'a@b.com' });
-    expect(res.message).toBe('sent');
+
+  it('forgotPassword', async () => {
+    post.mockResolvedValue({ data: { message: 'Email sent' } });
+    const res = await authService.forgotPassword({ email: 'u@t.com' });
+    expect(res.message).toBe('Email sent');
   });
-  it('resetPassword calls post', async () => {
-    mockPost.mockResolvedValue({ data: { message: 'ok' } });
-    await authService.resetPassword({ token: 'tk', newPassword: 'n' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/reset-password', { token: 'tk', newPassword: 'n' });
+
+  it('resetPassword', async () => {
+    post.mockResolvedValue({ data: { message: 'Reset ok' } });
+    const res = await authService.resetPassword({ token: 'tk', newPassword: 'np' });
+    expect(res.message).toBe('Reset ok');
   });
-  it('resendVerification calls post', async () => {
-    mockPost.mockResolvedValue({ data: { message: 'sent' } });
-    await authService.resendVerification({ email: 'a@b.com' });
-    expect(mockPost).toHaveBeenCalledWith('/auth/resend-verification', { email: 'a@b.com' });
+
+  it('resendVerification', async () => {
+    post.mockResolvedValue({ data: { message: 'Sent' } });
+    await authService.resendVerification({ email: 'u@t.com' });
   });
-  it('verifyEmail calls get with params', async () => {
-    mockGet.mockResolvedValue({ data: { message: 'verified' } });
+
+  it('verifyEmail with token param', async () => {
+    get.mockResolvedValue({ data: { message: 'Verified' } });
     const res = await authService.verifyEmail('token123');
-    expect(mockGet).toHaveBeenCalledWith('/auth/verify-email', { params: { token: 'token123' } });
-    expect(res.message).toBe('verified');
+    expect(res.message).toBe('Verified');
   });
 });

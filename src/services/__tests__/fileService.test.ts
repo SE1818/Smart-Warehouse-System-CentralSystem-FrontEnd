@@ -1,32 +1,49 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const apiClient = { post: vi.fn() as any };
+vi.mock('@/services/api', () => ({
+  __esModule: true,
+  default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+}));
 
-vi.mock('@/services/api', () => ({ __esModule: true, default: apiClient }));
-
+import apiClient from '@/services/api';
 import { fileService } from '@/services/file';
 
-const { post } = apiClient;
+const get = apiClient.get as ReturnType<typeof vi.fn>;
+const post = apiClient.post as ReturnType<typeof vi.fn>;
+const del = apiClient.delete as ReturnType<typeof vi.fn>;
 
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('fileService', () => {
-  it('uploadFile posts file with key', async () => {
+  it('uploadFile with default subFolder returns url', async () => {
     post.mockResolvedValue({ data: { url: 'https://s3/x' } });
-    const file = new File(['x'], 'test.png', { type: 'image/png' }) as any;
-    fileService.uploadFile(file, 'products');
-    expect(post.mock.calls.length).toBeGreaterThanOrEqual(0);
+    const file = new File(['x'], 't.png', { type: 'image/png' });
+    const res = await fileService.uploadFile(file);
+    expect(res.url).toBe('https://s3/x');
   });
-
-  it('deleteFile posts delete request', async () => {
-    post.mockResolvedValue({ data: {} });
-    await (fileService as any).deleteFile('file-key-123');
-    expect(post).toHaveBeenCalled();
+  it('uploadProductImage returns url', async () => {
+    post.mockResolvedValue({ data: { url: 'https://s3/prod' } });
+    const res = await fileService.uploadProductImage(new File(['x'], 'p.png', { type: 'image/png' }));
+    expect(res.url).toBe('https://s3/prod');
   });
-
-  it('getPresignedUrl gets download URL', async () => {
-    post.mockResolvedValue({ data: { url: 'https://s3/dl' } });
-    const res = await (fileService as any).getPresignedUrl('file-key-123');
-    expect(res.url).toBe('https://s3/dl');
+  it('uploadReceipt returns url', async () => {
+    post.mockResolvedValue({ data: { url: 'https://s3/rec' } });
+    const res = await fileService.uploadReceipt(new File(['r'], 'rec.pdf', { type: 'application/pdf' }));
+    expect(res.url).toBe('https://s3/rec');
+  });
+  it('uploadAvatar returns url', async () => {
+    post.mockResolvedValue({ data: { url: 'https://s3/av' } });
+    const res = await fileService.uploadAvatar(new File(['a'], 'av.png', { type: 'image/png' }));
+    expect(res.url).toBe('https://s3/av');
+  });
+  it('listFiles returns array', async () => {
+    get.mockResolvedValue({ data: [] });
+    await fileService.listFiles();
+    expect(get).toHaveBeenCalled();
+  });
+  it('deleteFile uses delete with body', async () => {
+    del.mockResolvedValue({ data: {} });
+    await fileService.deleteFile('https://s3/key');
+    expect(del).toHaveBeenCalled();
   });
 });
