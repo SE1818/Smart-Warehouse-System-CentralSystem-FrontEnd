@@ -200,7 +200,7 @@ export function TransferDetailDrawer({ transferId, onClose, onCancel }: Transfer
 
                 {audit.responses.length === 0 && (
                   <p className="text-xs text-slate-500 italic text-center py-4">
-                    // Đang đợi nhận dữ liệu telemetry từ robot...
+                    {/* Đang đợi nhận dữ liệu telemetry từ robot... */}
                   </p>
                 )}
               </div>

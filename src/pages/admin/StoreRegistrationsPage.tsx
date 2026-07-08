@@ -358,10 +358,14 @@ export function StoreRegistrationsPage() {
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => { setRejectingReg(null); setRejectionReason(''); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setRejectingReg(null); setRejectionReason(''); } }}
+          role="dialog"
+          aria-modal="true"
         >
           <div
             className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setRejectingReg(null); setRejectionReason(''); } }}
           >
             {/* Modal Header */}
             <div className="px-6 py-4 flex items-center justify-between border-b border-slate-100">

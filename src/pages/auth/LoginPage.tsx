@@ -101,7 +101,7 @@ export function LoginPage() {
               name: (res.email || '').split('@')[0] || 'Nhân viên',
               email: res.email || ''
             }));
-            navigate(res.role === 'admin' || res.role === 'admin' || res.role === 'Admin' ? '/admin/dashboard' : '/');
+            navigate(res.role === 'admin' || res.role === 'Admin' ? '/admin/dashboard' : '/');
           } catch (err) {
             console.error('Google login error:', err);
             const apiError = err as { response?: { data?: { message?: string } } };
@@ -184,7 +184,7 @@ export function LoginPage() {
         name: email.split('@')[0] || 'Nhân viên',
         email: email
       }));
-      const isAdmin = res.role === 'admin' || res.role === 'admin' || res.role === 'Admin' || res.role === 'store_manager';
+      const isAdmin = res.role === 'admin' || res.role === 'Admin' || res.role === 'store_manager';
       navigate(isAdmin ? '/admin/dashboard' : '/');
     } catch (err) {
       console.error('API error during login', err);
