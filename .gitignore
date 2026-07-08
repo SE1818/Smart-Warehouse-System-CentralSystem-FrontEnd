@@ -25,6 +25,9 @@ npm-debug.log*
 .history/
 .DS_Store
 
+# Test / coverage artifacts
+coverage/
+
 # Temporary files
 tmp/
 temp/

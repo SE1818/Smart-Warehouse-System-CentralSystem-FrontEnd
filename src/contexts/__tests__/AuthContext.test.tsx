@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, act as rtlAct } from '@testing-library/react';
-import { useEffect, useContext } from 'react';
-import { AuthProvider, AuthContext } from '@/contexts/AuthContext';
+import { render, act, waitFor } from '@testing-library/react';
+import { AuthProvider, AuthContext, AuthContextType } from '@/contexts/AuthContext';
 import { authService } from '@/services/auth';
-import type { AuthContextType } from '@/contexts/AuthContext';
+import type { User } from '@/types/auth';
+import { useContext, useEffect, useState } from 'react';
 
 // Per-test stub setup — direct assignment (no vi.mock ESM issues)
 function setupStubs(opts?: {
@@ -33,38 +33,85 @@ function restoreStubs() {
   authService.getProfile = vi.fn();
 }
 
-// Consumer using useContext for React 19 (no context.Consumer).
-// useEffect is always called regardless of context value (hooks rules).
-function TestConsumer({
-  onReady,
-}: {
-  onReady: (ctx: AuthContextType) => void;
-}) {
-  const ctx = useContext(AuthContext);
-  // Inside AuthProvider, ctx is never null (the default only applies outside provider).
-  // No dependency array: re-run after every render so late-arriving
-  // context values (after AuthProvider's setTimeout) are always captured.
-  useEffect(() => {
-    onReady(ctx!);
-  });
-  return null;
+// Helper: get the context value synchronously from a mounted consumer.
+function getContext(container: HTMLElement): AuthContextType {
+  // Trigger a re-render by mutating a tracked state in a descendant.
+  // We read context via a rendered function component using direct call.
+  // The simplest approach: render with a consumer that calls a ref-setter.
+  let ctxVal: AuthContextType | null = null;
+  const setter = (v: AuthContextType) => { ctxVal = v; };
+
+  function Consumer({ onReady }: { onReady: (v: AuthContextType) => void }) {
+    const ctx = useContext(AuthContext);
+    // Only fire when loading is false (settled) or null (initial render)
+    if (ctx && !ctx.loading) {
+      onReady(ctx);
+    }
+    return null;
+  }
+
+  render(<Consumer onReady={setter} />, { container });
+  if (!ctxVal) {
+    throw new Error('Context not yet settled — use waitSettledAuth() instead');
+  }
+  return ctxVal;
 }
 
-// Helper: mount AuthProvider, wait for loading=false, then return the context
+// Helper: mount inside AuthProvider and wait for loading=false.
+// Returns an object with context value and an inner query function.
 async function settleAuth(): Promise<AuthContextType> {
-  let ctxHolder: AuthContextType | null = null;
+  function Consumer({ onReady }: { onReady: (v: AuthContextType) => void }) {
+    const ctx = useContext(AuthContext);
+    if (ctx && !ctx.loading) {
+      onReady(ctx);
+    }
+    return null;
+  }
+
+  const holder: { ctx: AuthContextType | null } = { ctx: null };
+  const { container } = render(
+    <AuthProvider>
+      <Consumer onReady={(c) => { holder.ctx = c; }} />
+    </AuthProvider>,
+  );
+
+  // Flush the AuthProvider's setTimeout(0) + all micro-tasks
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 100));
+  });
+
+  if (!holder.ctx) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 100));
+    });
+  }
+
+  if (!holder.ctx) {
+    throw new Error('AuthContext did not settle to loading=false within ' +
+      'the expected time. Check AuthProvider implementation.');
+  }
+
+  // Cleanup all rendered elements (including the Consumer)
+  container.innerHTML = '';
+  return holder.ctx;
+}
+
+// Queries the context synchronously for the "loading=true" check:
+// renders only the Consumer (not full tree) — reads context synchronously.
+function getLoadingState(): { loading: boolean; user: User | null } {
+  let captured: { loading: boolean; user: User | null } | null = null;
+  function Consumer() {
+    const ctx = useContext(AuthContext);
+    captured = { loading: ctx?.loading ?? false, user: ctx?.user ?? null };
+    return null;
+  }
   render(
     <AuthProvider>
-      <TestConsumer
-        onReady={(c) => {
-          if (!c.loading) ctxHolder = c;
-        }}
-      />
-    </AuthProvider>
+      <Consumer />
+    </AuthProvider>,
   );
-  // Give the setTimeout(0) inside AuthProvider time to flip loading to false
-  await new Promise((r) => setTimeout(r, 80));
-  return ctxHolder!;
+  if (!captured) throw new Error('Consumer did not render');
+  return captured;
 }
 
 describe('AuthContext', () => {
@@ -78,19 +125,9 @@ describe('AuthContext', () => {
   // ─── Initialization ──────────────────────────────────────────────────────
 
   it('loading=true immediately after mount', async () => {
-    let captured: { loading: boolean; user: unknown } | null = null;
-    render(
-      <AuthProvider>
-        <TestConsumer
-          onReady={(c) => {
-            captured = { loading: c.loading, user: c.user };
-          }}
-        />
-      </AuthProvider>
-    );
-    expect(captured).not.toBeNull();
-    expect(captured!.loading).toBe(true);
-    expect(captured!.user).toBeNull();
+    const state = getLoadingState();
+    expect(state.loading).toBe(true);
+    expect(state.user).toBeNull();
   });
 
   it('settles to loading=false with user=null when localStorage is empty', async () => {
@@ -101,7 +138,7 @@ describe('AuthContext', () => {
   it('restores user from localStorage when valid JSON is stored', async () => {
     localStorage.setItem(
       'user',
-      JSON.stringify({ id: '42', username: 'restored', email: 'r@t.com', role: 'Admin', isActive: true, createdAt: '' })
+      JSON.stringify({ id: '42', username: 'restored', email: 'r@t.com', role: 'Admin', isActive: true, createdAt: '' }),
     );
     const ctx = await settleAuth();
     expect(ctx.user).not.toBeNull();
@@ -123,9 +160,11 @@ describe('AuthContext', () => {
       profile: { id: '99', username: 'loginuser', email: 'lo@t.com', role: 'Admin', isActive: true, createdAt: '' },
     });
     const ctx = await settleAuth();
-    await rtlAct(async () => {
+
+    await act(async () => {
       await ctx.login('test@example.com', 'password123');
     });
+
     expect(authService.login).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password123' });
     expect(authService.getProfile).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBe('at-l');
@@ -139,9 +178,11 @@ describe('AuthContext', () => {
       profile: { id: '55', username: 'reguser', email: 're@t.com', role: 'User', isActive: true, createdAt: '' },
     });
     const ctx = await settleAuth();
-    await rtlAct(async () => {
+
+    await act(async () => {
       await ctx.register('newuser', 'new@t.com', 'SecurePass1!');
     });
+
     expect(authService.register).toHaveBeenCalledWith({
       username: 'newuser',
       email: 'new@t.com',
@@ -160,9 +201,10 @@ describe('AuthContext', () => {
     localStorage.setItem('user', JSON.stringify(user));
 
     const ctx = await settleAuth();
-    await rtlAct(async () => {
+    await act(async () => {
       await ctx.logout();
     });
+
     expect(authService.logout).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
@@ -175,9 +217,12 @@ describe('AuthContext', () => {
     localStorage.setItem('user', JSON.stringify(user));
 
     const ctx = await settleAuth();
-    await rtlAct(async () => {
-      try { await ctx.logout(); } catch { /* expected */ }
+    await act(async () => {
+      try {
+        await ctx.logout();
+      } catch { /* expected */ }
     });
+
     expect(authService.logout).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
@@ -192,9 +237,10 @@ describe('AuthContext', () => {
     }));
 
     const ctx = await settleAuth();
-    await rtlAct(async () => {
+    await act(async () => {
       await ctx.refreshUser();
     });
+
     expect(authService.getProfile).toHaveBeenCalled();
     const stored = JSON.parse(localStorage.getItem('user')!);
     expect(stored.username).toBe('refreshed');
@@ -211,9 +257,12 @@ describe('AuthContext', () => {
     localStorage.setItem('user', JSON.stringify(user));
 
     const ctx = await settleAuth();
-    await rtlAct(async () => {
-      try { await ctx.refreshUser(); } catch { /* expected */ }
+    await act(async () => {
+      try {
+        await ctx.refreshUser();
+      } catch { /* expected */ }
     });
+
     expect(authService.getProfile).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
