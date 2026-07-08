@@ -29,7 +29,7 @@ export function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({
+  const [newProduct, setNewProduct] = useState<Partial<Product> & { _pendingImage?: File }>({
     sku: '',
     name: '',
     category: 'Đồ uống',
@@ -109,7 +109,7 @@ export function ProductsPage() {
         unit: newProduct.unit || 'chiếc'
       });
 
-      const pendingFile = (newProduct as any)?._pendingImage as File | undefined;
+      const pendingFile = newProduct._pendingImage;
       if (pendingFile) {
         try {
           const uploadResult = await productService.uploadImage(created.id, pendingFile);
@@ -278,7 +278,7 @@ export function ProductsPage() {
                             alt={p.name}
                             className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
                             loading="lazy"
-                      onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
+                      onError={() => setImageErrors(prev => ({ ...prev, [editingProduct.id]: true }))}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
@@ -441,7 +441,7 @@ export function ProductsPage() {
                         src={resolveImageUrl(editingProduct.imageUrl)}
                         alt="Preview"
                         className="w-16 h-16 rounded-lg object-cover border border-slate-200"
-                  onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
+                  onError={() => setImageErrors(prev => ({ ...prev, [editingProduct.id]: true }))}
                       />
                     </div>
                   )}
@@ -602,7 +602,7 @@ export function ProductsPage() {
                       Tải ảnh lên
                     </button>
                     <span className="text-xs text-slate-400 self-center">
-                      {(newProduct as any)?._pendingImage ? (newProduct as any)._pendingImage.name : 'Chưa chọn ảnh'}
+                      {newProduct._pendingImage ? newProduct._pendingImage.name : 'Chưa chọn ảnh'}
                     </span>
                   </div>
                 </div>

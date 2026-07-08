@@ -7,7 +7,7 @@ import type {
   CreateFlashSaleRequest,
   FlashSaleProductItem,
 } from '../types/promotion';
-import type { Product } from '@/types/stock';
+import type { Product } from '@/types';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
 import { CustomSelect } from '@/components/CustomSelect';
