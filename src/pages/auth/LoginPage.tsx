@@ -6,10 +6,6 @@ import { Icons } from '@/components/Icons';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-if (!GOOGLE_CLIENT_ID) {
-  throw new Error('VITE_GOOGLE_CLIENT_ID is not set in .env');
-}
-
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
