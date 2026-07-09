@@ -22,8 +22,8 @@ describe('searchService', () => {
 
   it('indexProduct posts product data', async () => {
     mockPost.mockResolvedValue({ data: { success: true, message: 'Indexed' } });
-    await searchService.indexProduct({ id: 'p1', name: 'Phone', description: 'Smart' });
-    expect(mockPost).toHaveBeenCalledWith('/v1/search/products/index', { id: 'p1', name: 'Phone', description: 'Smart' });
+    await searchService.indexProduct({ id: 'p1', sku: 'SKU-1', name: 'Phone', description: 'Smart', price: 100, stockQuantity: 50 });
+    expect(mockPost).toHaveBeenCalledWith('/v1/search/products/index', { id: 'p1', sku: 'SKU-1', name: 'Phone', description: 'Smart', price: 100, stockQuantity: 50 });
   });
 
   it('askWarehouseAssistant posts question', async () => {

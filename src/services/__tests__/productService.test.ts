@@ -24,7 +24,7 @@ describe('productService', () => {
 
   it('createProduct returns created (with stockQuantity)', async () => {
     post.mockResolvedValue({ data: { id: 'p1', name: 'New', category: 'cat', stockQuantity: 5 } });
-    const res = await productService.createProduct({ name: 'New', price: 10, category: 'cat', image: 'img', description: 'desc', sku: 'SKU-001', stockQuantity: 5, unit: 'pcs' });
+    const res = await productService.createProduct({ name: 'New', price: 10, category: 'cat', imageUrl: 'img', description: 'desc', sku: 'SKU-001', stockQuantity: 5, unit: 'pcs' });
     expect(res.id).toBe('p1');
   });
 

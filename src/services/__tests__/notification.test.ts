@@ -34,8 +34,8 @@ describe('notificationService', () => {
 
   it('sendNotification posts data', async () => {
     mockPost.mockResolvedValue({ data: { id: 'n1', message: 'Hello' } });
-    const res = await notificationService.sendNotification({ userId: 'u1', title: 'Hi', message: 'Hello' });
+    const res = await notificationService.sendNotification({ userId: 'u1', title: 'Hi', message: 'Hello', type: 'InApp' });
     expect(res.id).toBe('n1');
-    expect(mockPost).toHaveBeenCalledWith('/v1/notifications', { userId: 'u1', title: 'Hi', message: 'Hello' });
+    expect(mockPost).toHaveBeenCalledWith('/v1/notifications', { userId: 'u1', title: 'Hi', message: 'Hello', type: 'InApp' });
   });
 });

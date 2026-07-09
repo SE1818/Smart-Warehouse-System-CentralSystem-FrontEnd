@@ -196,6 +196,9 @@ export function StoresPage() {
         <div
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedStore(null)}
+          onKeyDown={(e) => { if (e.key === "Escape") setSelectedStore(null); }}
+          role="button"
+          tabIndex={0}
         >
           <div
             className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden"

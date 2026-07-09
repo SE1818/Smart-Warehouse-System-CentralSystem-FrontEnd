@@ -126,11 +126,11 @@ export function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-55 text-slate-800 font-sans p-6 md:p-10 space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
       {/* Header */}
       <div className="border-b border-slate-200/80 pb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <Icons.Bell className="w-8 h-8 text-brand-600" />
             <span>Quản lý Thông báo</span>
           </h1>
@@ -142,9 +142,9 @@ export function NotificationsPage() {
           <button
             onClick={fetchNotifications}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 hover:border-slate-300 transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
           >
-            <Icons.Refresh className={`w-4 h-4 text-slate-550 ${loading ? 'animate-spin' : ''}`} />
+            <Icons.Refresh className={`w-4 h-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
             <span>Làm mới</span>
           </button>
           <button
@@ -164,7 +164,7 @@ export function NotificationsPage() {
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Tổng thông báo</p>
             <h3 className="text-2xl font-black text-slate-800 mt-1">{stats.total}</h3>
           </div>
-          <div className="p-3 bg-brand-55 rounded-xl">
+          <div className="p-3 bg-brand-50 rounded-xl">
             <Icons.Bell className="w-6 h-6 text-brand-600" />
           </div>
         </div>
@@ -279,28 +279,28 @@ export function NotificationsPage() {
             <div
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-300 ease-in-out"
               onClick={() => setIsModalOpen(false)}
-        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
-        role="button"
-        tabIndex={0}
-        aria-label="��ng modal g?i th�ng b�o"
+              onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
+              role="button"
+              tabIndex={0}
+              aria-label="Đóng modal gửi thông báo"
             />
 
             <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
               <div className="pointer-events-auto w-screen max-w-md transform transition-transform duration-300 ease-in-out">
                 <div className="flex h-full flex-col overflow-y-scroll bg-white shadow-2xl border-l border-slate-200">
                   {/* Form Header */}
-                  <div className="bg-slate-55 px-6 py-6 border-b border-slate-150 flex items-center justify-between">
+                  <div className="bg-slate-100 px-6 py-6 border-b border-slate-200 flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-bold text-slate-900" id="slide-over-title">Gửi thông báo mới</h2>
                       <p className="mt-1 text-xs text-slate-500">Soạn thảo và gửi thông báo trực tiếp đến người dùng</p>
                     </div>
                     <button
                       onClick={() => setIsModalOpen(false)}
-        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
-        role="button"
-        tabIndex={0}
-        aria-label="��ng modal g?i th�ng b�o"
-                      className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-655 transition-all cursor-pointer"
+                      onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Đóng modal gửi thông báo"
+                      className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all cursor-pointer"
                     >
                       <Icons.Close className="w-5 h-5" />
                     </button>
@@ -309,22 +309,22 @@ export function NotificationsPage() {
                   {/* Form Body */}
                   <form onSubmit={handleSendNotification} className="flex-1 px-6 py-6 space-y-6">
                     {sendSuccess && (
-                      <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
+                      <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2 shadow-sm">
                         <Icons.Check className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>{sendSuccess}</span>
                       </div>
                     )}
 
                     {sendError && (
-                      <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2 shadow-xs">
-                        <Icons.AlertWarning className="w-4 h-4 text-rose-650 shrink-0" />
+                      <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2 shadow-sm">
+                        <Icons.AlertWarning className="w-4 h-4 text-rose-600 shrink-0" />
                         <span>{sendError}</span>
                       </div>
                     )}
 
                     {/* Target Selection */}
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-605 uppercase tracking-wider">Đối tượng nhận</label>
+                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Đối tượng nhận</label>
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
@@ -383,7 +383,7 @@ export function NotificationsPage() {
                                 : 'border-slate-100 bg-slate-50 hover:border-slate-200 text-slate-600'
                             }`}
                           >
-                            {type === 'InApp' ? 'In-App App' : type}
+                            {type}
                           </button>
                         ))}
                       </div>
@@ -404,7 +404,7 @@ export function NotificationsPage() {
 
                     {/* Message */}
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-605">Nội dung thông báo</label>
+                      <label className="text-xs font-bold text-slate-600">Nội dung thông báo</label>
                       <textarea
                         required
                         rows={4}
@@ -420,10 +420,10 @@ export function NotificationsPage() {
                       <button
                         type="button"
                         onClick={() => setIsModalOpen(false)}
-        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
-        role="button"
-        tabIndex={0}
-        aria-label="��ng modal g?i th�ng b�o"
+                        onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') setIsModalOpen(false); }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Đóng modal gửi thông báo"
                         className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
                       >
                         Hủy

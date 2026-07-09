@@ -1,31 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // vitest hoists `vi.mock` calls to the top of the file, so `mockCreate`
-// must already exist in scope when the factory closure runs.
+// and the captured handlers must already exist in scope when the factory closure runs.
 // eslint-disable-next-line no-var
 var mockCreate: ReturnType<typeof vi.fn>;
-const createArgs: unknown[][] = [];
+// Captured interceptor callbacks from axios.create().interceptors.request/response.use()
+let capturedRequestHandler: ((config: Record<string, unknown>) => Record<string, unknown>) | null = null;
+let capturedResponseHandler: ((error: unknown) => Promise<unknown>) | null = null;
 
 vi.mock('axios', () => {
-  mockCreate = vi.fn((config: Record<string, unknown>) => {
-    createArgs.push([config]);
-    return {
-      defaults: config as Record<string, unknown>,
-      interceptors: {
-        request: { use: vi.fn(() => 0) },
-        response: { use: vi.fn(() => 0) },
+  mockCreate = vi.fn((config: Record<string, unknown>) => ({
+    defaults: config as Record<string, unknown>,
+    interceptors: {
+      request: {
+        use: vi.fn((handler: (config: Record<string, unknown>) => Record<string, unknown>) => {
+          capturedRequestHandler = handler;
+          return 0;
+        }),
       },
-      post: vi.fn(),
-      get: vi.fn(),
-    };
-  });
+      response: {
+        use: vi.fn((handler: (error: unknown) => Promise<unknown>) => {
+          capturedResponseHandler = handler;
+          return 0;
+        }),
+      },
+    },
+    post: vi.fn(),
+    get: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  }));
 
   return { default: { create: mockCreate } };
 });
 
 describe('services/api.ts', () => {
   beforeEach(() => {
-    createArgs.length = 0;
+    capturedRequestHandler = null;
+    capturedResponseHandler = null;
     vi.clearAllMocks();
     localStorage.clear();
     vi.resetModules();
@@ -45,79 +57,71 @@ describe('services/api.ts', () => {
 
   it('calls axios.create with the correct default headers', async () => {
     await import('@/services/api');
-    const cfg = createArgs[0][0] as Record<string, Record<string, string>>;
+    const cfg = (mockCreate.mock.calls[0][0] as Record<string, Record<string, string>>);
     expect(cfg.headers['Content-Type']).toBe('application/json');
     expect(cfg.headers['ngrok-skip-browser-warning']).toBe('true');
   });
 
   // ── Request interceptor body (src/services/api.ts lines 17-23) ────────
 
-  it('adds Authorization: Bearer <token> when token is in localStorage', () => {
+  it('adds Authorization: Bearer token when token is in localStorage', async () => {
+    localStorage.removeItem('authToken');
+    await import('@/services/api');
+    expect(capturedRequestHandler).not.toBeNull();
+
     localStorage.setItem('authToken', 'test-jwt-token');
-    let result: string | undefined;
-    {
-      const config: Record<string, Record<string, string>> = { headers: {} };
-      const token = localStorage.getItem('authToken');
-      if (token) config.headers['Authorization'] = `Bearer ${token}`;
-      result = config.headers['Authorization'];
-    }
-    expect(result).toBe('Bearer test-jwt-token');
-    localStorage.removeItem('authToken');
+    const config: Record<string, Record<string, string>> = { headers: {} };
+    capturedRequestHandler!(config);
+
+    expect(config.headers['Authorization']).toBe('Bearer test-jwt-token');
   });
 
-  it('does NOT add Authorization when localStorage has no token', () => {
+  it('does NOT add Authorization when localStorage has no token', async () => {
     localStorage.removeItem('authToken');
-    let result: string | undefined;
-    {
-      const config: Record<string, Record<string, string>> = { headers: {} };
-      const token = localStorage.getItem('authToken');
-      if (token) config.headers['Authorization'] = `Bearer ${token}`;
-      result = config.headers['Authorization'];
-    }
-    expect(result).toBeUndefined();
+    await import('@/services/api');
+    expect(capturedRequestHandler).not.toBeNull();
+
+    const config: Record<string, Record<string, string>> = { headers: {} };
+    capturedRequestHandler!(config);
+
+    expect(config.headers['Authorization']).toBeUndefined();
   });
 
-  // ── Response interceptor body (src/services/api.ts lines 26-36) ───────
+  // ── Response interceptor body (src/services/api.ts lines 26-36) ────────
 
-  it('clears localStorage on 401', () => {
-    localStorage.setItem('authToken', 'to-clear');
-    localStorage.setItem('user', '{"id":"42"}');
-    {
-      const error: unknown = { response: { status: 401 } };
-      if ((error as Record<string, { status?: number }>).response?.status === 401) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        // redirect: window.location.href = '/login'
-      }
-    }
-    expect(localStorage.getItem('authToken')).toBeNull();
+  it('clears localStorage on 401 response', async () => {
+    await import('@/services/api');
+    expect(capturedResponseHandler).not.toBeNull();
+
+    const error401: unknown = { response: { status: 401, data: {} } };
+    void capturedResponseHandler!(error401);
+
+  expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
   });
 
-  it('preserves localStorage on 500', () => {
+  it('preserves localStorage on 500 error', async () => {
     localStorage.setItem('authToken', 'safe');
     localStorage.setItem('user', '{"id":"42"}');
-    {
-      const error: unknown = { response: { status: 500, data: {} } };
-      if ((error as Record<string, { status?: number }>).response?.status === 401) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-      }
-    }
+    await import('@/services/api');
+    expect(capturedResponseHandler).not.toBeNull();
+
+    const error500: unknown = { response: { status: 500, data: {} } };
+    capturedResponseHandler!(error500);
+
     expect(localStorage.getItem('authToken')).toBe('safe');
     expect(localStorage.getItem('user')).toBe('{"id":"42"}');
   });
 
-  it('preserves localStorage on network error (no .response)', () => {
+  it('preserves localStorage on network error (no .response)', async () => {
     localStorage.setItem('authToken', 'preserved');
     localStorage.setItem('user', '{"id":"42"}');
-    {
-      const error: unknown = { request: {} };
-      if ((error as Record<string, { status?: number }>).response?.status === 401) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-      }
-    }
+    await import('@/services/api');
+    expect(capturedResponseHandler).not.toBeNull();
+
+    const error: unknown = { request: {} };
+    capturedResponseHandler!(error);
+
     expect(localStorage.getItem('authToken')).toBe('preserved');
     expect(localStorage.getItem('user')).toBe('{"id":"42"}');
   });
