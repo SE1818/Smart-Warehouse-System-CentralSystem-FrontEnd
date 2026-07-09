@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, act as rtlAct } from '@testing-library/react';
-import { useEffect, useContext, useRef } from 'react';
+import { useEffect, useContext } from 'react';
 import { AuthProvider, AuthContext } from '@/contexts/AuthContext';
 import { authService } from '@/services/auth';
 import type { AuthContextType } from '@/contexts/AuthContext';
@@ -63,7 +63,7 @@ function TestConsumer({
 async function settleAuth(): Promise<AuthContextType> {
   let ctxHolder: AuthContextType | null = null;
 
-  const { unmount } = render(
+  render(
     <AuthProvider>
       <TestConsumer
         onReady={(c) => {
