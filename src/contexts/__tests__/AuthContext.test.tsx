@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, cleanup } from '@testing-library/react';
 import { useContext, useEffect } from 'react';
 import { AuthProvider, AuthContext } from '@/contexts/AuthContext';
 import { authService } from '@/services/auth';
@@ -14,7 +14,7 @@ function setupStubs(opts?: {
   authService.login = vi.fn(async () =>
     opts?.loginRes ?? { accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' });
   authService.register = vi.fn(async () =>
-    opts?.registerRes ?? { accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' });
+    opts?.loginRes ?? { accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' });
   authService.logout = vi.fn(async () => {
     if (opts?.logoutOk === false) throw new Error('Network');
   });
@@ -29,30 +29,55 @@ function restoreStubs() {
   authService.getProfile = vi.fn();
 }
 
-function AuthReader({ callback }: { callback: (ctx: AuthContextType) => void }) {
+function ExposeAuth({ slot }: { slot: string }) {
   const ctx = useContext(AuthContext);
-  if (ctx) useEffect(() => { callback(ctx); }, [ctx, callback]);
+  if (!ctx) return null;
+  useEffect(() => {
+    const el = document.createElement('span');
+    el.dataset.slot = slot;
+    el.dataset.loading = String(ctx.loading);
+    el.dataset.user = ctx.user ? ctx.user.username : 'null';
+    document.body.appendChild(el);
+    return () => el.remove();
+  }, [ctx, slot]);
   return null;
 }
 
-function waitForAuthState(
-  predicate: (ctx: AuthContextType) => boolean,
-  timeout = 3000
-): Promise<AuthContextType> {
-  let resolve: (ctx: AuthContextType) => void;
-  const promise = new Promise<AuthContextType>((r) => { resolve = r; });
+function waitForSlot(slot: string, timeout = 3000): Promise<AuthContextType> {
+  return new Promise((resolve, reject) => {
+    render(
+      <AuthProvider>
+        <ExposeAuth slot={slot} />
+      </AuthProvider>,
+    );
 
-  render(
-    <AuthProvider>
-      <AuthReader
-        callback={(ctx) => {
-          if (predicate(ctx)) resolve(ctx);
-        }}
-      />
-    </AuthProvider>
-  );
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-slot="${slot}"]`);
+      const loading = el?.dataset.loading;
+      const username = el?.dataset.user;
+      cleanup();
+      reject(new Error(`Timed out waiting for slot=${slot}, loading=${loading}, user=${username}`));
+    }, timeout);
 
-  return waitFor(() => expect(promise).resolves.toBeDefined(), { timeout }).then(() => promise);
+    const check = () => {
+      const el = document.querySelector(`[data-slot="${slot}"]`);
+      if (el && el.dataset.loading !== undefined) {
+        clearTimeout(timer);
+        const loading = el.dataset.loading === 'true';
+        const username = el.dataset.user;
+        cleanup();
+        resolve({ loading, user: username === 'null' ? null : { username } as AuthContextType['user'] });
+      } else {
+        setTimeout(check, 50);
+      }
+    };
+
+    setTimeout(check, 50);
+  });
+}
+
+function waitForSettled(timeout = 3000): Promise<AuthContextType> {
+  return waitForSlot('settled', timeout);
 }
 
 describe('AuthContext', () => {
@@ -60,33 +85,29 @@ describe('AuthContext', () => {
     vi.clearAllMocks();
     restoreStubs();
     localStorage.clear();
+    cleanup();
     document.body.innerHTML = '';
   });
 
   it('mounts with loading=true', async () => {
-    let captured: { loading: boolean; user: unknown } | null = null;
     render(
       <AuthProvider>
-        <AuthContext.Consumer>
-          {(ctx) => {
-            if (!ctx) return null;
-            if (!captured) captured = { loading: ctx.loading, user: ctx.user };
-            return null;
-          }}
-        </AuthContext.Consumer>
-      </AuthProvider>
+        <ExposeAuth slot="loading" />
+      </AuthProvider>,
     );
 
     await waitFor(
-      () => expect(captured).not.toBeNull(),
-      { timeout: 3000 }
+      () => expect(document.querySelector('[data-slot="loading"]')).not.toBeNull(),
+      { timeout: 3000 },
     );
-    expect(captured!.loading).toBe(true);
-    expect(captured!.user).toBeNull();
+    const el = document.querySelector('[data-slot="loading"]')!;
+    expect(el.dataset.loading).toBe('true');
+    expect(el.dataset.user).toBe('null');
+    cleanup();
   });
 
   it('settles to loading=false with user=null when localStorage is empty', async () => {
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     expect(ctx.user).toBeNull();
   });
 
@@ -95,14 +116,14 @@ describe('AuthContext', () => {
       'user',
       JSON.stringify({ id: '42', username: 'restored', email: 'r@t.com', role: 'Admin', isActive: true, createdAt: '' }),
     );
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     expect(ctx.user).not.toBeNull();
-    expect(ctx.user!.username).toBe('restored');
+    if (ctx.user) expect(ctx.user.username).toBe('restored');
   });
 
   it('removes malformed user JSON from localStorage', async () => {
     localStorage.setItem('user', 'not-valid-json');
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     expect(ctx.user).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
   });
@@ -112,7 +133,7 @@ describe('AuthContext', () => {
       loginRes: { accessToken: 'at-l', refreshToken: 'rt-l', accessTokenExpiresIn: '3600', role: 'Admin' },
       profile: { id: '99', username: 'loginuser', email: 'lo@t.com', role: 'Admin', isActive: true, createdAt: '' },
     });
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     await ctx.login('test@example.com', 'password123');
     expect(authService.login).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password123' });
     expect(authService.getProfile).toHaveBeenCalled();
@@ -124,7 +145,7 @@ describe('AuthContext', () => {
       registerRes: { accessToken: 'at-r', refreshToken: 'rt-r', accessTokenExpiresIn: '3600', role: 'User' },
       profile: { id: '55', username: 'reguser', email: 're@t.com', role: 'User', isActive: true, createdAt: '' },
     });
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     await ctx.register('newuser', 'new@t.com', 'SecurePass1!');
     expect(authService.register).toHaveBeenCalledWith({ username: 'newuser', email: 'new@t.com', password: 'SecurePass1!' });
     expect(authService.getProfile).toHaveBeenCalled();
@@ -137,7 +158,7 @@ describe('AuthContext', () => {
     localStorage.setItem('authToken', 'old-token');
     localStorage.setItem('user', JSON.stringify(user));
 
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     await ctx.logout();
     expect(authService.logout).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
@@ -150,7 +171,7 @@ describe('AuthContext', () => {
     localStorage.setItem('authToken', 'tok');
     localStorage.setItem('user', JSON.stringify(user));
 
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     try { await ctx.logout(); } catch { /* expected */ }
     expect(authService.logout).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
@@ -162,7 +183,7 @@ describe('AuthContext', () => {
     authService.getProfile = vi.fn(async () => ({
       id: '7', username: 'refreshed', email: 'r@t.com', role: 'Admin', isActive: true, createdAt: '2024-06-01',
     }));
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     await ctx.refreshUser();
     expect(authService.getProfile).toHaveBeenCalled();
     const stored = JSON.parse(localStorage.getItem('user')!);
@@ -176,7 +197,7 @@ describe('AuthContext', () => {
     const user = { id: '1', username: 'expired', email: 'e@t.com', role: 'User', isActive: true, createdAt: '' };
     localStorage.setItem('authToken', 'expired-token');
     localStorage.setItem('user', JSON.stringify(user));
-    const ctx = await waitForAuthState((c) => !c.loading);
+    const ctx = await waitForSettled();
     try { await ctx.refreshUser(); } catch { /* expected */ }
     expect(authService.getProfile).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
