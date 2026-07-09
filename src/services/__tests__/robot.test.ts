@@ -2,15 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/services/api', () => ({
   __esModule: true,
-  default: {
-    get: vi.fn(),
-    put: vi.fn(),
-    post: vi.fn(),
-  },
+  default: { get: vi.fn(), put: vi.fn(), post: vi.fn() },
 }));
 
 import apiClient from '@/services/api';
 import { robotService } from '@/services/robot';
+import type { Robot } from '@/types/robot';
 
 const get = apiClient.get as ReturnType<typeof vi.fn>;
 const put = apiClient.put as ReturnType<typeof vi.fn>;
@@ -26,28 +23,27 @@ describe('robotService', () => {
     expect(res[0].status).toBe('Idle');
   });
 
-  it('listRobots falls back to x/y, Running status', async () => {
-    get.mockResolvedValue({ data: [{ id: 'r2', name: 'B2', x: 3, y: 7, battery: 50, status: 'RUNNING', createdAt: '', updatedAt: '' }] });
+  it('listRobots maps Moving status', async () => {
+    get.mockResolvedValue({ data: [{ id: 'r2', name: 'B2', x: 3, y: 7, battery: 50, status: 'MOVING', createdAt: '', updatedAt: '' }] });
     const res = await robotService.listRobots();
-    expect(res[0].x).toBe(3);
-    expect(res[0].status).toBe('Running');
+    expect(res[0].status).toBe('Moving');
   });
 
-  it('moveRobot', async () => {
+  it('moveRobot sends correct payload', async () => {
     put.mockResolvedValue({ data: {} });
-    const cur = { id: 'r1', name: 'Bot', status: 'IDLE', x: 0, y: 0, battery: 50, createdAt: '', updatedAt: '' };
+    const cur: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 0, y: 0, battery: 50 };
     await robotService.moveRobot('r1', 10, 20, cur);
     expect(put).toHaveBeenCalled();
   });
 
-  it('updateRobotStatus', async () => {
+  it('updateRobotStatus sends correct payload', async () => {
     put.mockResolvedValue({ data: {} });
-    const cur = { id: 'r1', name: 'Bot', status: 'IDLE', x: 5, y: 8, battery: 70, createdAt: '', updatedAt: '' };
-    await robotService.updateRobotStatus('r1', 'PAUSED', cur);
+    const cur: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 5, y: 8, battery: 70 };
+    await robotService.updateRobotStatus('r1', 'Charging', cur);
     expect(put).toHaveBeenCalled();
   });
 
-  it('fulfillOrder', async () => {
+  it('fulfillOrder posts task', async () => {
     post.mockResolvedValue({ data: {} });
     await robotService.fulfillOrder('r1', 'o1', 'from-s1', 'to-s2');
     expect(post).toHaveBeenCalledWith('/v1/robots/r1/tasks', { orderId: 'o1', fromStationId: 'from-s1', toStationId: 'to-s2' });

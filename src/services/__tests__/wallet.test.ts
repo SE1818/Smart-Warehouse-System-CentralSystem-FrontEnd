@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/services/api', () => ({
   __esModule: true,
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-  },
+  default: { get: vi.fn(), post: vi.fn() },
 }));
 
 import apiClient from '@/services/api';
@@ -23,14 +20,14 @@ describe('walletService', () => {
     expect(res.balance).toBe(1000);
   });
 
-  it('getTransactions', async () => {
-    get.mockResolvedValue({ data: [{ id: 't1', type: 'DEPOSIT', amount: 100 }] });
+  it('getTransactions returns transactionType', async () => {
+    get.mockResolvedValue({ data: [{ id: 't1', userId: 'u1', amount: 100, transactionType: 'TopUp', description: 'deposit', createdAt: '2024-01-01' }] });
     const res = await walletService.getTransactions('u1');
-    expect(res[0].type).toBe('DEPOSIT');
+    expect(res[0].transactionType).toBe('TopUp');
   });
 
   it('topUp', async () => {
-    post.mockResolvedValue({ data: { userId: 'u1', balance: 1500 } });
+    post.mockResolvedValue({ data: { userId: 'u1', balance: 1500, message: 'ok' } });
     const res = await walletService.topUp({ userId: 'u1', amount: 500 });
     expect(res.balance).toBe(1500);
   });
