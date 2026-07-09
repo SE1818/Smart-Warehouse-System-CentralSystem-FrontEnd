@@ -31,6 +31,12 @@ jobs:
       - name: Run tests with coverage
         run: npx vitest run --coverage
 
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Upload coverage to SonarCloud
         uses: SonarSource/sonarqube-scan-action@v2
         env:
