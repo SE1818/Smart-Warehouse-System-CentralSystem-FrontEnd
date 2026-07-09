@@ -58,17 +58,20 @@ pipeline {
                 dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
                     try {
                         withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN_CRED')]) {
-                            sh """
+                            sh '''
+                                curl -sSfL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.1.1290-linux-x64.zip -o sonar-scanner.zip
+                                unzip -q sonar-scanner.zip
+                                export PATH="$PWD/sonar-scanner-6.2.1.1290-linux-x64/bin:$PATH"
                                 export JAVA_HOME=/opt/java/openjdk-21
-                                npx sonar-scanner \\
-                                    -Dsonar.projectKey="\${SONAR_PROJECT_KEY}" \\
-                                    -Dsonar.organization="\${SONAR_ORGANIZATION}" \\
-                                    -Dsonar.token="\${SONAR_TOKEN_CRED}" \\
+                                sonar-scanner \\
+                                    -Dsonar.projectKey="'${SONAR_PROJECT_KEY}'" \\
+                                    -Dsonar.organization="'${SONAR_ORGANIZATION}'" \\
+                                    -Dsonar.token="'${SONAR_TOKEN_CRED}'" \\
                                     -Dsonar.host.url="https://sonarcloud.io" \\
                                     -Dsonar.sources=src \\
                                     -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.test.ts" \\
                                     -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-                            """
+                            '''
                         }
                     } catch (Exception e) {
                         echo "SonarQube analysis skipped or failed: ${e.getMessage()}. Proceeding with standard build."
