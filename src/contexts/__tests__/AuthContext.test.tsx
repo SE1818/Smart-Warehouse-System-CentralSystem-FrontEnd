@@ -1,44 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor, cleanup } from '@testing-library/react';
 import { useContext, useEffect } from 'react';
-import { AuthProvider, AuthContext } from '@/contexts/AuthContext';
+import { AuthProvider, AuthContext, type AuthContextType } from '@/contexts/AuthContext';
 import { authService } from '@/services/auth';
-import type { AuthContextType } from '@/contexts/AuthContext';
 
-function setupStubs(opts?: {
-  loginRes?: { accessToken: string; refreshToken: string; accessTokenExpiresIn: string; role: string };
-  registerRes?: { accessToken: string; refreshToken: string; accessTokenExpiresIn: string; role: string };
-  logoutOk?: boolean;
-  profile?: { id: string; username: string; email: string; role: string; isActive: boolean; createdAt: string };
-}) {
-  authService.login = vi.fn(async () =>
-    opts?.loginRes ?? { accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' });
-  authService.register = vi.fn(async () =>
-    opts?.loginRes ?? { accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' });
-  authService.logout = vi.fn(async () => {
-    if (opts?.logoutOk === false) throw new Error('Network');
-  });
-  authService.getProfile = vi.fn(async () =>
-    opts?.profile ?? { id: '99', username: 'p', email: 'e@t.com', role: 'Admin', isActive: true, createdAt: '' });
-}
+/* ---------- shared state to capture real context ---------- */
 
-function restoreStubs() {
-  authService.login = vi.fn();
-  authService.register = vi.fn();
-  authService.logout = vi.fn();
-  authService.getProfile = vi.fn();
-}
+let capturedCtx: AuthContextType | null = null;
 
 function ExposeAuth({ slot }: { slot: string }) {
   const ctx = useContext(AuthContext);
-  if (!ctx) return null;
   useEffect(() => {
-    const el = document.createElement('span');
-    el.dataset.slot = slot;
-    el.dataset.loading = String(ctx.loading);
-    el.dataset.user = ctx.user ? ctx.user.username : 'null';
-    document.body.appendChild(el);
-    return () => el.remove();
+    // Store the real context so tests can call its methods directly
+    capturedCtx = ctx;
+    const node = document.createElement('span');
+    node.setAttribute('data-slot', slot);
+    node.setAttribute('data-loading', String(ctx?.loading ?? true));
+    node.setAttribute('data-user', ctx?.user ? ctx.user.username : 'null');
+    document.body.appendChild(node);
+    return () => {
+      node.remove();
+    };
   }, [ctx, slot]);
   return null;
 }
@@ -48,25 +30,29 @@ function waitForSlot(slot: string, timeout = 3000): Promise<AuthContextType> {
     render(
       <AuthProvider>
         <ExposeAuth slot={slot} />
-      </AuthProvider>,
+      </AuthProvider>
     );
 
     const timer = setTimeout(() => {
-      const el = document.querySelector(`[data-slot="${slot}"]`);
-      const loading = el?.dataset.loading;
-      const username = el?.dataset.user;
       cleanup();
-      reject(new Error(`Timed out waiting for slot=${slot}, loading=${loading}, user=${username}`));
+      reject(
+        new Error(
+          `Timed out waiting for slot=${slot}`
+        )
+      );
     }, timeout);
 
     const check = () => {
-      const el = document.querySelector(`[data-slot="${slot}"]`);
-      if (el && el.dataset.loading !== undefined) {
+      const el = document.querySelector(`[data-slot="${slot}"]`) as HTMLElement | null;
+      if (el && el.getAttribute('data-loading') !== null) {
         clearTimeout(timer);
-        const loading = el.dataset.loading === 'true';
-        const username = el.dataset.user;
+        const loading = el.getAttribute('data-loading') === 'true';
+        const username = el.getAttribute('data-user');
         cleanup();
-        resolve({ loading, user: username === 'null' ? null : { username } as AuthContextType['user'] });
+        resolve({
+          loading,
+          user: username === 'null' ? null : ({ username } as AuthContextType['user']),
+        } as AuthContextType);
       } else {
         setTimeout(check, 50);
       }
@@ -77,13 +63,31 @@ function waitForSlot(slot: string, timeout = 3000): Promise<AuthContextType> {
 }
 
 function waitForSettled(timeout = 3000): Promise<AuthContextType> {
-  return waitForSlot('settled', timeout);
+  capturedCtx = null;
+  const result = waitForSlot('settled', timeout);
+  result.then(() => {
+    // After settle, expose the real context for action calls
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+  });
+  return result;
 }
+
+/* ---------- tests ---------- */
 
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    restoreStubs();
+    capturedCtx = null;
+    Object.assign(authService, {
+      login: vi.fn(async () => ({ accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' })),
+      register: vi.fn(async () => ({ accessToken: 'tok', refreshToken: 'rt', accessTokenExpiresIn: '3600', role: 'User' })),
+      logout: vi.fn(async () => {}),
+      getProfile: vi.fn(async () => ({ id: '99', username: 'def', email: 'd@t.com', role: 'User', isActive: true, createdAt: '' })),
+    });
     localStorage.clear();
     cleanup();
     document.body.innerHTML = '';
@@ -93,28 +97,37 @@ describe('AuthContext', () => {
     render(
       <AuthProvider>
         <ExposeAuth slot="loading" />
-      </AuthProvider>,
+      </AuthProvider>
     );
 
     await waitFor(
       () => expect(document.querySelector('[data-slot="loading"]')).not.toBeNull(),
-      { timeout: 3000 },
+      { timeout: 3000 }
     );
-    const el = document.querySelector('[data-slot="loading"]')!;
-    expect(el.dataset.loading).toBe('true');
-    expect(el.dataset.user).toBe('null');
+
+    const el = document.querySelector('[data-slot="loading"]') as HTMLElement;
+    expect(el.getAttribute('data-loading')).toBe('true');
+    expect(el.getAttribute('data-user')).toBe('null');
     cleanup();
   });
 
   it('settles to loading=false with user=null when localStorage is empty', async () => {
     const ctx = await waitForSettled();
+    expect(ctx.loading).toBe(false);
     expect(ctx.user).toBeNull();
   });
 
   it('restores user from localStorage when valid JSON is stored', async () => {
     localStorage.setItem(
       'user',
-      JSON.stringify({ id: '42', username: 'restored', email: 'r@t.com', role: 'Admin', isActive: true, createdAt: '' }),
+      JSON.stringify({
+        id: '42',
+        username: 'restored',
+        email: 'r@t.com',
+        role: 'Admin',
+        isActive: true,
+        createdAt: '',
+      })
     );
     const ctx = await waitForSettled();
     expect(ctx.user).not.toBeNull();
@@ -129,77 +142,189 @@ describe('AuthContext', () => {
   });
 
   it('login calls authService.login then getProfile, stores tokens', async () => {
-    setupStubs({
-      loginRes: { accessToken: 'at-l', refreshToken: 'rt-l', accessTokenExpiresIn: '3600', role: 'Admin' },
-      profile: { id: '99', username: 'loginuser', email: 'lo@t.com', role: 'Admin', isActive: true, createdAt: '' },
+    const loginMock = vi.fn(async () => ({
+      accessToken: 'at-l',
+      refreshToken: 'rt-l',
+      accessTokenExpiresIn: '3600',
+      role: 'Admin',
+    }));
+    const profileMock = vi.fn(async () => ({
+      id: '99',
+      username: 'loginuser',
+      email: 'lo@t.com',
+      role: 'Admin',
+      isActive: true,
+      createdAt: '',
+    }));
+    authService.login = loginMock;
+    authService.getProfile = profileMock;
+
+    await waitForSettled();
+    // Re-render to get fresh context pointing to the new mocks
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+    await waitFor(() => capturedCtx !== null && (capturedCtx.loading === false));
+
+    await capturedCtx!.login('test@example.com', 'password123');
+
+    expect(loginMock).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      password: 'password123',
     });
-    const ctx = await waitForSettled();
-    await ctx.login('test@example.com', 'password123');
-    expect(authService.login).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password123' });
-    expect(authService.getProfile).toHaveBeenCalled();
+    expect(profileMock).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBe('at-l');
   });
 
   it('register calls authService.register then getProfile, stores token', async () => {
-    setupStubs({
-      registerRes: { accessToken: 'at-r', refreshToken: 'rt-r', accessTokenExpiresIn: '3600', role: 'User' },
-      profile: { id: '55', username: 'reguser', email: 're@t.com', role: 'User', isActive: true, createdAt: '' },
+    const registerMock = vi.fn(async () => ({
+      accessToken: 'at-r',
+      refreshToken: 'rt-r',
+      accessTokenExpiresIn: '3600',
+      role: 'User',
+    }));
+    const profileMock = vi.fn(async () => ({
+      id: '55',
+      username: 'reguser',
+      email: 're@t.com',
+      role: 'User',
+      isActive: true,
+      createdAt: '',
+    }));
+    authService.register = registerMock;
+    authService.getProfile = profileMock;
+
+    await waitForSettled();
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+    await waitFor(() => capturedCtx !== null && (capturedCtx.loading === false));
+
+    await capturedCtx!.register('newuser', 'new@t.com', 'SecurePass1!');
+
+    expect(registerMock).toHaveBeenCalledWith({
+      username: 'newuser',
+      email: 'new@t.com',
+      password: 'SecurePass1!',
     });
-    const ctx = await waitForSettled();
-    await ctx.register('newuser', 'new@t.com', 'SecurePass1!');
-    expect(authService.register).toHaveBeenCalledWith({ username: 'newuser', email: 'new@t.com', password: 'SecurePass1!' });
-    expect(authService.getProfile).toHaveBeenCalled();
+    expect(profileMock).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBe('at-r');
   });
 
   it('logout calls API and clears storage', async () => {
-    setupStubs({ logoutOk: true });
-    const user = { id: '1', username: 'lo', email: 'lo@t.com', role: 'User', isActive: true, createdAt: '' };
-    localStorage.setItem('authToken', 'old-token');
-    localStorage.setItem('user', JSON.stringify(user));
+    const logoutMock = vi.fn(async () => {});
+    authService.logout = logoutMock;
 
-    const ctx = await waitForSettled();
-    await ctx.logout();
-    expect(authService.logout).toHaveBeenCalled();
+    localStorage.setItem('authToken', 'old-token');
+    localStorage.setItem(
+      'user',
+      JSON.stringify({ id: '1', username: 'lo', email: 'lo@t.com', role: 'User', isActive: true, createdAt: '' })
+    );
+
+    await waitForSettled();
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+    await waitFor(() => capturedCtx !== null && (capturedCtx.loading === false));
+
+    await capturedCtx!.logout();
+
+    expect(logoutMock).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
   });
 
   it('logout clears storage even when API rejects', async () => {
-    setupStubs({ logoutOk: false });
-    const user = { id: '2', username: 'u', email: 'e@t.com', role: 'Admin', isActive: true, createdAt: '' };
-    localStorage.setItem('authToken', 'tok');
-    localStorage.setItem('user', JSON.stringify(user));
+    const logoutMock = vi.fn(async () => {
+      throw new Error('Network');
+    });
+    authService.logout = logoutMock;
 
-    const ctx = await waitForSettled();
-    try { await ctx.logout(); } catch { /* expected */ }
-    expect(authService.logout).toHaveBeenCalled();
+    localStorage.setItem('authToken', 'tok');
+    localStorage.setItem(
+      'user',
+      JSON.stringify({ id: '2', username: 'u', email: 'e@t.com', role: 'Admin', isActive: true, createdAt: '' })
+    );
+
+    await waitForSettled();
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+    await waitFor(() => capturedCtx !== null && (capturedCtx.loading === false));
+
+    try {
+      await capturedCtx!.logout();
+    } catch {
+      /* expected */
+    }
+
+    expect(logoutMock).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
   });
 
   it('refreshUser fetches profile and persists to localStorage', async () => {
-    setupStubs();
-    authService.getProfile = vi.fn(async () => ({
-      id: '7', username: 'refreshed', email: 'r@t.com', role: 'Admin', isActive: true, createdAt: '2024-06-01',
+    const profileMock = vi.fn(async () => ({
+      id: '7',
+      username: 'refreshed',
+      email: 'r@t.com',
+      role: 'Admin',
+      isActive: true,
+      createdAt: '2024-06-01',
     }));
-    const ctx = await waitForSettled();
-    await ctx.refreshUser();
-    expect(authService.getProfile).toHaveBeenCalled();
+    authService.getProfile = profileMock;
+
+    await waitForSettled();
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+    await waitFor(() => capturedCtx !== null && (capturedCtx.loading === false));
+
+    await capturedCtx!.refreshUser();
+
+    expect(profileMock).toHaveBeenCalled();
     const stored = JSON.parse(localStorage.getItem('user')!);
     expect(stored.username).toBe('refreshed');
     expect(stored.id).toBe('7');
   });
 
   it('refreshUser clears storage on 401', async () => {
-    setupStubs();
-    authService.getProfile = vi.fn(async () => { throw new Error('401 Unauthorized'); });
-    const user = { id: '1', username: 'expired', email: 'e@t.com', role: 'User', isActive: true, createdAt: '' };
+    const profileMock = vi.fn(async () => {
+      throw new Error('401 Unauthorized');
+    });
+    authService.getProfile = profileMock;
+
     localStorage.setItem('authToken', 'expired-token');
-    localStorage.setItem('user', JSON.stringify(user));
-    const ctx = await waitForSettled();
-    try { await ctx.refreshUser(); } catch { /* expected */ }
-    expect(authService.getProfile).toHaveBeenCalled();
+    localStorage.setItem(
+      'user',
+      JSON.stringify({ id: '1', username: 'expired', email: 'e@t.com', role: 'User', isActive: true, createdAt: '' })
+    );
+
+    await waitForSettled();
+    render(
+      <AuthProvider>
+        <ExposeAuth slot="ctx" />
+      </AuthProvider>
+    );
+    await waitFor(() => capturedCtx !== null && (capturedCtx.loading === false));
+
+    try {
+      await capturedCtx!.refreshUser();
+    } catch {
+      /* expected */
+    }
+
+    expect(profileMock).toHaveBeenCalled();
     expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
   });
