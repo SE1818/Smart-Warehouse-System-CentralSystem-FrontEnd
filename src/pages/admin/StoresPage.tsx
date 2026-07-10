@@ -145,7 +145,7 @@ export function StoresPage() {
               key={store.id}
               onClick={() => setSelectedStore(store)}
         onKeyDown={(e) => { if (e.key === 'Enter') setSelectedStore(store); }}
-        role="button"
+  role="button"
         tabIndex={0}
         aria-label="Xem sản phẩm cửa hàng"
               className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
@@ -197,7 +197,9 @@ export function StoresPage() {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedStore(null)}
           onKeyDown={(e) => { if (e.key === "Escape") setSelectedStore(null); }}
-          role="button"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Chi tiết cửa hàng"
           tabIndex={0}
         >
           <div
