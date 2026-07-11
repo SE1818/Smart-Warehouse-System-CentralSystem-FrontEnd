@@ -19,8 +19,8 @@ vi.mock('axios', () => {
         }),
       },
       response: {
-        use: vi.fn((handler: (error: unknown) => Promise<unknown>) => {
-          capturedResponseHandler = handler;
+        use: vi.fn((_successHandler: unknown, errorHandler: (error: unknown) => Promise<unknown>) => {
+          capturedResponseHandler = errorHandler;
           return 0;
         }),
       },
@@ -90,14 +90,33 @@ describe('services/api.ts', () => {
   // ── Response interceptor body (src/services/api.ts lines 26-36) ────────
 
   it('clears localStorage on 401 response', async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { href: '' } as unknown as Location,
+    });
+
     await import('@/services/api');
     expect(capturedResponseHandler).not.toBeNull();
 
-    const error401: unknown = { response: { status: 401, data: {} } };
-    void capturedResponseHandler!(error401);
+    localStorage.setItem('authToken', 'token');
+    localStorage.setItem('user', 'user');
 
-  expect(localStorage.getItem('authToken')).toBeNull();
+    const error401: unknown = { response: { status: 401, data: {} } };
+    try {
+      await capturedResponseHandler!(error401);
+    } catch {
+      // Ignored
+    }
+
+    expect(localStorage.getItem('authToken')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
+    expect(window.location.href).toBe('/login');
+
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: originalLocation,
+    });
   });
 
   it('preserves localStorage on 500 error', async () => {
@@ -107,7 +126,7 @@ describe('services/api.ts', () => {
     expect(capturedResponseHandler).not.toBeNull();
 
     const error500: unknown = { response: { status: 500, data: {} } };
-    capturedResponseHandler!(error500);
+    await expect(capturedResponseHandler!(error500)).rejects.toBeDefined();
 
     expect(localStorage.getItem('authToken')).toBe('safe');
     expect(localStorage.getItem('user')).toBe('{"id":"42"}');
@@ -120,7 +139,7 @@ describe('services/api.ts', () => {
     expect(capturedResponseHandler).not.toBeNull();
 
     const error: unknown = { request: {} };
-    capturedResponseHandler!(error);
+    await expect(capturedResponseHandler!(error)).rejects.toBeDefined();
 
     expect(localStorage.getItem('authToken')).toBe('preserved');
     expect(localStorage.getItem('user')).toBe('{"id":"42"}');
