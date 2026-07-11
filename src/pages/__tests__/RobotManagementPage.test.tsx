@@ -71,6 +71,7 @@ const mockRobot = (overrides: Partial<Robot> = {}): Robot => ({
   battery: overrides.battery ?? 80,
   x: overrides.x ?? 0,
   y: overrides.y ?? 0,
+  currentAreaId: overrides.currentAreaId,
   createdAt: '',
   updatedAt: '',
 });
@@ -345,14 +346,261 @@ describe('RobotManagementPage', () => {
     });
   });
 
-  it('shows Di chuyển button on each robot card', async () => {
+  it('shows Di chuyển button on each robot card and opens move modal', async () => {
+    const user = userEvent.setup();
     mockListRobots.mockResolvedValue([
-      mockRobot({ name: 'MoveBot' }),
+      mockRobot({ id: 'move-robot-id', name: 'MoveBot', status: 'Idle' }),
     ]);
     mockListPendingOrders.mockResolvedValue([]);
     renderRobotManagementPage();
+
     await waitFor(() => {
       expect(screen.getByText('Di chuyển')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Di chuyển'));
+    expect(screen.getByText('Di chuyển MoveBot')).toBeInTheDocument();
+  });
+
+  it('handles clicking sạc pin and dừng sạc status updates', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'charge-robot-id', name: 'ChargeBot', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([]);
+    vi.mocked(robotService.updateRobotStatus).mockResolvedValue({} as any);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Sạc Pin')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Sạc Pin'));
+    expect(robotService.updateRobotStatus).toHaveBeenCalledWith('charge-robot-id', 'Charging', expect.any(Object));
+  });
+
+  it('handles clicking báo lỗi with confirmation', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'err-robot-id', name: 'ErrorBot', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([]);
+    vi.mocked(robotService.updateRobotStatus).mockResolvedValue({} as any);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Báo lỗi')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Báo lỗi'));
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(robotService.updateRobotStatus).toHaveBeenCalledWith('err-robot-id', 'Error', expect.any(Object));
+  });
+
+  it('handles copying robot ID to clipboard', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'long-robot-id-to-copy', name: 'CopyBot' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([]);
+    const clipboardSpy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Sao chép ID')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTitle('Sao chép ID'));
+    expect(clipboardSpy).toHaveBeenCalledWith('long-robot-id-to-copy');
+  });
+
+  it('handles selecting area and rendering map stations/robots', async () => {
+    const user = userEvent.setup();
+    vi.mocked(robotService.getAreas).mockResolvedValue([
+      { id: 'area-1', name: 'Khu A', level: 1 },
+    ]);
+    vi.mocked(robotService.getStations).mockResolvedValue([
+      { id: 'station-1', name: 'Trạm A', xCoord: 2, yCoord: 3, areaId: 'area-1', stationType: 'pickup' },
+    ]);
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'r-1', name: 'Bot A', currentAreaId: 'area-1', x: 4, y: 5 }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([]);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('custom-select')).toBeInTheDocument();
+    });
+
+    const select = screen.getByTestId('custom-select');
+    await user.selectOptions(select, 'area-1');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Chọn robot Bot A')).toBeInTheDocument();
+      expect(screen.getByLabelText('Trạm Trạm A')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText('Chọn robot Bot A'));
+
+    expect(screen.getByText(/Đang chọn:/)).toBeInTheDocument();
+
+    const map = screen.getByLabelText('Bản đồ vận hành kho. Chọn tọa độ để di chuyển robot.');
+    await user.click(map);
+
+    expect(screen.getByText('Di chuyển Bot A')).toBeInTheDocument();
+  });
+
+  it('submits MoveModal form and calls moveRobot', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'r-1', name: 'Bot A', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([]);
+    vi.mocked(robotService.moveRobot).mockResolvedValue({} as any);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Di chuyển')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Di chuyển'));
+
+    // Verify modal is open
+    expect(screen.getByText('Di chuyển Bot A')).toBeInTheDocument();
+
+    // Fill coordinates
+    const inputs = screen.getAllByRole('spinbutton');
+    await user.clear(inputs[0]);
+    await user.type(inputs[0], '8.2');
+    await user.clear(inputs[1]);
+    await user.type(inputs[1], '9.1');
+
+    // Click Confirm
+    await user.click(screen.getByRole('button', { name: 'Xác nhận' }));
+
+    // Verify moveRobot was called
+    expect(robotService.moveRobot).toHaveBeenCalledWith('r-1', 8.2, 9.1, expect.any(Object));
+  });
+
+  it('submits FulfillmentModal form and calls fulfillOrder', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'r-1', name: 'Bot A', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([
+      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' } as any,
+    ]);
+    vi.mocked(robotService.fulfillOrder).mockResolvedValue({} as any);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Xử lý đơn hàng chờ')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Xử lý đơn hàng chờ'));
+
+    // Wait for modal to render
+    await waitFor(() => {
+      expect(screen.getByText('Phân công giao hàng')).toBeInTheDocument();
+    });
+
+    // Select order and robot
+    const selects = screen.getAllByTestId('custom-select');
+    const orderSelect = selects.find(s => s.querySelector('option[value=""]')?.textContent === '-- Chọn đơn hàng --')!;
+    const robotSelect = selects.find(s => s.querySelector('option[value=""]')?.textContent === '-- Chọn robot rảnh --')!;
+    await user.selectOptions(orderSelect, 'order-1');
+    await user.selectOptions(robotSelect, 'r-1');
+
+    // Click Start Delivery
+    await user.click(screen.getByRole('button', { name: 'Bắt đầu giao' }));
+
+    // Verify fulfillOrder was called
+    expect(robotService.fulfillOrder).toHaveBeenCalledWith('r-1', 'order-1', expect.any(String), expect.any(String));
+  });
+
+  it('triggers validation error in FulfillmentModal when order or robot not selected', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'r-1', name: 'Bot A', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([
+      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' } as any,
+    ]);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Xử lý đơn hàng chờ')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Xử lý đơn hàng chờ'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Phân công giao hàng')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Bắt đầu giao' }));
+
+    const { toast } = await import('react-toastify');
+    expect(toast.error).toHaveBeenCalledWith('Vui lòng điền đầy đủ thông tin phân công');
+  });
+
+  it('closes FulfillmentModal when close button is clicked', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'r-1', name: 'Bot A', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([
+      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' } as any,
+    ]);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Xử lý đơn hàng chờ')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Xử lý đơn hàng chờ'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Phân công giao hàng')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Hủy' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Phân công giao hàng')).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes MoveModal when cancel button is clicked', async () => {
+    const user = userEvent.setup();
+    mockListRobots.mockResolvedValue([
+      mockRobot({ id: 'r-1', name: 'Bot A', status: 'Idle' }),
+    ]);
+    mockListPendingOrders.mockResolvedValue([]);
+
+    renderRobotManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Di chuyển')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Di chuyển'));
+
+    expect(screen.getByText('Di chuyển Bot A')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Hủy' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Di chuyển Bot A')).not.toBeInTheDocument();
     });
   });
 });
