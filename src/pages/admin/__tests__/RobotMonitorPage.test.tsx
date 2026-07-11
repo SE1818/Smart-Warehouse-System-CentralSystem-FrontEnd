@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { RobotMonitorPage } from '../RobotMonitorPage';
+import { RobotMonitorPage, type Robot } from '../RobotMonitorPage';
 
 window.HTMLElement.prototype.scrollIntoView = () => {};
 

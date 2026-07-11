@@ -21,6 +21,8 @@ vi.mock('@/components/Icons', () => {
       Spinner: mockIcon('spinner'),
       Refresh: mockIcon('refresh'),
       Truck: mockIcon('truck'),
+      Warehouse: mockIcon('warehouse'),
+      Dashboard: mockIcon('dashboard'),
     },
   };
 });
@@ -53,6 +55,8 @@ vi.mock('@/services/robot', () => ({
     moveRobot: (...args: unknown[]) => mockMoveRobot(...args),
     updateRobotStatus: (...args: unknown[]) => mockUpdateRobotStatus(...args),
     fulfillOrder: (...args: unknown[]) => mockFulfillOrder(...args),
+    getAreas: () => Promise.resolve([]),
+    getStations: () => Promise.resolve([]),
   },
 }));
 

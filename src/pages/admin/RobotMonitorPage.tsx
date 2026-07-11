@@ -4,7 +4,7 @@ import * as signalR from '@microsoft/signalr';
 import { Icons } from '@/components/Icons';
 import apiClient from '@/services/api';
 
-interface Robot {
+export interface Robot {
   id: string;
   name: string;
   currentX: number;

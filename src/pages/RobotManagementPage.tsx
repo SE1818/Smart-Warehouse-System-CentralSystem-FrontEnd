@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { robotService } from '../services/robot';
-import type { Robot, MoveRequest } from '../types/robot';
+import type { Robot, MoveRequest, Area, Station } from '../types/robot';
 import { Icons } from '@/components/Icons';
 import type { Order } from '../types/product';
 import { toast } from 'react-toastify';
@@ -15,6 +15,113 @@ export function RobotManagementPage() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showFulfillmentModal, setShowFulfillmentModal] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
+  const [prevAreaId, setPrevAreaId] = useState<string>('');
+  const [mapImageLoadError, setMapImageLoadError] = useState(false);
+  const [clickedX, setClickedX] = useState<number | null>(null);
+  const [clickedY, setClickedY] = useState<number | null>(null);
+
+  if (selectedAreaId !== prevAreaId) {
+    setPrevAreaId(selectedAreaId);
+    setMapImageLoadError(false);
+  }
+
+  useEffect(() => {
+    const loadMetadata = async () => {
+      try {
+        const areasData = await robotService.getAreas();
+        const stationsData = await robotService.getStations();
+        setAreas(areasData);
+        setStations(stationsData);
+        if (areasData.length > 0) {
+          setSelectedAreaId(areasData[0].id);
+        }
+      } catch (err) {
+        console.error('Không thể tải dữ liệu bản đồ', err);
+      }
+    };
+    loadMetadata();
+  }, []);
+
+  const currentArea = areas.find(a => a.id === selectedAreaId);
+  const mapImageSrc = (mapImageLoadError || !currentArea?.mapUrl) ? '/maps/main.png' : currentArea.mapUrl;
+
+  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!selectedRobot) {
+      toast.info('Vui lòng chọn một robot từ danh sách trước khi di chuyển!');
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
+    const relativeX = (clickX / rect.width - 0.05) / 0.90;
+    const relativeY = (clickY / rect.height - 0.05) / 0.90;
+    
+    const gridX = Math.min(9, Math.max(0, Math.round(relativeX * 9 * 10) / 10));
+    const gridY = Math.min(9, Math.max(0, Math.round(relativeY * 9 * 10) / 10));
+
+    setClickedX(gridX);
+    setClickedY(gridY);
+    setShowMoveModal(true);
+  };
+
+  const getStationStyles = (type: string) => {
+    switch (type) {
+      case 'pickup':
+        return 'bg-orange-50 border-orange-200 text-orange-600';
+      case 'dropoff':
+        return 'bg-emerald-50 border-emerald-200 text-emerald-600';
+      case 'charging':
+        return 'bg-amber-50 border-amber-200 text-amber-600';
+      default:
+        return 'bg-slate-50 border-slate-200 text-slate-600';
+    }
+  };
+
+  const getStationIcon = (type: string) => {
+    switch (type) {
+      case 'pickup':
+        return <Icons.CartOrder className="w-4 h-4" />;
+      case 'dropoff':
+        return <Icons.Dashboard className="w-4 h-4" />;
+      case 'charging':
+        return <Icons.Bolt className="w-4 h-4" />;
+      default:
+        return <Icons.Dashboard className="w-4 h-4" />;
+    }
+  };
+
+  const getStationTypeLabel = (type: string) => {
+    switch (type) {
+      case 'pickup':
+        return 'Lấy hàng';
+      case 'dropoff':
+        return 'Giao hàng';
+      case 'charging':
+        return 'Trạm sạc';
+      default:
+        return 'Trạm làm việc';
+    }
+  };
+
+  const getRobotStatusColor = (status: string) => {
+    switch (status) {
+      case 'Idle':
+        return { dot: 'bg-emerald-500', iconText: 'text-emerald-500' };
+      case 'Moving':
+        return { dot: 'bg-blue-500', iconText: 'text-blue-500' };
+      case 'Charging':
+        return { dot: 'bg-amber-500', iconText: 'text-amber-500' };
+      case 'Error':
+        return { dot: 'bg-rose-500', iconText: 'text-rose-500' };
+      default:
+        return { dot: 'bg-slate-400', iconText: 'text-slate-400' };
+    }
+  };
 
   const loadRobots = useCallback(async () => {
     try {
@@ -236,6 +343,205 @@ export function RobotManagementPage() {
           </div>
         </div>
 
+        {/* Visual Warehouse Map */}
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
+                <div className="p-2 bg-brand-50 rounded-xl text-brand-600 border border-brand-100">
+                  <Icons.Warehouse className="w-5 h-5" />
+                </div>
+                <span className="bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Bản đồ vận hành Kho</span>
+              </h2>
+              <p className="text-slate-550 text-xs font-semibold">Giám sát trực quan vị trí robot, các trạm giao nhận và sạc pin. Nhấp vào bản đồ để di chuyển robot đã chọn.</p>
+            </div>
+            {/* Area Selector */}
+            {areas.length > 0 && (
+              <div className="w-64">
+                <CustomSelect
+                  label=""
+                  value={selectedAreaId}
+                  onChange={setSelectedAreaId}
+                  options={areas.map(a => ({ value: a.id, label: a.name }))}
+                  placeholder="-- Chọn khu vực --"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Interactive Map Layout */}
+            <div className="lg:col-span-3 bg-slate-950 rounded-2xl p-4 flex items-center justify-center relative border border-slate-800 shadow-inner overflow-hidden select-none">
+              <div 
+                className="relative w-full aspect-square max-w-[550px] border border-slate-800/80 rounded-lg overflow-hidden cursor-crosshair group/map"
+                onClick={handleMapClick}
+              >
+                {/* Background Floor Plan Image */}
+                <img 
+                  src={mapImageSrc} 
+                  alt="Warehouse Floor Plan" 
+                  className="w-full h-full object-cover opacity-90 transition-opacity duration-300"
+                  onError={() => setMapImageLoadError(true)}
+                />
+
+                {/* Digital Grid Overlay */}
+                <div className="absolute inset-0 grid grid-cols-10 grid-rows-10 pointer-events-none opacity-20">
+                  {Array.from({ length: 100 }).map((_, i) => (
+                    <div key={i} className="border-[0.5px] border-slate-700/60" />
+                  ))}
+                </div>
+
+                {/* Station Markers */}
+                {stations
+                  .filter(s => s.areaId === selectedAreaId)
+                  .map(station => {
+                    const left = `${5 + (station.xCoord / 9) * 90}%`;
+                    const top = `${5 + (station.yCoord / 9) * 90}%`;
+                    return (
+                      <div 
+                        key={station.id}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 group/station cursor-pointer z-10"
+                        style={{ left, top }}
+                        onClick={(e) => e.stopPropagation()} // Prevent triggering map click when clicking station
+                      >
+                        {/* Station Icon and Badge */}
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center border shadow-md transition-transform duration-200 hover:scale-110 ${getStationStyles(station.stationType)}`}>
+                          {getStationIcon(station.stationType)}
+                        </div>
+                        {/* Tooltip */}
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-8 hidden group-hover/station:block bg-slate-900/95 backdrop-blur-md text-white text-[11px] font-bold p-3.5 rounded-xl border border-slate-750 shadow-xl whitespace-nowrap z-30 transition-all">
+                          <p className="text-slate-100 font-extrabold text-xs">{station.name}</p>
+                          <div className="h-px bg-slate-800 my-1.5" />
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Loại: {getStationTypeLabel(station.stationType)}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">Tọa độ: ({station.xCoord}, {station.yCoord})</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                {/* Robot Markers */}
+                {robots
+                  .filter(r => r.currentAreaId === selectedAreaId)
+                  .map(robot => {
+                    const left = `${5 + (robot.x / 9) * 90}%`;
+                    const top = `${5 + (robot.y / 9) * 90}%`;
+                    const isSelected = selectedRobot?.id === robot.id;
+                    const statusColor = getRobotStatusColor(robot.status);
+                    return (
+                      <div
+                        key={robot.id}
+                        className={`absolute -translate-x-1/2 -translate-y-1/2 group/robot cursor-pointer transition-all duration-500 z-20 ${isSelected ? 'scale-110' : ''}`}
+                        style={{ left, top }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRobot(robot);
+                        }}
+                      >
+                        {/* Pulse effect for selected or moving robot */}
+                        {(isSelected || robot.status === 'Moving') && (
+                          <div className={`absolute -inset-2.5 rounded-full opacity-40 animate-ping ${isSelected ? 'bg-brand-500' : 'bg-blue-500'}`} />
+                        )}
+                        {/* Robot Body */}
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 shadow-lg transition-all ${
+                          isSelected ? 'border-brand-500 ring-4 ring-brand-500/20 bg-brand-600 text-white' : 'border-slate-800 bg-white hover:bg-slate-50 text-slate-800'
+                        }`}>
+                          <Icons.Robot className={`w-5 h-5 ${isSelected ? 'text-white' : statusColor.iconText}`} />
+                        </div>
+                        {/* Battery indicator mini badge */}
+                        <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-extrabold text-white border border-white ${
+                          robot.battery > 50 ? 'bg-emerald-500' : robot.battery > 20 ? 'bg-amber-500' : 'bg-rose-500 animate-pulse'
+                        }`}>
+                          {robot.battery.toFixed(0)}
+                        </div>
+                        {/* Label */}
+                        <div className={`absolute top-10 left-1/2 -translate-x-1/2 text-[10px] font-extrabold px-2 py-0.5 rounded-md border whitespace-nowrap shadow-xs ${
+                          isSelected ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-slate-900/90 border-slate-750 text-white'
+                        }`}>
+                          {robot.name.split(' ')[0]}
+                        </div>
+                        {/* Tooltip */}
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-12 hidden group-hover/robot:block bg-slate-900/95 backdrop-blur-md text-white text-[11px] font-bold p-3.5 rounded-xl border border-slate-750 shadow-xl whitespace-nowrap z-30 transition-all">
+                          <p className="text-slate-100 font-extrabold text-xs">{robot.name}</p>
+                          <div className="h-px bg-slate-800 my-1.5" />
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                            Trạng thái: 
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${statusColor.dot}`} />
+                            {robot.status === 'Idle' ? 'Sẵn sàng' : robot.status === 'Moving' ? 'Đang di chuyển' : robot.status === 'Charging' ? 'Đang sạc' : robot.status === 'Error' ? 'Lỗi' : 'Ngoại tuyến'}
+                          </p>
+                          <p className="text-[10px] text-slate-400">Pin: {robot.battery.toFixed(0)}%</p>
+                          <p className="text-[10px] text-slate-400 font-mono">Vị trí: ({robot.x.toFixed(2)}, {robot.y.toFixed(2)})</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Sidebar / Legend and Control Info */}
+            <div className="lg:col-span-1 space-y-6 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chú thích bản đồ</h3>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center bg-orange-50 border border-orange-200 text-orange-600">
+                        <Icons.CartOrder className="w-3.5 h-3.5" />
+                      </div>
+                      <span>Trạm Lấy hàng (Pickup)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center bg-emerald-50 border border-emerald-200 text-emerald-600">
+                        <Icons.Dashboard className="w-3.5 h-3.5" />
+                      </div>
+                      <span>Trạm Giao hàng (Dropoff)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center bg-amber-50 border border-amber-200 text-amber-600">
+                        <Icons.Bolt className="w-3.5 h-3.5" />
+                      </div>
+                      <span>Trạm Sạc pin (Charging)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Điều khiển Nhanh</h3>
+                  <div className="text-[11px] font-semibold text-slate-500 leading-relaxed">
+                    {selectedRobot ? (
+                      <div className="space-y-2">
+                        <p className="text-slate-700 font-bold">Đang chọn: <span className="text-brand-600 font-extrabold">{selectedRobot.name}</span></p>
+                        <p>Nhấp vào bất kỳ điểm nào trên bản đồ để di chuyển robot này đến tọa độ đó.</p>
+                        <div className="bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-[10px] text-slate-700 flex justify-between">
+                          <span>Vị trí hiện tại:</span>
+                          <span className="font-bold">({selectedRobot.x.toFixed(1)}, {selectedRobot.y.toFixed(1)})</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="italic text-slate-400">Vui lòng chọn một robot từ danh sách dưới đây hoặc nhấp vào biểu tượng robot trên bản đồ để bắt đầu điều khiển.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {selectedRobot && (
+                <button
+                  onClick={() => {
+                    setClickedX(null);
+                    setClickedY(null);
+                    setShowMoveModal(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0 1 21.485 12 59.77 59.77 0 0 1 3.27 20.876L5.999 12Zm0 0h7.5" />
+                  </svg>
+                  <span>Mở bảng tọa độ di chuyển</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Robot Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {robots.map((robot) => (
@@ -302,6 +608,8 @@ export function RobotManagementPage() {
                 <button
                   onClick={() => {
                     setSelectedRobot(robot);
+                    setClickedX(null);
+                    setClickedY(null);
                     setShowMoveModal(true);
                   }}
                   disabled={robot.status === 'Moving' || robot.status === 'Charging'}
@@ -356,9 +664,13 @@ export function RobotManagementPage() {
       {showMoveModal && selectedRobot && (
         <MoveModal
           robot={selectedRobot}
+          initialX={clickedX !== null ? clickedX : selectedRobot.x}
+          initialY={clickedY !== null ? clickedY : selectedRobot.y}
           onMove={handleMove}
           onClose={() => {
             setShowMoveModal(false);
+            setClickedX(null);
+            setClickedY(null);
             setSelectedRobot(null);
           }}
         />
@@ -382,13 +694,15 @@ export function RobotManagementPage() {
 
 interface MoveModalProps {
   robot: Robot;
+  initialX: number;
+  initialY: number;
   onMove: (request: MoveRequest) => Promise<void>;
   onClose: () => void;
 }
 
-function MoveModal({ robot, onMove, onClose }: MoveModalProps) {
-  const [x, setX] = useState(robot.x.toString());
-  const [y, setY] = useState(robot.y.toString());
+function MoveModal({ robot, initialX, initialY, onMove, onClose }: MoveModalProps) {
+  const [x, setX] = useState(initialX.toFixed(2));
+  const [y, setY] = useState(initialY.toFixed(2));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
