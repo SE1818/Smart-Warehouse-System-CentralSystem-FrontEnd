@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -92,7 +93,7 @@ describe('DashboardPage', () => {
     vi.mocked(productService.getProducts).mockResolvedValue([]);
     vi.mocked(orderService.getPendingOrders).mockResolvedValue([]);
     vi.mocked(stockService.getStockLevels).mockResolvedValue([]);
-    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 });
+    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 } as any);
   });
 
   it('renders page title "Bảng điều khiển quản lý"', () => {
@@ -113,10 +114,10 @@ describe('DashboardPage', () => {
       { id: '1', name: 'Test', category: 'Đồ uống', price: 10000, stockQuantity: 50, description: '', unit: 'lon', createdAt: '', updatedAt: '' },
     ]);
     vi.mocked(orderService.getPendingOrders).mockResolvedValue([
-      { id: 'ORD-1', createdAt: '2025-01-01T00:00:00Z', totalAmount: 50000, deliveryNodeId: 'ST01' },
+      { id: 'ORD-1', createdAt: '2025-01-01T00:00:00Z', totalAmount: 50000, deliveryNodeId: 'ST01' } as any,
     ]);
-    vi.mocked(stockService.getStockLevels).mockResolvedValue([{ productId: '1', quantity: 50 }]);
-    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 2 });
+    vi.mocked(stockService.getStockLevels).mockResolvedValue([{ productId: '1', quantity: 50 } as any]);
+    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 2 } as any);
 
     renderDashboardPage();
 
@@ -137,10 +138,10 @@ describe('DashboardPage', () => {
   it('renders activity table rows after data loads', async () => {
     vi.mocked(productService.getProducts).mockResolvedValue([]);
     vi.mocked(orderService.getPendingOrders).mockResolvedValue([
-      { id: 'ORD-999', createdAt: '2025-06-15T10:30:00Z', totalAmount: 75000, deliveryNodeId: 'ST03' },
+      { id: 'ORD-999', createdAt: '2025-06-15T10:30:00Z', totalAmount: 75000, deliveryNodeId: 'ST03' } as any,
     ]);
     vi.mocked(stockService.getStockLevels).mockResolvedValue([]);
-    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 });
+    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 } as any);
 
     renderDashboardPage();
 
@@ -156,7 +157,7 @@ describe('DashboardPage', () => {
     vi.mocked(productService.getProducts).mockResolvedValue([]);
     vi.mocked(orderService.getPendingOrders).mockResolvedValue([]);
     vi.mocked(stockService.getStockLevels).mockResolvedValue([]);
-    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 });
+    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 } as any);
 
     renderDashboardPage();
 
@@ -170,7 +171,7 @@ describe('DashboardPage', () => {
     vi.mocked(productService.getProducts).mockResolvedValue([]);
     vi.mocked(orderService.getPendingOrders).mockResolvedValue([]);
     vi.mocked(stockService.getStockLevels).mockResolvedValue([]);
-    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 });
+    vi.mocked(transferService.getTransferStats).mockResolvedValue({ active: 0 } as any);
 
     renderDashboardPage();
 

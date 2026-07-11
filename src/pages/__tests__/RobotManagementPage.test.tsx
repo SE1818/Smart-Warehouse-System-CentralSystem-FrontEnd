@@ -1,4 +1,4 @@
-/** @vitest-environment jsdom */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,7 +6,12 @@ import { BrowserRouter } from 'react-router-dom';
 import { RobotManagementPage } from '../RobotManagementPage';
 
 vi.mock('react-toastify', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
 }));
 
 vi.mock('@/components/Icons', () => {
@@ -28,9 +33,9 @@ vi.mock('@/components/Icons', () => {
 vi.mock('@/components/CustomSelect', () => ({
   CustomSelect: function CustomSelect(props: Record<string, unknown>) {
     return (
-      <select data-testid="custom-select" value={props.value} onChange={(e) => props.onChange?.(e.target.value)}>
-        <option value="">{props.placeholder}</option>
-        {props.options?.map((o: { value: string; label: string }) => (
+      <select data-testid="custom-select" value={props.value as string} onChange={(e) => (props.onChange as (v: string) => void)(e.target.value)}>
+        <option value="">{props.placeholder as string}</option>
+        {(props.options as { value: string; label: string }[] | undefined)?.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
@@ -38,25 +43,24 @@ vi.mock('@/components/CustomSelect', () => ({
   },
 }));
 
-import type { Robot, Order } from '@/types';
-
-const mockListRobots = vi.fn<[], Promise<Robot[]>>();
-const mockListPendingOrders = vi.fn<[], Promise<Order[]>>();
-const mockMoveRobot = vi.fn<[string, number, number, Robot], Promise<void>>();
-const mockUpdateRobotStatus = vi.fn<[string, string, Robot], Promise<void>>();
-const mockFulfillOrder = vi.fn<[string, string, string, string], Promise<void>>();
-
 vi.mock('@/services/robot', () => ({
   robotService: {
-    listRobots: (...args: unknown[]) => mockListRobots(...args),
-    listPendingOrders: (...args: unknown[]) => mockListPendingOrders(...args),
-    moveRobot: (...args: unknown[]) => mockMoveRobot(...args),
-    updateRobotStatus: (...args: unknown[]) => mockUpdateRobotStatus(...args),
-    fulfillOrder: (...args: unknown[]) => mockFulfillOrder(...args),
+    listRobots: vi.fn(),
+    listPendingOrders: vi.fn(),
+    moveRobot: vi.fn(),
+    updateRobotStatus: vi.fn(),
+    fulfillOrder: vi.fn(),
   },
 }));
 
-const mockRobot = (overrides: Record<string, unknown> = {}) => ({
+import type { Robot } from '@/types/robot';
+import { robotService } from '@/services/robot';
+
+const mockListRobots = vi.mocked(robotService.listRobots);
+const mockListPendingOrders = vi.mocked(robotService.listPendingOrders);
+
+
+const mockRobot = (overrides: Partial<Robot> = {}): Robot => ({
   id: overrides.id ?? 'robot-1',
   name: overrides.name ?? 'RBT-001',
   status: overrides.status ?? 'Idle',
@@ -90,8 +94,10 @@ describe('RobotManagementPage', () => {
   });
 
   it('shows loading state initially', () => {
-    let resolve: (value: never[]) => void;
-    const pending = new Promise<never[]>((r) => { resolve = r; });
+    let resolve: (value: Robot[]) => void;
+    const pending = new Promise<Robot[]>((r) => {
+      resolve = r;
+    });
     mockListRobots.mockReturnValue(pending);
     mockListPendingOrders.mockResolvedValue([]);
     renderRobotManagementPage();
@@ -162,7 +168,6 @@ describe('RobotManagementPage', () => {
     await waitFor(() => {
       expect(screen.getByText('ErrBot')).toBeInTheDocument();
     });
-    // The errorBadge count is in the stats section
     expect(screen.getAllByText('Lỗi hệ thống').length).toBeGreaterThanOrEqual(1);
   });
 
@@ -249,7 +254,7 @@ describe('RobotManagementPage', () => {
       mockRobot({ status: 'Idle' }),
     ]);
     mockListPendingOrders.mockResolvedValue([
-      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' },
+      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' } as any,
     ]);
     renderRobotManagementPage();
     await waitFor(() => {
@@ -264,7 +269,7 @@ describe('RobotManagementPage', () => {
       mockRobot({ status: 'Moving' }),
     ]);
     mockListPendingOrders.mockResolvedValue([
-      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' },
+      { id: 'order-1', totalAmount: 50000, deliveryNodeId: 'ST01' } as any,
     ]);
     renderRobotManagementPage();
     await waitFor(() =>
@@ -314,9 +319,9 @@ describe('RobotManagementPage', () => {
     });
   });
 
-  it('shows Ngoại tuyến for unknown/Offline status', async () => {
+  it('shows Ngoại tuyến for unknown status', async () => {
     mockListRobots.mockResolvedValue([
-      mockRobot({ status: 'unknown_status', name: 'GhostBot' }),
+      mockRobot({ status: 'Offline' as Robot['status'], name: 'GhostBot' }),
     ]);
     mockListPendingOrders.mockResolvedValue([]);
     renderRobotManagementPage();

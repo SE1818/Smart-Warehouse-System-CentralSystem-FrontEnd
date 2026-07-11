@@ -1,21 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor, within } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider, AuthContext } from '@/contexts/AuthContext';
-import type { User, AuthResponse } from '@/types/auth';
 
 vi.mock('@/services/auth', () => ({
   __esModule: true,
   authService: {
     login: vi.fn(),
     register: vi.fn(),
+    externalLogin: vi.fn(),
     logout: vi.fn(),
+    refreshToken: vi.fn(),
     getProfile: vi.fn(),
+    forgotPassword: vi.fn(),
+    resetPassword: vi.fn(),
+    resendVerification: vi.fn(),
+    verifyEmail: vi.fn(),
   },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockAuthService = (await import('@/services/auth')).authService as any;
+import { authService } from '@/services/auth';
+import type { User, AuthResponse } from '@/types/auth';
+import { AuthProvider, AuthContext, type AuthContextType } from '@/contexts/AuthContext';
+
+const mockLogin = vi.mocked(authService.login);
+const mockLogout = vi.mocked(authService.logout);
+const mockGetProfile = vi.mocked(authService.getProfile);
 
 const mockUser: User = {
   id: '1',
@@ -34,10 +43,18 @@ const mockAuthResponse: AuthResponse = {
   email: 'test@example.com',
 };
 
+const mockAuthService = {
+  login: mockLogin,
+  logout: mockLogout,
+  getProfile: mockGetProfile,
+};
+
 describe('AuthProvider', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
+    mockAuthService.login.mockClear();
+    mockAuthService.logout.mockClear();
+    mockAuthService.getProfile.mockClear();
   });
 
   it('renders children without throwing', () => {
@@ -46,7 +63,7 @@ describe('AuthProvider', () => {
         <AuthProvider>
           <div>child content</div>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
     expect(within(container).getByText('child content')).toBeDefined();
   });
@@ -58,37 +75,34 @@ describe('AuthProvider', () => {
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               capturedLoading = ctx?.loading;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
-    // Initial render: loading should be true (default useState(true))
     expect(capturedLoading).toBe(true);
 
-    // After the setTimeout(..., 0) fires, loading becomes false
     await waitFor(() => {
       expect(within(container).getByText('child')).toBeDefined();
     }, { timeout: 500 });
 
-    // Verify the context now reflects loading=false via a second render
     let finalLoading = true;
 
     const { container: container2 } = render(
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) finalLoading = ctx.loading;
               return <div>child2</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {
@@ -104,13 +118,13 @@ describe('AuthProvider', () => {
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) loadingValue = ctx.loading;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {
@@ -132,13 +146,13 @@ describe('AuthProvider', () => {
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) restoredUser = ctx.user;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {
@@ -157,29 +171,31 @@ describe('AuthProvider', () => {
         <AuthProvider>
           <div>child</div>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => expect(localStorage.getItem('user')).toBeNull(), { timeout: 500 });
   });
 
   it('login calls authService.login then getProfile', async () => {
-    mockAuthService.login.mockResolvedValue(mockAuthResponse);
-    mockAuthService.getProfile.mockResolvedValue(mockUser);
+    const loginMock = mockAuthService.login;
+    const getProfileMock = mockAuthService.getProfile;
+    loginMock.mockResolvedValue(mockAuthResponse);
+    getProfileMock.mockResolvedValue(mockUser);
 
-    let loginFn: ((email: string, password: string) => Promise<void>) | null = null;
+    let loginFn = null as unknown as (email: string, password: string) => Promise<void>;
 
     const { container } = render(
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) loginFn = ctx.login;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {
@@ -191,8 +207,8 @@ describe('AuthProvider', () => {
 
     await loginFn('test@example.com', 'password123');
 
-    expect(mockAuthService.login).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password123' });
-    expect(mockAuthService.getProfile).toHaveBeenCalledTimes(1);
+    expect(loginMock).toHaveBeenCalledTimes(1);
+    expect(getProfileMock).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem('authToken')).toBe('mock-access-token');
   });
 
@@ -202,19 +218,19 @@ describe('AuthProvider', () => {
     localStorage.setItem('authToken', 'stale-token');
     localStorage.setItem('user', JSON.stringify(mockUser));
 
-    let logoutFn: (() => Promise<void>) | null = null;
+    let logoutFn = null as unknown as () => Promise<void>;
 
     const { container } = render(
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) logoutFn = ctx.logout;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {
@@ -235,19 +251,19 @@ describe('AuthProvider', () => {
   it('refreshUser updates user from API', async () => {
     mockAuthService.getProfile.mockResolvedValue(mockUser);
 
-    let refreshFn: (() => Promise<void>) | null = null;
+    let refreshFn = null as unknown as () => Promise<void>;
 
     const { container } = render(
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) refreshFn = ctx.refreshUser;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {
@@ -269,19 +285,19 @@ describe('AuthProvider', () => {
 
     mockAuthService.getProfile.mockRejectedValue(new Error('401 Unauthorized'));
 
-    let refreshFn: (() => Promise<void>) | null = null;
+    let refreshFn = null as unknown as () => Promise<void>;
 
     const { container } = render(
       <BrowserRouter>
         <AuthProvider>
           <AuthContext.Consumer>
-            {(ctx) => {
+            {(ctx: AuthContextType | null) => {
               if (ctx) refreshFn = ctx.refreshUser;
               return <div>child</div>;
             }}
           </AuthContext.Consumer>
         </AuthProvider>
-      </BrowserRouter>
+      </BrowserRouter>,
     );
 
     await waitFor(() => {

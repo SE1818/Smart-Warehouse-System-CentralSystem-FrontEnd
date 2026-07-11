@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -113,7 +113,7 @@ tr {
 
 .Toastify__toast--warning {
   background: #fff3e0 !important;
-  color: #e65100 !important;
+  color: #a83a00 !important;
   border-left: 4px solid #e85d04 !important;
 }
 

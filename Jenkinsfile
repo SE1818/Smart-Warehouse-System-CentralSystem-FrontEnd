@@ -11,6 +11,7 @@ pipeline {
         SONAR_ORGANIZATION = 'se1818'
         IMAGE_NAME = 'smartwarehouse-central-system-frontend'
         REGISTRY = 'docker.io'
+        PROJECT_DIR = 'Smart-Warehouse-System-CentralSystem-FrontEnd'
     }
 
     options {
@@ -22,7 +23,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     checkout scm
                 }
             }
@@ -30,7 +31,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     sh 'npm ci'
                 }
             }
@@ -38,7 +39,7 @@ pipeline {
 
         stage('Lint & Type Check') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     sh 'npm run lint --if-present'
                     sh 'npx tsc --noEmit'
                 }
@@ -47,7 +48,7 @@ pipeline {
 
         stage('Test') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     // Chạy test sinh file lcov để chuẩn bị nạp dữ liệu cho bước Sonar
                     sh 'npx vitest run --coverage'
                 }
@@ -56,7 +57,7 @@ pipeline {
 
         stage('SonarQube & Build') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     script {
                         try {
                             withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN_CRED')]) {
@@ -85,7 +86,7 @@ pipeline {
             steps {
                 script {
                     def imageTag = env.BUILD_NUMBER
-                    dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                    dir(env.PROJECT_DIR) {
                         sh "docker build -t ${IMAGE_NAME}:${imageTag} -t ${IMAGE_NAME}:latest ."
                     }
                 }

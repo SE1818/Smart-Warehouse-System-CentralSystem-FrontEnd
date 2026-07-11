@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
@@ -81,12 +82,12 @@ describe('StockLevelsPage', () => {
         productId: 'p1',
         quantity: 100,
         reservedQuantity: 10,
-        product: { id: 'p1', sku: 'SKU001', name: 'Sản phẩm A', description: '', price: 100000, stockQuantity: 50 },
-        warehouse: { id: 'w1', code: 'WH01', name: 'Kho chính', address: 'Hà Nội' },
-      },
+        product: { id: 'p1', sku: 'SKU001', name: 'Sản phẩm A', description: '', price: 100000, stockQuantity: 50 } as any,
+        warehouse: { id: 'w1', code: 'WH01', name: 'Kho chính', address: 'Hà Nội' } as any,
+      } as any,
     ]);
-    const spyWh = vi.spyOn(stockService, 'getWarehouses').mockResolvedValue([{ id: 'w1', code: 'WH01', name: 'Kho chính', address: 'Hà Nội', isActive: true }]);
-    const spyProd = vi.spyOn(stockService, 'getProducts').mockResolvedValue([{ id: 'p1', sku: 'SKU001', name: 'Sản phẩm A', description: '', price: 10000 }]);
+    const spyWh = vi.spyOn(stockService, 'getWarehouses').mockResolvedValue([{ id: 'w1', code: 'WH01', name: 'Kho chính', address: 'Hà Nội', isActive: true } as any]);
+    const spyProd = vi.spyOn(stockService, 'getProducts').mockResolvedValue([{ id: 'p1', sku: 'SKU001', name: 'Sản phẩm A', description: '', price: 10000 } as any]);
 
     renderStockLevels();
 

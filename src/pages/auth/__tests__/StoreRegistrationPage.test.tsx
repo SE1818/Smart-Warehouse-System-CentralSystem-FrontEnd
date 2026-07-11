@@ -1,6 +1,7 @@
-/** @vitest-environment jsdom */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { StoreRegistrationPage } from '../StoreRegistrationPage';
 
 vi.mock('@/components/Icons', () => {

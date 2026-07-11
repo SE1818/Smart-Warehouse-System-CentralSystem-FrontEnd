@@ -19,15 +19,15 @@ vi.mock('@/components/Icons', () => ({
 }));
 
 // Declare mock variables BEFORE vi.mock so the factory can reference them
-const mockSuggestProducts = vi.fn<[string, number?], Promise<string[]>>();
-const mockSearchProducts = vi.fn<[string], Promise<ProductIndex[]>>();
-const mockAskWarehouseAssistant = vi.fn<[string], Promise<AskResponse>>();
+const mockSuggestProducts = vi.fn();
+const mockSearchProducts = vi.fn();
+const mockAskWarehouseAssistant = vi.fn();
 
 vi.mock('@/services/search', () => ({
   searchService: {
-    suggestProducts: (...args: unknown[]) => mockSuggestProducts(...args),
-    searchProducts: (...args: unknown[]) => mockSearchProducts(...args),
-    askWarehouseAssistant: (...args: unknown[]) => mockAskWarehouseAssistant(...args),
+    suggestProducts: (...args: unknown[]) => mockSuggestProducts(...args) as Promise<string[]>,
+    searchProducts: (...args: unknown[]) => mockSearchProducts(...args) as unknown as Promise<ProductIndex[]>,
+    askWarehouseAssistant: (...args: unknown[]) => mockAskWarehouseAssistant(...args) as unknown as Promise<AskResponse>,
   },
 }));
 

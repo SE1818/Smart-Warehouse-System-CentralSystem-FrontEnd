@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
@@ -73,11 +74,11 @@ async function getService() {
   return mod.stockService;
 }
 
-async function setupMocks(movements: unknown[] = [], warehouses: unknown[] = mockWarehouses, levels: unknown[] = [{}]) {
+async function setupMocks(movements: any[] = [], warehouses: any[] = mockWarehouses, levels: any[] = [{}]) {
   const svc = await getService();
-  serviceSpies.push(vi.spyOn(svc, 'getStockMovements').mockResolvedValue(movements));
-  serviceSpies.push(vi.spyOn(svc, 'getWarehouses').mockResolvedValue(warehouses));
-  serviceSpies.push(vi.spyOn(svc, 'getStockLevels').mockResolvedValue(levels));
+  serviceSpies.push(vi.spyOn(svc, 'getStockMovements').mockResolvedValue(movements as any));
+  serviceSpies.push(vi.spyOn(svc, 'getWarehouses').mockResolvedValue(warehouses as any));
+  serviceSpies.push(vi.spyOn(svc, 'getStockLevels').mockResolvedValue(levels as any));
 }
 
 const waitLoaded = () => waitFor(() => {
@@ -115,10 +116,10 @@ describe('StockMovementsPage', () => {
     const svc = await getService();
     // All three services must be mocked — the page calls getWarehouses then getStockMovements
     serviceSpies.push(vi.spyOn(svc, 'getStockMovements').mockReturnValue(
-      new Promise((resolve) => setTimeout(() => resolve([]), 500))
+      new Promise((resolve) => setTimeout(() => resolve([]), 500)) as any
     ));
-    serviceSpies.push(vi.spyOn(svc, 'getWarehouses').mockResolvedValue(mockWarehouses));
-    serviceSpies.push(vi.spyOn(svc, 'getStockLevels').mockResolvedValue([]));
+    serviceSpies.push(vi.spyOn(svc, 'getWarehouses').mockResolvedValue(mockWarehouses as any));
+    serviceSpies.push(vi.spyOn(svc, 'getStockLevels').mockResolvedValue([] as any));
     renderWithRouter(<StockMovementsPage />);
     // Spinner is visible before the async fetch resolves
     expect(screen.getByTestId('icon-spinner')).toBeDefined();

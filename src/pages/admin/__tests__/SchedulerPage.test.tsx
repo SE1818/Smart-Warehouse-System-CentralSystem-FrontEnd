@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { SchedulerPage } from '../SchedulerPage';
-import type { SchedulerJob, SchedulerResponse } from '@/services/scheduler';
+import type { SchedulerJob, SchedulerResponse, SchedulerTrigger } from '@/services/scheduler';
 
 vi.mock('@/components/Icons', () => {
   const mockIcon = (name: string) => () => <span data-testid={`icon-${name}`}>{name}Icon</span>;
@@ -66,7 +66,7 @@ const mockJob = (
   jobType: 'org.quartz.Job',
   isCurrentlyRunning: (overrides.isCurrentlyRunning as boolean) ?? false,
   durable: true,
-  triggers: (overrides.triggers as SchedulerTrigger[]) ?? [
+  triggers: (overrides.triggers as SchedulerTrigger[] | undefined) ?? [
     {
       triggerKey: 't1',
       triggerType: 'CRON',

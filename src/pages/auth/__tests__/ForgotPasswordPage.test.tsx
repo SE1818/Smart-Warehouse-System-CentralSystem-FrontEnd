@@ -70,7 +70,7 @@ describe('ForgotPasswordPage', () => {
 
   it('should show success message and clear email on success', async () => {
     const user = userEvent.setup();
-    vi.mocked(authService.forgotPassword).mockResolvedValueOnce(undefined);
+    vi.mocked(authService.forgotPassword).mockResolvedValueOnce({ message: 'success' });
 
     renderForgotPasswordPage();
 
@@ -87,9 +87,9 @@ describe('ForgotPasswordPage', () => {
 
   it('should show loading state with spinner and "Sending..." text', async () => {
     const user = userEvent.setup();
-    let resolveFn: (value: void | PromiseLike<void>) => void;
+    let resolveFn: (value: { message: string } | PromiseLike<{ message: string }>) => void;
     vi.mocked(authService.forgotPassword).mockImplementation(
-      () => new Promise<void>((resolve) => { resolveFn = resolve; })
+      () => new Promise<{ message: string }>((resolve) => { resolveFn = resolve; })
     );
 
     renderForgotPasswordPage();
@@ -100,7 +100,7 @@ describe('ForgotPasswordPage', () => {
     expect(screen.getByText('Sending...')).toBeInTheDocument();
     expect(screen.getByTestId('spinner-icon')).toBeInTheDocument();
 
-    resolveFn!();
+    resolveFn!({ message: 'success' });
   });
 
   it('should have "Remember your password?" link to /login', () => {

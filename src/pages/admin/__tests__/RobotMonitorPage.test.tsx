@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
+import type { Robot } from '@/types/robot';
 import { RobotMonitorPage } from '../RobotMonitorPage';
 
 window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -70,13 +72,13 @@ vi.mock('@microsoft/signalr', () => ({
 const renderRobotMonitorPage = () =>
   render(<BrowserRouter><RobotMonitorPage /></BrowserRouter>);
 
-const robot = (overrides: Record<string, unknown> = {}): Robot => ({
+const robot = (overrides: Record<string, unknown> = {}): any => ({
   id: overrides.id as string ?? 'r1',
   name: overrides.name as string ?? 'Robot-01',
   currentX: overrides.currentX as number ?? 5,
   currentY: overrides.currentY as number ?? 3,
   batteryLevel: overrides.batteryLevel as number ?? 80,
-  status: overrides.status as string ?? 'idle',
+  status: (overrides.status as Robot['status']) ?? 'Idle',
   ipAddress: 'ipAddress' in overrides ? overrides.ipAddress as string | undefined : undefined,
   updatedAt: overrides.updatedAt as string ?? '2025-06-15T00:00:00Z',
 });

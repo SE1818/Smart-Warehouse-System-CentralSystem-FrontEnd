@@ -11,7 +11,7 @@ interface CustomSelectProps {
   icon?: React.ReactNode;
 }
 
-export function CustomSelect({ label, value, onChange, options, placeholder, className = '', disabled = false, icon }: CustomSelectProps) {
+export function CustomSelect({ label, value, onChange, options, placeholder, className = '', disabled = false, icon }: Readonly<CustomSelectProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
@@ -59,6 +59,8 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
         <button
           ref={buttonRef}
           type="button"
+          role="combobox"
+          aria-expanded={isOpen}
           disabled={disabled}
           onClick={() => setIsOpen(!isOpen)}
           className={`w-full flex items-center justify-between ${icon ? 'pl-11' : 'px-4'} py-3 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-350 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-sm font-semibold text-slate-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed`}

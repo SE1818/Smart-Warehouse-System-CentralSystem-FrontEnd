@@ -13,7 +13,7 @@ ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set fetch-retry-maxtimeout 300000
 
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --ignore-scripts
 
 # Copy toàn bộ source code
 COPY . .
