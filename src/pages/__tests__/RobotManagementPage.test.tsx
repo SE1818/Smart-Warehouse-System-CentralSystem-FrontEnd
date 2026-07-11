@@ -26,6 +26,8 @@ vi.mock('@/components/Icons', () => {
       Spinner: mockIcon('spinner'),
       Refresh: mockIcon('refresh'),
       Truck: mockIcon('truck'),
+      Warehouse: mockIcon('warehouse'),
+      Dashboard: mockIcon('dashboard'),
     },
   };
 });
@@ -50,6 +52,8 @@ vi.mock('@/services/robot', () => ({
     moveRobot: vi.fn(),
     updateRobotStatus: vi.fn(),
     fulfillOrder: vi.fn(),
+    getAreas: vi.fn().mockResolvedValue([]),
+    getStations: vi.fn().mockResolvedValue([]),
   },
 }));
 

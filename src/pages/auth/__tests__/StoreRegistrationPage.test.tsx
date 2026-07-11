@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { toast } from 'react-toastify';
 import { StoreRegistrationPage } from '../StoreRegistrationPage';
 
 vi.mock('@/components/Icons', () => {
@@ -40,6 +39,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 import { storeService, robotService } from '@/services';
+import { toast } from 'react-toastify';
 
 function renderStoreRegistration() {
   return render(
@@ -64,10 +64,10 @@ describe('StoreRegistrationPage', () => {
 
   it('renders all form fields', async () => {
     vi.mocked(robotService.getAreas).mockResolvedValueOnce([
-      { id: 'area-1', name: 'Khu vực chính' },
+      { id: 'area-1', name: 'Khu vực chính', level: 1 },
     ]);
     vi.mocked(robotService.getStations).mockResolvedValueOnce([
-      { id: 'station-1', name: 'ST01', areaId: 'area-1' },
+      { id: 'station-1', name: 'ST01', areaId: 'area-1', stationType: 'dropoff', xCoord: 0, yCoord: 0 },
     ]);
 
     renderStoreRegistration();
@@ -96,10 +96,10 @@ describe('StoreRegistrationPage', () => {
 
   it('submit calls registerStore with correct data', async () => {
     vi.mocked(robotService.getAreas).mockResolvedValueOnce([
-      { id: 'area-1', name: 'Khu A' },
+      { id: 'area-1', name: 'Khu A', level: 1 },
     ]);
     vi.mocked(robotService.getStations).mockResolvedValueOnce([
-      { id: 'st-1', name: 'ST01', areaId: 'area-1' },
+      { id: 'st-1', name: 'ST01', areaId: 'area-1', stationType: 'dropoff', xCoord: 0, yCoord: 0 },
     ]);
     vi.mocked(storeService.registerStore).mockResolvedValueOnce({ message: 'OK' });
 

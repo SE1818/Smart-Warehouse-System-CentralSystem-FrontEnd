@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Icons } from '@/components/Icons';
 import { storeService, robotService } from '@/services';
+import type { Area, Station } from '../../types/robot';
 
 export function StoreRegistrationPage() {
   const navigate = useNavigate();
@@ -14,8 +15,9 @@ export function StoreRegistrationPage() {
   const [selectedAreaId, setSelectedAreaId] = useState('');
   const [selectedStationId, setSelectedStationId] = useState('');
   
-  const [areas, setAreas] = useState<{ id: string; name: string }[]>([]);
-  const [stations, setStations] = useState<{ id: string; name: string; areaId: string }[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
+
   
   const [loading, setLoading] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(true);
@@ -38,15 +40,15 @@ export function StoreRegistrationPage() {
         toast.warning('Không thể kết nối dịch vụ vị trí, đang sử dụng dữ liệu dự phòng.');
         
         // Fallback data
-        const fallbackAreas = [
-          { id: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', name: 'Khu vực chính (Mặc định)' }
+        const fallbackAreas: Area[] = [
+          { id: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', name: 'Khu vực chính (Mặc định)', level: 1 }
         ];
-        const fallbackStations = [
-          { id: '11111111-1111-1111-1111-111111111111', name: 'ST01 (Trạm Dropoff A)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2' },
-          { id: '22222222-2222-2222-2222-222222222222', name: 'ST02 (Trạm Dropoff B)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2' },
-          { id: '33333333-3333-3333-3333-333333333333', name: 'ST03 (Trạm Dropoff C)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2' },
-          { id: '44444444-4444-4444-4444-444444444444', name: 'ST04 (Trạm Dropoff D)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2' },
-          { id: '55555555-5555-5555-5555-555555555555', name: 'ST05 (Trạm Pickup E)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2' }
+        const fallbackStations: Station[] = [
+          { id: '11111111-1111-1111-1111-111111111111', name: 'ST01 (Trạm Dropoff A)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', stationType: 'dropoff', xCoord: 0, yCoord: 0 },
+          { id: '22222222-2222-2222-2222-222222222222', name: 'ST02 (Trạm Dropoff B)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', stationType: 'dropoff', xCoord: 0, yCoord: 0 },
+          { id: '33333333-3333-3333-3333-333333333333', name: 'ST03 (Trạm Dropoff C)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', stationType: 'dropoff', xCoord: 0, yCoord: 0 },
+          { id: '44444444-4444-4444-4444-444444444444', name: 'ST04 (Trạm Dropoff D)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', stationType: 'dropoff', xCoord: 0, yCoord: 0 },
+          { id: '55555555-5555-5555-5555-555555555555', name: 'ST05 (Trạm Pickup E)', areaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2', stationType: 'pickup', xCoord: 0, yCoord: 0 }
         ];
 
         setAreas(fallbackAreas);
