@@ -32,7 +32,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir(env.PROJECT_DIR) {
-                    sh 'npm ci'
+                    sh 'npm ci --include=dev'
                 }
             }
         }
