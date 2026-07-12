@@ -47,6 +47,9 @@ pipeline {
         }
 
         stage('Test') {
+            environment {
+                NODE_ENV = 'test'
+            }
             steps {
                 dir(env.PROJECT_DIR) {
                     // Chạy test sinh file lcov để chuẩn bị nạp dữ liệu cho bước Sonar
