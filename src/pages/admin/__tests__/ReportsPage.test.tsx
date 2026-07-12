@@ -88,10 +88,10 @@ describe('ReportsPage', () => {
 
   it('renders stat cards with metrics after data loads', async () => {
     vi.mocked(metricsService.getMetrics).mockResolvedValue([
-      { id: '1', metricType: MetricType.Temperature, metricValue: 25.5, warehouseId: 'wh1', recordedAt: '2025-06-01T00:00:00Z' },
-      { id: '2', metricType: MetricType.Humidity, metricValue: 60.0, warehouseId: 'wh1', recordedAt: '2025-06-01T00:00:00Z' },
-      { id: '3', metricType: MetricType.PowerConsumption, metricValue: 150.0, warehouseId: 'wh1', recordedAt: '2025-06-01T00:00:00Z' },
-      { id: '4', metricType: MetricType.InventoryCount, metricValue: 500, warehouseId: 'wh1', recordedAt: '2025-06-01T00:00:00Z' },
+      { id: '1', metricType: MetricType.Temperature, metricValue: 25.5, warehouseId: 'wh1', timestamp: '2025-06-01T00:00:00Z', createdAt: '2025-06-01T00:00:00Z', },
+      { id: '2', metricType: MetricType.Humidity, metricValue: 60.0, warehouseId: 'wh1', timestamp: '2025-06-01T00:00:00Z', createdAt: '2025-06-01T00:00:00Z', },
+      { id: '3', metricType: MetricType.PowerConsumption, metricValue: 150.0, warehouseId: 'wh1', timestamp: '2025-06-01T00:00:00Z', createdAt: '2025-06-01T00:00:00Z', },
+      { id: '4', metricType: MetricType.InventoryCount, metricValue: 500, warehouseId: 'wh1', timestamp: '2025-06-01T00:00:00Z', createdAt: '2025-06-01T00:00:00Z', },
     ]);
     renderReportsPage();
 

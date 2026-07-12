@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { RegisterPage } from '../RegisterPage';
@@ -215,9 +215,11 @@ describe('RegisterPage', () => {
     await user.type(secondPassword(), 'ValidPass1!');
     await user.click(screen.getByText('Đăng ký'));
 
-    const shownUsername = screen.queryByText('Username already taken');
-    const shownEmail = screen.queryByText('Email already exists');
-    expect(shownUsername || shownEmail).toBeInTheDocument();
+    await waitFor(() => {
+      const shownUsername = screen.queryByText('Username already taken');
+      const shownEmail = screen.queryByText('Email already exists');
+      expect(shownUsername || shownEmail).not.toBeNull();
+    });
   });
 
   it('shows default error message when no structured error data is provided', async () => {

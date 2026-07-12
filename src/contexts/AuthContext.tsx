@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
 import type { User } from '@/types/auth';
 import { authService } from '@/services/auth';
 
@@ -15,11 +15,11 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const userData = await authService.getProfile();
       setUser(userData);
@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -48,19 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const response = await authService.login({ email, password });
     localStorage.setItem('authToken', response.accessToken);
     await refreshUser();
-  };
+  }, [refreshUser]);
 
-  const register = async (username: string, email: string, password: string) => {
+  const register = useCallback(async (username: string, email: string, password: string) => {
     const response = await authService.register({ username, email, password });
     localStorage.setItem('authToken', response.accessToken);
     await refreshUser();
-  };
+  }, [refreshUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await authService.logout();
     } finally {
@@ -68,10 +68,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('user');
       setUser(null);
     }
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    user,
+    loading,
+    login,
+    register,
+    logout,
+    refreshUser
+  }), [user, loading, login, register, logout, refreshUser]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

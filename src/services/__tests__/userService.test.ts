@@ -39,4 +39,11 @@ describe('userService', () => {
     await userService.deleteUser('u1');
     expect(del).toHaveBeenCalledWith('/admin/users/u1');
   });
+
+  it('getAllUsers returns array from items when res.data has items', async () => {
+    get.mockResolvedValue({ data: { items: [{ id: 'u2', username: 'B', email: 'b@t.com', role: 'ADMIN', isActive: true }] } });
+    const res = await userService.getAllUsers();
+    expect(res.length).toBe(1);
+    expect(res[0].username).toBe('B');
+  });
 });

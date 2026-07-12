@@ -46,4 +46,29 @@ describe('fileService', () => {
     await fileService.deleteFile('https://s3/key');
     expect(del).toHaveBeenCalled();
   });
+
+  it('downloadFile downloads successfully', async () => {
+    const mockBlob = new Blob(['data']);
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      blob: async () => mockBlob,
+    } as unknown as Response);
+
+    const res = await fileService.downloadFile('http://t.com/file');
+    expect(fetchSpy).toHaveBeenCalledWith('http://t.com/file');
+    expect(res).toBe(mockBlob);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('downloadFile throws error when status is not ok', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      statusText: 'Not Found',
+    } as unknown as Response);
+
+    await expect(fileService.downloadFile('http://t.com/file')).rejects.toThrow('Failed to download file: Not Found');
+
+    fetchSpy.mockRestore();
+  });
 });

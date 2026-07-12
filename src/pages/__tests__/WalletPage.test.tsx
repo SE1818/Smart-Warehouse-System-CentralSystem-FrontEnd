@@ -26,6 +26,7 @@ vi.mock('@/components/Icons', () => ({
 }));
 
 vi.mock('@/services/wallet', () => ({
+  __esModule: true,
   walletService: {
     getBalance: vi.fn(),
     getTransactions: vi.fn(),
@@ -33,9 +34,11 @@ vi.mock('@/services/wallet', () => ({
   },
 }));
 
-const walletService = vi.mocked(
-  await import('@/services/wallet')
-).walletService;
+const walletService = (await import('@/services/wallet')).walletService as unknown as {
+  getBalance: ReturnType<typeof vi.fn>;
+  getTransactions: ReturnType<typeof vi.fn>;
+  topUp: ReturnType<typeof vi.fn>;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,8 +80,8 @@ describe('WalletPage', () => {
   });
 
   it('shows loading skeleton while fetching data', () => {
-    let balanceResolve: (value: MockWallet) => void;
-    const pendingBalance = new Promise<MockWallet>((r) => {
+    let balanceResolve!: (value: { id: string; userId: string; balance: number }) => void;
+    const pendingBalance = new Promise<{ id: string; userId: string; balance: number }>((r) => {
       balanceResolve = r;
     });
     walletService.getBalance.mockReturnValue(pendingBalance);
@@ -87,7 +90,7 @@ describe('WalletPage', () => {
     renderWalletPage();
 
     expect(screen.getByText('Đang tải thông tin ví...')).toBeDefined();
-    balanceResolve!({ id: 'w1', userId: 'u1', balance: 100000 });
+    balanceResolve({ id: 'w1', userId: 'u1', balance: 100000 });
   });
 
   it('renders top-up form with amount and description fields', async () => {

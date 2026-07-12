@@ -43,7 +43,7 @@ describe('VerifyEmailPage', () => {
   });
 
   it('should call verifyEmail when token is present', async () => {
-    vi.mocked(authService.verifyEmail).mockResolvedValueOnce(undefined);
+    vi.mocked(authService.verifyEmail).mockResolvedValueOnce({ message: 'success' });
 
     renderVerifyEmailPage(['/verify-email?token=valid-token']);
 
@@ -53,7 +53,7 @@ describe('VerifyEmailPage', () => {
   });
 
   it('should show success state after verification', async () => {
-    vi.mocked(authService.verifyEmail).mockResolvedValueOnce(undefined);
+    vi.mocked(authService.verifyEmail).mockResolvedValueOnce({ message: 'success' });
 
     renderVerifyEmailPage(['/verify-email?token=valid-token']);
 
@@ -75,7 +75,7 @@ describe('VerifyEmailPage', () => {
   });
 
   it('should show "Go to Login" link in all states', async () => {
-    vi.mocked(authService.verifyEmail).mockResolvedValueOnce(undefined);
+    vi.mocked(authService.verifyEmail).mockResolvedValueOnce({ message: 'success' });
 
     renderVerifyEmailPage(['/verify-email?token=valid-token']);
 
@@ -86,9 +86,9 @@ describe('VerifyEmailPage', () => {
   });
 
   it('should show "Go to Login" link on loading state', async () => {
-    let resolveFn: (value: void | PromiseLike<void>) => void;
+    let resolveFn: (value: { message: string } | PromiseLike<{ message: string }>) => void;
     vi.mocked(authService.verifyEmail).mockImplementation(
-      () => new Promise<void>((resolve) => { resolveFn = resolve; })
+      () => new Promise<{ message: string }>((resolve) => { resolveFn = resolve; })
     );
 
     renderVerifyEmailPage(['/verify-email?token=valid-token']);
@@ -97,6 +97,6 @@ describe('VerifyEmailPage', () => {
     expect(screen.getByText('Verifying your email...')).toBeInTheDocument();
     expect(screen.getByText('Go to Login')).toBeInTheDocument();
 
-    resolveFn!();
+    resolveFn!({ message: 'success' });
   });
 });

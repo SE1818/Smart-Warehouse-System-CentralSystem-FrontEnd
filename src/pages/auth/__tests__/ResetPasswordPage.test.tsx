@@ -19,6 +19,7 @@ vi.mock('@/services', () => ({
 }));
 
 import { ResetPasswordPage } from '../ResetPasswordPage';
+import { authService } from '@/services';
 
 function renderResetPassword(entries: string[] = ['/']) {
   return render(
@@ -33,8 +34,8 @@ describe('ResetPasswordPage', () => {
     localStorage.clear();
   });
 
-  afterEach(async () => {
-    vi.mocked(await import('@/services')).authService.resetPassword.mockReset();
+  afterEach(() => {
+    vi.mocked(authService.resetPassword).mockReset();
   });
 
   it('shows error when no token in URL', async () => {
@@ -77,7 +78,7 @@ describe('ResetPasswordPage', () => {
   });
 
   it('success calls resetPassword with correct data', async () => {
-    vi.mocked(await import('@/services')).authService.resetPassword.mockResolvedValueOnce(undefined);
+    vi.mocked(authService.resetPassword).mockResolvedValueOnce({ message: 'success' });
     renderResetPassword(['/reset-password?token=valid-token&email=test@example.com']);
     await waitFor(() => expect(screen.getAllByPlaceholderText('••••••••').length).toBe(2));
     const [pw1, pw2] = screen.getAllByPlaceholderText('••••••••');

@@ -6,6 +6,7 @@ export interface Robot {
   battery: number;
   status: 'Idle' | 'Moving' | 'Charging' | 'Error' | 'Offline';
   currentAreaId?: string;
+  destination?: string;
   createdAt?: string;
   updatedAt?: string;
 }

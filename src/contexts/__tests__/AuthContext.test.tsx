@@ -45,8 +45,12 @@ function waitForSlot(slot: string, timeout = 3000): Promise<AuthContextType> {
     const check = () => {
       const el = document.querySelector(`[data-slot="${slot}"]`) as HTMLElement | null;
       if (el && el.getAttribute('data-loading') !== null) {
-        clearTimeout(timer);
         const loading = el.getAttribute('data-loading') === 'true';
+        if (slot === 'settled' && loading) {
+          setTimeout(check, 50);
+          return;
+        }
+        clearTimeout(timer);
         const username = el.getAttribute('data-user');
         cleanup();
         resolve({

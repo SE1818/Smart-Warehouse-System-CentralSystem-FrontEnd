@@ -265,4 +265,126 @@ describe('FileManagementPage', () => {
       expect(fileService.listFiles).toHaveBeenCalledWith(undefined);
     });
   });
+
+  it('handles selecting and uploading a product file successfully', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.mocked(fileService.listFiles).mockResolvedValue({
+      subFolder: 'products',
+      count: 0,
+      files: [],
+    });
+    vi.mocked(fileService.uploadProductImage).mockResolvedValue({ fileName: 'prod.png', url: '', originalName: 'prod.png', size: 100, version: 1, sha256Hash: 'hash' });
+
+    renderFileManagementPage();
+
+    await user.click(screen.getByText('Sản phẩm'));
+
+    const input = document.getElementById('file-upload')!;
+    const file = new File(['(binary)'], 'prod.png', { type: 'image/png' });
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const uploadBtn = screen.getByRole('button', { name: 'Upload' });
+    await user.click(uploadBtn);
+
+    await waitFor(() => {
+      expect(fileService.uploadProductImage).toHaveBeenCalledWith(file);
+    });
+    expect(alertSpy).toHaveBeenCalledWith('Upload thành công: prod.png');
+    alertSpy.mockRestore();
+  });
+
+  it('handles selecting and uploading a receipt file successfully', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.mocked(fileService.listFiles).mockResolvedValue({
+      subFolder: 'receipts',
+      count: 0,
+      files: [],
+    });
+    vi.mocked(fileService.uploadReceipt).mockResolvedValue({ fileName: 'receipt.pdf', url: '', originalName: 'receipt.pdf', size: 100, version: 1, sha256Hash: 'hash' });
+
+    renderFileManagementPage();
+
+    await user.click(screen.getByText('Hóa đơn'));
+
+    const input = document.getElementById('file-upload')!;
+    const file = new File(['(binary)'], 'receipt.pdf', { type: 'application/pdf' });
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const uploadBtn = screen.getByRole('button', { name: 'Upload' });
+    await user.click(uploadBtn);
+
+    await waitFor(() => {
+      expect(fileService.uploadReceipt).toHaveBeenCalledWith(file);
+    });
+    expect(alertSpy).toHaveBeenCalledWith('Upload thành công: receipt.pdf');
+    alertSpy.mockRestore();
+  });
+
+  it('handles selecting and uploading an avatar file successfully', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.mocked(fileService.listFiles).mockResolvedValue({
+      subFolder: 'avatars',
+      count: 0,
+      files: [],
+    });
+    vi.mocked(fileService.uploadAvatar).mockResolvedValue({ fileName: 'avatar.jpg', url: '', originalName: 'avatar.jpg', size: 100, version: 1, sha256Hash: 'hash' });
+
+    renderFileManagementPage();
+
+    await user.click(screen.getByText('Avatar'));
+
+    const input = document.getElementById('file-upload')!;
+    const file = new File(['(binary)'], 'avatar.jpg', { type: 'image/jpeg' });
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    const uploadBtn = screen.getByRole('button', { name: 'Upload' });
+    await user.click(uploadBtn);
+
+    await waitFor(() => {
+      expect(fileService.uploadAvatar).toHaveBeenCalledWith(file);
+    });
+    expect(alertSpy).toHaveBeenCalledWith('Upload thành công: avatar.jpg');
+    alertSpy.mockRestore();
+  });
+
+  it('handles downloading a file successfully', async () => {
+    const user = userEvent.setup();
+    const mockBlob = new Blob(['hello'], { type: 'application/pdf' });
+    vi.mocked(fileService.listFiles).mockResolvedValue({
+      subFolder: '',
+      count: 1,
+      files: [
+        { fileName: 'doc.pdf', url: 'http://localhost:5000/api/v1/files/doc.pdf' },
+      ],
+    });
+    const downloadSpy = vi.fn().mockResolvedValue(mockBlob);
+    vi.mocked(fileService).downloadFile = downloadSpy;
+
+    const createObjectUrlSpy = vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:url');
+    const revokeObjectUrlSpy = vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    renderFileManagementPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Tải xuống')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText('Tải xuống'));
+
+    await waitFor(() => {
+      expect(downloadSpy).toHaveBeenCalledWith('doc.pdf');
+    });
+
+    expect(createObjectUrlSpy).toHaveBeenCalledWith(mockBlob);
+    expect(revokeObjectUrlSpy).toHaveBeenCalledWith('blob:url');
+
+    createObjectUrlSpy.mockRestore();
+    revokeObjectUrlSpy.mockRestore();
+  });
 });

@@ -144,10 +144,10 @@ export function StoresPage() {
             <div
               key={store.id}
               onClick={() => setSelectedStore(store)}
-        onKeyDown={(e) => { if (e.key === 'Enter') setSelectedStore(store); }}
-  role="button"
-        tabIndex={0}
-        aria-label="Xem sản phẩm cửa hàng"
+              onKeyDown={(e) => { if (e.key === 'Enter') setSelectedStore(store); }}
+              role="button"
+              tabIndex={0}
+              aria-label="Xem sản phẩm cửa hàng"
               className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer overflow-hidden"
             >
               {/* Card top accent bar */}
@@ -197,14 +197,16 @@ export function StoresPage() {
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedStore(null)}
           onKeyDown={(e) => { if (e.key === "Escape") setSelectedStore(null); }}
-  role="dialog"
-  aria-modal="true"
-  aria-label="Chi tiết cửa hàng"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Chi tiết cửa hàng"
           tabIndex={0}
         >
           <div
             className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="document"
           >
             {/* Modal Header */}
             <div className={`px-6 py-5 bg-gradient-to-r ${getAvatarColor(selectedStore.name)} flex items-center justify-between`}>

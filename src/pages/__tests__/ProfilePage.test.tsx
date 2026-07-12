@@ -23,13 +23,11 @@ vi.mock('@/services/profile', () => ({
   },
 }));
 
-const profileService = vi.mocked(
-  await import('@/services/profile')
-).profileService;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const profileService = (await import('@/services/profile')).profileService as any;
 
 // ─── Mock types ───────────────────────────────────────────────────────────────
 
-// Minimal Profile type shape matching the real one
 type MockProfile = {
   id: string;
   email: string;
@@ -65,7 +63,7 @@ function renderProfilePage() {
   return render(
     <BrowserRouter>
       <ProfilePage />
-    </BrowserRouter>
+    </BrowserRouter>,
   );
 }
 
@@ -79,9 +77,7 @@ describe('ProfilePage', () => {
 
   it('renders "Hồ sơ cá nhân" heading', async () => {
     profileService.getProfile.mockResolvedValue(mockProfile());
-
     renderProfilePage();
-
     await waitFor(() => {
       expect(screen.getByText('Hồ sơ cá nhân')).toBeDefined();
     });
@@ -93,25 +89,18 @@ describe('ProfilePage', () => {
       resolve = r;
     });
     profileService.getProfile.mockReturnValue(pending);
-
     renderProfilePage();
-
     expect(screen.getByText('Đang tải thông tin hồ sơ...')).toBeDefined();
     resolve!(mockProfile());
   });
 
   it('renders form with user data after loading', async () => {
     profileService.getProfile.mockResolvedValue(mockProfile());
-
     renderProfilePage();
-
     await waitFor(() => {
       expect(screen.getByText('Hồ sơ cá nhân')).toBeDefined();
     });
-
-    // "Nguyễn Văn A" appears twice (in header + in info section) — use getAllByText
     expect(screen.getAllByText('Nguyễn Văn A').length).toBeGreaterThanOrEqual(1);
-    // "test@example.com" appears twice (in header + info section)
     expect(screen.getAllByText('test@example.com').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('0909123456')).toBeDefined();
   });
@@ -119,33 +108,24 @@ describe('ProfilePage', () => {
   it('save button triggers update mutation', async () => {
     profileService.getProfile.mockResolvedValue(mockProfile());
     profileService.updateProfile.mockResolvedValue(mockProfile());
-
     renderProfilePage();
-
     await waitFor(() => {
       expect(screen.getByText('Hồ sơ cá nhân')).toBeDefined();
     });
-
-    // Find the "Lưu thay đổi" button (in the edit form or inline save)
     const saveButton = screen.queryByText('Lưu thay đổi');
     if (saveButton) {
       await userEvent.click(saveButton);
-      // After click, the update mutation should have been called
       expect(profileService.updateProfile).toHaveBeenCalled();
     }
   });
 
   it('loading state disables save button', () => {
-    // This test verifies that during loading we see the spinner (no form rendered yet)
     let resolve: (value: MockProfile) => void;
     const pending = new Promise<MockProfile>((r) => {
       resolve = r;
     });
     profileService.getProfile.mockReturnValue(pending);
-
     renderProfilePage();
-
-    // During loading: no save button should be present (spinner only)
     expect(screen.queryByText('Lưu thay đổi')).toBeNull();
     expect(screen.getByText('Đang tải thông tin hồ sơ...')).toBeDefined();
     resolve!(mockProfile());
@@ -153,9 +133,7 @@ describe('ProfilePage', () => {
 
   it('shows error state when API fails', async () => {
     profileService.getProfile.mockRejectedValue(new Error('API error'));
-
     renderProfilePage();
-
     await waitFor(() => {
       expect(screen.getByText('Không thể tải thông tin hồ sơ')).toBeDefined();
     });

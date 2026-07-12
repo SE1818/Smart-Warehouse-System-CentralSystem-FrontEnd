@@ -375,6 +375,20 @@ export function RobotManagementPage() {
               <div 
                 className="relative w-full aspect-square max-w-[550px] border border-slate-800/80 rounded-lg overflow-hidden cursor-crosshair group/map"
                 onClick={handleMapClick}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    if (!selectedRobot) {
+                      toast.info('Vui lòng chọn một robot từ danh sách trước khi di chuyển!');
+                      return;
+                    }
+                    setClickedX(null);
+                    setClickedY(null);
+                    setShowMoveModal(true);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="Bản đồ vận hành kho. Chọn tọa độ để di chuyển robot."
               >
                 {/* Background Floor Plan Image */}
                 <img 
@@ -403,6 +417,14 @@ export function RobotManagementPage() {
                         className="absolute -translate-x-1/2 -translate-y-1/2 group/station cursor-pointer z-10"
                         style={{ left, top }}
                         onClick={(e) => e.stopPropagation()} // Prevent triggering map click when clicking station
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Trạm ${station.name}`}
                       >
                         {/* Station Icon and Badge */}
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center border shadow-md transition-transform duration-200 hover:scale-110 ${getStationStyles(station.stationType)}`}>
@@ -436,6 +458,15 @@ export function RobotManagementPage() {
                           e.stopPropagation();
                           setSelectedRobot(robot);
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            setSelectedRobot(robot);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Chọn robot ${robot.name}`}
                       >
                         {/* Pulse effect for selected or moving robot */}
                         {(isSelected || robot.status === 'Moving') && (

@@ -11,6 +11,7 @@ pipeline {
         SONAR_ORGANIZATION = 'se1818'
         IMAGE_NAME = 'smartwarehouse-central-system-frontend'
         REGISTRY = 'docker.io'
+        PROJECT_DIR = 'Smart-Warehouse-System-CentralSystem-FrontEnd'
     }
 
     options {
@@ -22,7 +23,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     checkout scm
                 }
             }
@@ -30,15 +31,15 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
-                    sh 'npm ci'
+                dir(env.PROJECT_DIR) {
+                    sh 'npm ci --include=dev'
                 }
             }
         }
 
         stage('Lint & Type Check') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     sh 'npm run lint --if-present'
                     sh 'npx tsc --noEmit'
                 }
@@ -46,8 +47,11 @@ pipeline {
         }
 
         stage('Test') {
+            environment {
+                NODE_ENV = 'test'
+            }
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     // Chạy test sinh file lcov để chuẩn bị nạp dữ liệu cho bước Sonar
                     sh 'npx vitest run --coverage'
                 }
@@ -56,7 +60,7 @@ pipeline {
 
         stage('SonarQube & Build') {
             steps {
-                dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
+                dir(env.PROJECT_DIR) {
                     script {
                         try {
                             withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN_CRED')]) {
@@ -85,8 +89,21 @@ pipeline {
             steps {
                 script {
                     def imageTag = env.BUILD_NUMBER
-                    dir('Smart-Warehouse-System-CentralSystem-FrontEnd') {
-                        sh "docker build -t ${IMAGE_NAME}:${imageTag} -t ${IMAGE_NAME}:latest ."
+                    dir(env.PROJECT_DIR) {
+                        sh """
+                            DOCKER_CMD="docker"
+                            if ! docker ps >/dev/null 2>&1; then
+                                if sudo docker ps >/dev/null 2>&1; then
+                                    DOCKER_CMD="sudo docker"
+                                elif sudo chmod 666 /var/run/docker.sock >/dev/null 2>&1; then
+                                    DOCKER_CMD="docker"
+                                else
+                                    echo "ERROR: Current user lacks permission to access Docker socket, and passwordless sudo is not configured."
+                                    exit 1
+                                fi
+                            fi
+                            \$DOCKER_CMD build -t ${IMAGE_NAME}:${imageTag} -t ${IMAGE_NAME}:latest .
+                        """
                     }
                 }
             }
@@ -101,11 +118,21 @@ pipeline {
                     def imageTag = env.BUILD_NUMBER
                     try {
                         withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB_CREDS', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                            sh "docker login -u \$DOCKER_USER -p \$DOCKER_PASS ${env.REGISTRY}"
-                            sh "docker tag ${IMAGE_NAME}:${imageTag} \$DOCKER_USER/${IMAGE_NAME}:${imageTag}"
-                            sh "docker tag ${IMAGE_NAME}:latest \$DOCKER_USER/${IMAGE_NAME}:latest"
-                            sh "docker push \$DOCKER_USER/${IMAGE_NAME}:${imageTag}"
-                            sh "docker push \$DOCKER_USER/${IMAGE_NAME}:latest"
+                            sh """
+                                DOCKER_CMD="docker"
+                                if ! docker ps >/dev/null 2>&1; then
+                                    if sudo docker ps >/dev/null 2>&1; then
+                                        DOCKER_CMD="sudo docker"
+                                    elif sudo chmod 666 /var/run/docker.sock >/dev/null 2>&1; then
+                                        DOCKER_CMD="docker"
+                                    fi
+                                fi
+                                \$DOCKER_CMD login -u \$DOCKER_USER -p \$DOCKER_PASS ${env.REGISTRY}
+                                \$DOCKER_CMD tag ${IMAGE_NAME}:${imageTag} \$DOCKER_USER/${IMAGE_NAME}:${imageTag}
+                                \$DOCKER_CMD tag ${IMAGE_NAME}:latest \$DOCKER_USER/${IMAGE_NAME}:latest
+                                \$DOCKER_CMD push \$DOCKER_USER/${IMAGE_NAME}:${imageTag}
+                                \$DOCKER_CMD push \$DOCKER_USER/${IMAGE_NAME}:latest
+                            """
                         }
                     } catch (Exception e) {
                         echo "Skipping Push: DOCKER_HUB_CREDS not configured or error: ${e.getMessage()}"

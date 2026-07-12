@@ -60,4 +60,11 @@ describe('robotService', () => {
     const res = await robotService.getStations();
     expect(res[0].areaId).toBe('a1');
   });
+
+  it('listPendingOrders returns pending orders', async () => {
+    get.mockResolvedValue({ data: [{ id: 'o1', status: 'Pending' }] });
+    const res = await robotService.listPendingOrders();
+    expect(res[0].id).toBe('o1');
+    expect(get).toHaveBeenCalledWith('/v1/orders/pending');
+  });
 });
