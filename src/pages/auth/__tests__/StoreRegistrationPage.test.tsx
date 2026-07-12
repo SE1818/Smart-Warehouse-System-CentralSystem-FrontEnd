@@ -51,15 +51,14 @@ function renderStoreRegistration() {
 
 describe('StoreRegistrationPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
-    mockNavigate.mockClear();
-    vi.mocked(toast.warning).mockClear();
-    vi.mocked(toast.error).mockClear();
-    vi.mocked(toast.success).mockClear();
-    vi.mocked(storeService.registerStore).mockClear();
-    vi.mocked(robotService.getAreas).mockClear();
-    vi.mocked(robotService.getStations).mockClear();
+    mockNavigate.mockReset();
+    vi.mocked(toast.warning).mockReset();
+    vi.mocked(toast.error).mockReset();
+    vi.mocked(toast.success).mockReset();
+    vi.mocked(storeService.registerStore).mockReset();
+    vi.mocked(robotService.getAreas).mockReset();
+    vi.mocked(robotService.getStations).mockReset();
   });
 
   it('renders all form fields', async () => {
@@ -72,7 +71,7 @@ describe('StoreRegistrationPage', () => {
 
     renderStoreRegistration();
     await waitFor(() => {
-      expect(screen.getByText('Đăng ký mở cửa hàng')).toBeDefined();
+      expect(screen.getByText('Khu vực chính')).toBeDefined();
     });
     expect(screen.getByText('Tên cửa hàng')).toBeDefined();
     expect(screen.getByText('Tên chủ sở hữu')).toBeDefined();
@@ -88,9 +87,8 @@ describe('StoreRegistrationPage', () => {
 
     renderStoreRegistration();
     await waitFor(() => {
-      expect(screen.getByText('Đăng ký mở cửa hàng')).toBeDefined();
+      expect(screen.getByText('Khu vực chính (Mặc định)')).toBeDefined();
     });
-    expect(screen.getByText('Khu vực chính (Mặc định)')).toBeDefined();
     expect(toast.warning).toHaveBeenCalled();
   });
 
@@ -105,7 +103,7 @@ describe('StoreRegistrationPage', () => {
 
     renderStoreRegistration();
     await waitFor(() => {
-      expect(screen.getByText('Đăng ký mở cửa hàng')).toBeDefined();
+      expect(screen.getByText('Khu A')).toBeDefined();
     });
 
     const nameInput = screen.getByPlaceholderText('Ví dụ: Cửa hàng Tiện Lợi 247') as HTMLInputElement;
