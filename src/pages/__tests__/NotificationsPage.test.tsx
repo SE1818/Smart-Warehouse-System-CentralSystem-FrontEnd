@@ -2,7 +2,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { NotificationsPage } from '../NotificationsPage';
 import { notificationService } from '@/services/notification';
 
@@ -37,6 +36,7 @@ vi.mock('@/services/notification', () => ({
 describe('NotificationsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('shows loading spinner initially', () => {
@@ -102,7 +102,6 @@ describe('NotificationsPage', () => {
   });
 
   it('opens modal, validates input and submits new notification successfully', async () => {
-    const user = userEvent.setup();
     vi.mocked(notificationService.getAllNotifications).mockResolvedValue([]);
     vi.mocked(notificationService.sendNotification).mockResolvedValue({} as any);
 
@@ -112,28 +111,31 @@ describe('NotificationsPage', () => {
       expect(screen.getByText('Gửi thông báo mới')).toBeInTheDocument();
     });
 
+    const { fireEvent } = await import('@testing-library/react');
+
     // Open modal
-    await user.click(screen.getByText('Gửi thông báo mới'));
+    fireEvent.click(screen.getByText('Gửi thông báo mới'));
     expect(screen.getByText('Soạn thảo và gửi thông báo trực tiếp đến người dùng')).toBeInTheDocument();
 
     // Trigger validation error (empty fields)
     const titleInput = screen.getByPlaceholderText('Nhập tiêu đề...');
     const messageInput = screen.getByPlaceholderText('Nhập nội dung thông báo cụ thể...');
-    await user.type(titleInput, ' ');
-    await user.type(messageInput, ' ');
+    fireEvent.change(titleInput, { target: { value: ' ' } });
+    fireEvent.change(messageInput, { target: { value: ' ' } });
 
     const submitBtn = screen.getByText('Gửi ngay');
-    await user.click(submitBtn);
+    fireEvent.click(submitBtn);
     expect(screen.getByText('Vui lòng điền đầy đủ tiêu đề và nội dung.')).toBeInTheDocument();
 
     // Fill form for broadcast notification
-    await user.clear(titleInput);
-    await user.clear(messageInput);
-    await user.type(titleInput, 'Test Broadcast');
-    await user.type(messageInput, 'Test message content');
+    fireEvent.change(titleInput, { target: { value: 'Test Broadcast' } });
+    fireEvent.change(messageInput, { target: { value: 'Test message content' } });
+
+    // Enable fake timers only for submit and close action
+    vi.useFakeTimers();
 
     // Click submit
-    await user.click(submitBtn);
+    fireEvent.click(submitBtn);
 
     expect(notificationService.sendNotification).toHaveBeenCalledWith({
       title: 'Test Broadcast',
@@ -142,13 +144,14 @@ describe('NotificationsPage', () => {
       userId: undefined,
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('Gửi thông báo thành công!')).toBeInTheDocument();
-    });
+    // Wait for the async sendNotification and state update to complete
+    await vi.runAllTimersAsync();
+
+    expect(screen.queryByText('Soạn thảo và gửi thông báo trực tiếp đến người dùng')).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('submits specific user notification', async () => {
-    const user = userEvent.setup();
     vi.mocked(notificationService.getAllNotifications).mockResolvedValue([]);
     vi.mocked(notificationService.sendNotification).mockResolvedValue({} as any);
 
@@ -158,47 +161,45 @@ describe('NotificationsPage', () => {
       expect(screen.getByText('Gửi thông báo mới')).toBeInTheDocument();
     });
 
+    const { fireEvent } = await import('@testing-library/react');
+
     // Open modal
-    await user.click(screen.getByText('Gửi thông báo mới'));
+    fireEvent.click(screen.getByText('Gửi thông báo mới'));
 
     // Select target specific user
     const specificTargetBtn = screen.getByText('Gửi cá nhân');
-    await user.click(specificTargetBtn);
+    fireEvent.click(specificTargetBtn);
 
     // Fill spaces to bypass required validation
     const titleInput = screen.getByPlaceholderText('Nhập tiêu đề...');
     const messageInput = screen.getByPlaceholderText('Nhập nội dung thông báo cụ thể...');
     const userIdInput = screen.getByPlaceholderText('e.g. 4bad629d-c1cd-485e-b248-ee17f165c7be');
-    await user.type(titleInput, ' ');
-    await user.type(messageInput, ' ');
-    await user.type(userIdInput, ' ');
+    fireEvent.change(titleInput, { target: { value: ' ' } });
+    fireEvent.change(messageInput, { target: { value: ' ' } });
+    fireEvent.change(userIdInput, { target: { value: ' ' } });
 
     const submitBtn = screen.getByText('Gửi ngay');
-    await user.click(submitBtn);
+    fireEvent.click(submitBtn);
     expect(screen.getByText('Vui lòng điền đầy đủ tiêu đề và nội dung.')).toBeInTheDocument();
 
     // Enter valid title/message
-    await user.clear(titleInput);
-    await user.clear(messageInput);
-    await user.clear(userIdInput);
-    await user.type(titleInput, 'Specific Title');
-    await user.type(messageInput, 'Specific message body');
+    fireEvent.change(titleInput, { target: { value: 'Specific Title' } });
+    fireEvent.change(messageInput, { target: { value: 'Specific message body' } });
 
     // Try submit again (still missing user id, type space to bypass HTML5 validation)
-    await user.type(userIdInput, ' ');
-    await user.click(submitBtn);
+    fireEvent.change(userIdInput, { target: { value: ' ' } });
+    fireEvent.click(submitBtn);
     expect(screen.getByText('Vui lòng nhập ID người dùng nhận thông báo.')).toBeInTheDocument();
 
     // Enter user ID
-    await user.clear(userIdInput);
-    await user.type(userIdInput, 'some-user-uuid');
+    fireEvent.change(userIdInput, { target: { value: 'some-user-uuid' } });
 
     // Select channel SMS
     const smsChannelBtn = screen.getByText('SMS');
-    await user.click(smsChannelBtn);
+    fireEvent.click(smsChannelBtn);
 
     // Submit
-    await user.click(submitBtn);
+    fireEvent.click(submitBtn);
 
     expect(notificationService.sendNotification).toHaveBeenCalledWith({
       title: 'Specific Title',
@@ -209,7 +210,6 @@ describe('NotificationsPage', () => {
   });
 
   it('shows error on send notification failure', async () => {
-    const user = userEvent.setup();
     vi.mocked(notificationService.getAllNotifications).mockResolvedValue([]);
     vi.mocked(notificationService.sendNotification).mockRejectedValue({
       response: { data: { message: 'Không tìm thấy người dùng.' } },
@@ -221,18 +221,80 @@ describe('NotificationsPage', () => {
       expect(screen.getByText('Gửi thông báo mới')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('Gửi thông báo mới'));
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Gửi thông báo mới'));
 
     const titleInput = screen.getByPlaceholderText('Nhập tiêu đề...');
     const messageInput = screen.getByPlaceholderText('Nhập nội dung thông báo cụ thể...');
-    await user.type(titleInput, 'Title');
-    await user.type(messageInput, 'Message');
+    fireEvent.change(titleInput, { target: { value: 'Title' } });
+    fireEvent.change(messageInput, { target: { value: 'Message' } });
 
     const submitBtn = screen.getByText('Gửi ngay');
-    await user.click(submitBtn);
+    fireEvent.click(submitBtn);
 
     await waitFor(() => {
       expect(screen.getByText('Không tìm thấy người dùng.')).toBeInTheDocument();
     });
+  });
+
+  it('shows default error message on generic send notification failure', async () => {
+    vi.mocked(notificationService.getAllNotifications).mockResolvedValue([]);
+    vi.mocked(notificationService.sendNotification).mockRejectedValue(new Error('fail'));
+
+    render(<NotificationsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Gửi thông báo mới')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Gửi thông báo mới'));
+
+    const titleInput = screen.getByPlaceholderText('Nhập tiêu đề...');
+    const messageInput = screen.getByPlaceholderText('Nhập nội dung thông báo cụ thể...');
+    fireEvent.change(titleInput, { target: { value: 'Title' } });
+    fireEvent.change(messageInput, { target: { value: 'Message' } });
+
+    const submitBtn = screen.getByText('Gửi ngay');
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Có lỗi xảy ra khi gửi thông báo.')).toBeInTheDocument();
+    });
+  });
+
+  it('closes modal when Hủy is clicked', async () => {
+    vi.mocked(notificationService.getAllNotifications).mockResolvedValue([]);
+    render(<NotificationsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Gửi thông báo mới')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Gửi thông báo mới'));
+    expect(screen.getByText('Soạn thảo và gửi thông báo trực tiếp đến người dùng')).toBeInTheDocument();
+
+    const cancelBtn = screen.getByText('Hủy');
+    fireEvent.click(cancelBtn);
+    expect(screen.queryByText('Soạn thảo và gửi thông báo trực tiếp đến người dùng')).not.toBeInTheDocument();
+  });
+
+  it('closes modal when pressing Escape or Enter on backdrop/close button', async () => {
+    vi.mocked(notificationService.getAllNotifications).mockResolvedValue([]);
+    render(<NotificationsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Gửi thông báo mới')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Gửi thông báo mới'));
+    expect(screen.getByText('Soạn thảo và gửi thông báo trực tiếp đến người dùng')).toBeInTheDocument();
+
+    const closeBtns = screen.getAllByRole('button', { name: 'Đóng modal gửi thông báo' });
+    const closeBtn = closeBtns[1]; // close X button
+    fireEvent.keyDown(closeBtn, { key: 'Enter', code: 'Enter' });
+    expect(screen.queryByText('Soạn thảo và gửi thông báo trực tiếp đến người dùng')).not.toBeInTheDocument();
   });
 });

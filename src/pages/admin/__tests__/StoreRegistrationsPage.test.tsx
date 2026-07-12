@@ -277,4 +277,129 @@ describe('StoreRegistrationsPage', () => {
     expect(pendingTab).toBeInTheDocument();
     expect(within(pendingTab).getByText('1')).toBeInTheDocument();
   });
+
+  it('submits rejection successfully', async () => {
+    vi.mocked(storeService.rejectRegistration).mockResolvedValue({ message: 'Rejected' });
+    const mockRegistrations = [
+      {
+        id: 'reg-1',
+        storeName: 'Test Store',
+        ownerName: 'Test Owner',
+        ownerEmail: 'test@example.com',
+        phoneNumber: '0123456789',
+        areaId: 'area-1',
+        areaName: 'Khu vực 1',
+        stationId: 'ST01',
+        stationName: 'Trạm A',
+        status: 'Pending',
+        createdAt: '2025-06-15T10:00:00Z',
+        updatedAt: '2025-06-15T10:00:00Z',
+      },
+    ];
+    vi.mocked(storeService.getAllRegistrations).mockResolvedValue(mockRegistrations);
+    renderStoreRegistrationsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Store')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    const row = screen.getByText('Test Store').closest('tr');
+    expect(row).toBeTruthy();
+    if (row) {
+      fireEvent.click(within(row).getByText('Từ chối'));
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText('Từ chối yêu cầu')).toBeInTheDocument();
+    });
+
+    const reasonInput = screen.getByPlaceholderText('Vui lòng nêu rõ lý do tại sao từ chối yêu cầu này...');
+    fireEvent.change(reasonInput, { target: { value: 'Reason detail here' } });
+
+    const submitBtn = screen.getByText('Xác nhận từ chối');
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(storeService.rejectRegistration).toHaveBeenCalledWith('reg-1', 'Reason detail here');
+    });
+  });
+
+  it('closes reject modal when Hủy bỏ is clicked', async () => {
+    const mockRegistrations = [
+      {
+        id: 'reg-1',
+        storeName: 'Test Store',
+        ownerName: 'Test Owner',
+        ownerEmail: 'test@example.com',
+        phoneNumber: '0123456789',
+        areaId: 'area-1',
+        areaName: 'Khu vực 1',
+        stationId: 'ST01',
+        stationName: 'Trạm A',
+        status: 'Pending',
+        createdAt: '2025-06-15T10:00:00Z',
+        updatedAt: '2025-06-15T10:00:00Z',
+      },
+    ];
+    vi.mocked(storeService.getAllRegistrations).mockResolvedValue(mockRegistrations);
+    renderStoreRegistrationsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Store')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    const row = screen.getByText('Test Store').closest('tr');
+    if (row) {
+      fireEvent.click(within(row).getByText('Từ chối'));
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText('Từ chối yêu cầu')).toBeInTheDocument();
+    });
+
+    const cancelBtn = screen.getByText('Hủy bỏ');
+    fireEvent.click(cancelBtn);
+    expect(screen.queryByText('Từ chối yêu cầu')).not.toBeInTheDocument();
+  });
+
+  it('switches tabs and displays registrations accordingly', async () => {
+    const mockPending = [
+      {
+        id: 'reg-1', storeName: 'Pending Store', ownerName: 'A',
+        ownerEmail: 'a@example.com', phoneNumber: '', areaId: 'a1',
+        areaName: 'Area 1', stationId: 'ST01', stationName: 'Station 1',
+        status: 'Pending', createdAt: '2025-06-15T10:00:00Z', updatedAt: '2025-06-15T10:00:00Z',
+      },
+    ];
+    const mockApproved = [
+      {
+        id: 'reg-2', storeName: 'Approved Store', ownerName: 'B',
+        ownerEmail: 'b@example.com', phoneNumber: '', areaId: 'a2',
+        areaName: 'Area 2', stationId: 'ST02', stationName: 'Station 2',
+        status: 'Approved', createdAt: '2025-06-15T10:00:00Z', updatedAt: '2025-06-15T10:00:00Z',
+      },
+    ];
+
+    vi.mocked(storeService.getAllRegistrations).mockImplementation(async (status) => {
+      if (status === 'Approved') return mockApproved;
+      return mockPending;
+    });
+
+    renderStoreRegistrationsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Pending Store')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    const approvedTab = screen.getByRole('button', { name: /Đã duyệt/ });
+    fireEvent.click(approvedTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Approved Store')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Pending Store')).not.toBeInTheDocument();
+  });
 });

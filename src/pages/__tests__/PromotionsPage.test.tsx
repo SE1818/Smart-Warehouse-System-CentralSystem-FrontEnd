@@ -290,8 +290,131 @@ describe('PromotionsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Flash Sales')).toBeInTheDocument();
     });
-    await userEvent.click(screen.getByText('Flash Sales'));
-    await userEvent.click(screen.getByText('Tạo Flash Sale đầu tiên'));
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Flash Sales'));
+    await waitFor(() => {
+      expect(screen.getByText('Tạo Flash Sale đầu tiên')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Tạo Flash Sale đầu tiên'));
     expect(screen.getByText(/Chưa có sản phẩm nào/)).toBeInTheDocument();
+  });
+
+  it('creates a new promotion successfully', async () => {
+    mockGetProducts.mockResolvedValue([]);
+    renderPromotionsPage();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Thêm khuyến mãi/i })).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByRole('button', { name: /Thêm khuyến mãi/i }));
+    expect(screen.getByText('Thêm khuyến mãi mới')).toBeInTheDocument();
+
+    const codeInput = screen.getByPlaceholderText('VD: GIAMGIA30');
+    const descInput = screen.getByPlaceholderText('Nhập mô tả...');
+    const valueInput = screen.getAllByRole('spinbutton')[0];
+
+    fireEvent.change(codeInput, { target: { value: 'SAVE50' } });
+    fireEvent.change(descInput, { target: { value: 'Discount description' } });
+    fireEvent.change(valueInput, { target: { value: '50' } });
+
+    const submitBtn = screen.getByText('Tạo mới');
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockCreatePromotion).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Thêm khuyến mãi mới')).not.toBeInTheDocument();
+  });
+
+  it('creates a new flash sale successfully', async () => {
+    const mockProducts = [
+      { id: 'prod-1', name: 'Sản phẩm 1', price: 100000, stock: 10 },
+    ];
+    mockGetProducts.mockResolvedValue(mockProducts);
+    renderPromotionsPage();
+
+    await waitFor(() => {
+      expect(screen.getByText('Flash Sales')).toBeInTheDocument();
+    });
+
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Flash Sales'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Tạo Flash Sale đầu tiên')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Tạo Flash Sale đầu tiên'));
+
+    expect(screen.getByText('Tạo Flash Sale mới')).toBeInTheDocument();
+
+    const codeInput = screen.getByPlaceholderText('VD: FLASH28');
+    const descInput = screen.getByPlaceholderText('Tên chương trình Flash Sale');
+    fireEvent.change(codeInput, { target: { value: 'FLASH50' } });
+    fireEvent.change(descInput, { target: { value: 'Flash Sale Description' } });
+
+    // Select product
+    const selectProduct = screen.getByRole('combobox');
+    fireEvent.change(selectProduct, { target: { value: 'prod-1' } });
+
+    // Price input (Giá Flash Sale (đ))
+    const priceInput = screen.getByPlaceholderText('VD: 50000');
+    fireEvent.change(priceInput, { target: { value: '80000' } });
+
+    // Add to list button
+    const addProductBtn = screen.getByText('Thêm vào danh sách');
+    fireEvent.click(addProductBtn);
+
+    // Verify added product item shows up
+    expect(screen.getByText('Sản phẩm 1')).toBeInTheDocument();
+
+    // Click submit
+    const submitBtn = screen.getByText('Kích hoạt Flash Sale');
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockCreateFlashSale).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Tạo Flash Sale mới')).not.toBeInTheDocument();
+  });
+
+  it('closes delete confirmation modal on Hủy click', async () => {
+    mockListPromotions.mockResolvedValue([mockPromotion({ code: 'DEL' })]);
+    mockGetProducts.mockResolvedValue([]);
+    renderPromotionsPage();
+    await waitFor(() => {
+      expect(screen.getByText('DEL')).toBeInTheDocument();
+    });
+    const { fireEvent } = await import('@testing-library/react');
+    const deleteButtons = screen.getAllByText('Xóa');
+    fireEvent.click(deleteButtons[0]);
+    expect(screen.getByText('Xác nhận xóa')).toBeInTheDocument();
+
+    const cancelBtn = screen.getByText('Hủy');
+    fireEvent.click(cancelBtn);
+    expect(screen.queryByText('Xác nhận xóa')).not.toBeInTheDocument();
+  });
+
+  it('edits a promotion successfully', async () => {
+    mockListPromotions.mockResolvedValue([mockPromotion({ code: 'EDIT' })]);
+    mockGetProducts.mockResolvedValue([]);
+    mockUpdatePromotion.mockResolvedValue(undefined);
+    renderPromotionsPage();
+    await waitFor(() => {
+      expect(screen.getByText('EDIT')).toBeInTheDocument();
+    });
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByText('Sửa'));
+    expect(screen.getByText(/Sửa khuyến mãi/)).toBeInTheDocument();
+
+    const descInput = screen.getByPlaceholderText('Nhập mô tả...');
+    fireEvent.change(descInput, { target: { value: 'Updated Description' } });
+
+    const submitBtn = screen.getByText('Cập nhật');
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockUpdatePromotion).toHaveBeenCalled();
+    });
   });
 });
