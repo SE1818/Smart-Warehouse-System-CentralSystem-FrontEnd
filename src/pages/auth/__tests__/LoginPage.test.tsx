@@ -221,12 +221,12 @@ describe('LoginPage', () => {
   });
 
   it('should handle Google login success', async () => {
-    let googleCallback: any;
-    const initializeSpy = vi.fn((cfg: any) => {
+    let googleCallback: ((res: { credential?: string }) => Promise<void>) | undefined;
+    const initializeSpy = vi.fn((cfg: { callback: (res: { credential?: string }) => Promise<void> }) => {
       googleCallback = cfg.callback;
     });
     const renderButtonSpy = vi.fn();
-    (window as any).google = {
+    (window as unknown as { google: unknown }).google = {
       accounts: {
         id: {
           initialize: initializeSpy,
@@ -250,7 +250,9 @@ describe('LoginPage', () => {
     });
     expect(googleCallback).toBeDefined();
 
-    await googleCallback({ credential: 'mock-google-id-token' });
+    if (googleCallback) {
+      await googleCallback({ credential: 'mock-google-id-token' });
+    }
 
     expect(authService.externalLogin).toHaveBeenCalledWith({
       provider: 'Google',
@@ -260,12 +262,12 @@ describe('LoginPage', () => {
   });
 
   it('should handle Google login failure', async () => {
-    let googleCallback: any;
-    const initializeSpy = vi.fn((cfg: any) => {
+    let googleCallback: ((res: { credential?: string }) => Promise<void>) | undefined;
+    const initializeSpy = vi.fn((cfg: { callback: (res: { credential?: string }) => Promise<void> }) => {
       googleCallback = cfg.callback;
     });
     const renderButtonSpy = vi.fn();
-    (window as any).google = {
+    (window as unknown as { google: unknown }).google = {
       accounts: {
         id: {
           initialize: initializeSpy,
@@ -284,7 +286,9 @@ describe('LoginPage', () => {
       expect(initializeSpy).toHaveBeenCalled();
     });
 
-    await googleCallback({ credential: 'mock-google-id-token' });
+    if (googleCallback) {
+      await googleCallback({ credential: 'mock-google-id-token' });
+    }
 
     expect(await screen.findByText('Google login failed')).toBeInTheDocument();
   });
