@@ -1,6 +1,5 @@
 /** @vitest-environment jsdom */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -22,7 +21,6 @@ function Root() {
 
 describe('main.tsx integration', () => {
   let container: HTMLDivElement;
-  let root: ReturnType<typeof createRoot>;
 
   beforeEach(() => {
     localStorage.clear();
@@ -30,7 +28,8 @@ describe('main.tsx integration', () => {
     container = document.createElement('div');
     container.id = 'root';
     document.body.appendChild(container);
-    root = createRoot(container);
+    const root = createRoot(container);
+    expect(root).toBeDefined();
     window.history.pushState(null, '', '/login');
   });
 
