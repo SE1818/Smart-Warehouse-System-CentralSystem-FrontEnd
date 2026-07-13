@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AdminLayout } from './components/AdminLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -122,31 +122,46 @@ function App() {
 						}
 					>
 						<Route index element={<Navigate to="/admin/dashboard" replace />} />
-						<Route path="dashboard" element={<AdminDashboard />} />
-						<Route path="inventory" element={<AdminInventory />} />
-						<Route path="warehouses" element={<WarehousesPage />} />
-						<Route path="stocklevels" element={<StockLevelsPage />} />
-						<Route path="stockmovements" element={<StockMovementsPage />} />
-						<Route path="stockadjustments" element={<StockAdjustmentsPage />} />
-						<Route path="search" element={<SearchPage />} />
-						<Route path="notifications" element={<NotificationsPage />} />
-						<Route path="files" element={<FileManagementPage />} />
-						<Route path="promotions" element={<PromotionsPage />} />
-						<Route path="robots" element={<RobotManagementPage />} />
-						<Route path="wallet" element={<WalletPage />} />
-						<Route path="profile" element={<ProfilePage />} />
-						<Route path="metrics" element={<MetricsPage />} />
-						<Route path="logs" element={<AuditLogsPage />} />
-						<Route path="scheduler" element={<SchedulerPage />} />
-						<Route path="products" element={<AdminProducts />} />
-						<Route path="orders" element={<AdminOrders />} />
-						<Route path="users" element={<AdminUsers />} />
-						<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
-						<Route path="stores" element={<StoresPage />} />
-						<Route path="complaints" element={<AdminComplaints />} />
-						<Route path="reports" element={<AdminReports />} />
-						<Route path="transfers" element={<TransfersPage />} />
-						<Route path="robot-monitor" element={<RobotMonitorPage />} />
+						<Route
+							element={
+								<Suspense
+									fallback={
+										<div className="p-8 text-center text-slate-500 font-semibold flex flex-col items-center justify-center space-y-3 min-h-[50vh] animate-pulse">
+											<Icons.Spinner className="h-8 w-8 text-brand-600 animate-spin" />
+											<p className="text-sm">Đang tải nội dung...</p>
+										</div>
+									}
+								>
+									<Outlet />
+								</Suspense>
+							}
+						>
+							<Route path="dashboard" element={<AdminDashboard />} />
+							<Route path="inventory" element={<AdminInventory />} />
+							<Route path="warehouses" element={<WarehousesPage />} />
+							<Route path="stocklevels" element={<StockLevelsPage />} />
+							<Route path="stockmovements" element={<StockMovementsPage />} />
+							<Route path="stockadjustments" element={<StockAdjustmentsPage />} />
+							<Route path="search" element={<SearchPage />} />
+							<Route path="notifications" element={<NotificationsPage />} />
+							<Route path="files" element={<FileManagementPage />} />
+							<Route path="promotions" element={<PromotionsPage />} />
+							<Route path="robots" element={<RobotManagementPage />} />
+							<Route path="wallet" element={<WalletPage />} />
+							<Route path="profile" element={<ProfilePage />} />
+							<Route path="metrics" element={<MetricsPage />} />
+							<Route path="logs" element={<AuditLogsPage />} />
+							<Route path="scheduler" element={<SchedulerPage />} />
+							<Route path="products" element={<AdminProducts />} />
+							<Route path="orders" element={<AdminOrders />} />
+							<Route path="users" element={<AdminUsers />} />
+							<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
+							<Route path="stores" element={<StoresPage />} />
+							<Route path="complaints" element={<AdminComplaints />} />
+							<Route path="reports" element={<AdminReports />} />
+							<Route path="transfers" element={<TransfersPage />} />
+							<Route path="robot-monitor" element={<RobotMonitorPage />} />
+						</Route>
 					</Route>
 
 					{/* Fallback */}

@@ -1,51 +1,30 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Icons } from './Icons';
-import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
-import { toast } from 'react-toastify';
+import { useNotificationStore } from '../stores/notificationStore';
 
 export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Retrieve user info
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'admin' };
+  // Retrieve user info once on mount
+  const [user] = useState(() => {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : { name: 'Quản trị viên', email: 'admin@smartwarehouse.com', role: 'admin' };
+  });
 
   const userId = user?.id;
 
+  const { connect, disconnect } = useNotificationStore();
+
   useEffect(() => {
     if (!userId) return;
-
-    const connection = new HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/notifications/hub?userId=${userId}`, {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      })
-      .configureLogging(LogLevel.Information)
-      .withAutomaticReconnect()
-      .build();
-
-    connection.on('ReceiveNotification', (notification: { title: string; message: string }) => {
-      toast.info(
-        <div>
-          <div className="font-bold text-slate-900 text-sm mb-0.5">{notification.title}</div>
-          <div className="text-xs text-slate-600 font-semibold">{notification.message}</div>
-        </div>
-      );
-      window.dispatchEvent(new CustomEvent('smartwarehouse-notification', { detail: notification }));
-    });
-
-    connection.start()
-      .then(() => console.log('[SignalR] Connected to Notification Hub for user:', userId))
-      .catch((err) => console.error('[SignalR] Connection failed: ', err));
-
+    connect(userId);
     return () => {
-      connection.stop();
+      disconnect();
     };
-  }, [userId]);
+  }, [userId, connect, disconnect]);
 
   const isStoreManager = user?.role === 'store_manager';
 

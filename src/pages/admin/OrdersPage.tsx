@@ -19,6 +19,8 @@ interface Order {
   items: OrderItem[];
 }
 
+const PRODUCT_NAME_MAP = new Map(DEFAULT_PRODUCTS.map((p) => [p.id, p.name]));
+
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,8 +28,8 @@ export function OrdersPage() {
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
 
   const getProductName = (productId: string) => {
-    const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
-    return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
+    const name = PRODUCT_NAME_MAP.get(productId);
+    return name ?? `Sản phẩm (${productId.substring(0, 8)})`;
   };
 
   const loadOrders = useCallback(async () => {

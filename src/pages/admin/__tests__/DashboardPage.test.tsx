@@ -26,21 +26,27 @@ vi.mock('@/services', () => ({
 
 // Mock signalR to avoid WebSocket connection attempts
 // HubConnectionBuilder is called as `new signalR.HubConnectionBuilder()` so it must be a constructor
-vi.mock('@microsoft/signalr', () => ({
-  HubConnectionBuilder: function HubConnectionBuilder() {
-    return {
-      withUrl: () => ({
-        withAutomaticReconnect: () => ({
-          build: () => ({
-            start: () => Promise.reject(new Error('SignalR not available in test')),
-            on: () => {},
-            stop: () => Promise.resolve(),
-          }),
-        }),
-      }),
-    };
-  },
-}));
+vi.mock('@microsoft/signalr', () => {
+  const mockBuilder = {
+    withUrl: () => mockBuilder,
+    configureLogging: () => mockBuilder,
+    withAutomaticReconnect: () => mockBuilder,
+    build: () => ({
+      start: () => Promise.reject(new Error('SignalR not available in test')),
+      on: () => {},
+      stop: () => Promise.resolve(),
+      onreconnecting: () => {},
+      onreconnected: () => {},
+      onclose: () => {},
+    }),
+  };
+  return {
+    LogLevel: { Information: 1 },
+    HubConnectionBuilder: function HubConnectionBuilder() {
+      return mockBuilder;
+    },
+  };
+});
 
 // Mock Icons component
 vi.mock('@/components/Icons', () => {

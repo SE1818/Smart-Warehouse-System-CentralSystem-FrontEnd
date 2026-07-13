@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 interface CustomSelectProps {
   label?: string;
@@ -18,8 +19,8 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Compute fixed-position dropdown coords to escape overflow:hidden/auto parents
-  useLayoutEffect(() => {
-    if (!isOpen || !buttonRef.current) return;
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const spaceBelow = viewportHeight - rect.bottom;
@@ -34,12 +35,46 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
         ? { bottom: viewportHeight - rect.top + 4 }
         : { top: rect.bottom + 4 }),
     });
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
   }, [isOpen, options.length]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Recalculate position when scrolling any container or resizing window
+    const handleScroll = () => {
+      updatePosition();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
-        setIsOpen(false);
+        // Also check if click is inside the portal-rendered dropdown
+        const portalDropdowns = document.querySelectorAll('[data-custom-select-portal]');
+        let clickedInsidePortal = false;
+        portalDropdowns.forEach((portal) => {
+          if (portal.contains(e.target as Node)) {
+            clickedInsidePortal = true;
+          }
+        });
+
+        if (!clickedInsidePortal) {
+          setIsOpen(false);
+        }
       }
     };
     document.addEventListener('mousedown', fn);
@@ -78,8 +113,12 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
           </div>
         )}
       </div>
-      {isOpen && (
-        <div style={dropdownStyle} className="bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1">
+      {isOpen && createPortal(
+        <div 
+          style={dropdownStyle} 
+          data-custom-select-portal
+          className="bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1"
+        >
           {options.length === 0 ? (
             <div className="px-3.5 py-2.5 text-xs text-slate-400 italic">Không có dữ liệu</div>
           ) : (
@@ -104,7 +143,8 @@ export function CustomSelect({ label, value, onChange, options, placeholder, cla
               );
             })
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

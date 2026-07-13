@@ -39,6 +39,7 @@ vi.mock('@/components/Icons', () => {
 vi.mock('@/services/robot', () => ({
   robotService: {
     listRobots: vi.fn(),
+    moveRobot: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -46,25 +47,31 @@ let mockOnReceiveRobotLocation: ((updatedRobot: Robot) => void) | undefined;
 let mockSignalRStartShouldFail = false;
 
 // Mock signalR to avoid WebSocket connection attempts
-vi.mock('@microsoft/signalr', () => ({
-  HubConnectionBuilder: function HubConnectionBuilder() {
-    return {
-      withUrl: () => ({
-        withAutomaticReconnect: () => ({
-          build: () => ({
-            start: () => mockSignalRStartShouldFail ? Promise.reject(new Error('SignalR mock error')) : Promise.resolve(),
-            on: (event: string, callback: (...args: unknown[]) => void) => {
-              if (event === 'ReceiveRobotLocation') {
-                mockOnReceiveRobotLocation = callback;
-              }
-            },
-            stop: () => Promise.resolve(),
-          }),
-        }),
-      }),
-    };
-  },
-}));
+vi.mock('@microsoft/signalr', () => {
+  const mockBuilder = {
+    withUrl: () => mockBuilder,
+    configureLogging: () => mockBuilder,
+    withAutomaticReconnect: () => mockBuilder,
+    build: () => ({
+      start: () => mockSignalRStartShouldFail ? Promise.reject(new Error('SignalR mock error')) : Promise.resolve(),
+      on: (event: string, callback: (...args: unknown[]) => void) => {
+        if (event === 'ReceiveRobotLocation') {
+          mockOnReceiveRobotLocation = callback;
+        }
+      },
+      stop: () => Promise.resolve(),
+      onreconnecting: () => {},
+      onreconnected: () => {},
+      onclose: () => {},
+    }),
+  };
+  return {
+    LogLevel: { Information: 1 },
+    HubConnectionBuilder: function HubConnectionBuilder() {
+      return mockBuilder;
+    },
+  };
+});
 
 import { robotService } from '@/services/robot';
 

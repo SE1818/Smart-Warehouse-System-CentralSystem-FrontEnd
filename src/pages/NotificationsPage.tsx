@@ -2,8 +2,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { NotificationDto, NotificationType } from '@/types/notification';
 import { notificationService } from '@/services/notification';
+import { userService } from '@/services/userService';
+import type { AdminUserResponse } from '@/services/userService';
 import { useAuth } from '@/hooks/useAuth';
 import { Icons } from '@/components/Icons';
+import { CustomSelect } from '@/components/CustomSelect';
 
 export function NotificationsPage() {
   useAuth();
@@ -14,13 +17,19 @@ export function NotificationsPage() {
   // Form states for sending new notification
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [targetType, setTargetType] = useState<'all' | 'specific'>('all');
-  const [targetUserId, setTargetUserId] = useState('');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [channelType, setChannelType] = useState<NotificationType>('InApp');
+  const [destinationEmail, setDestinationEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  // User list for dropdowns
+  const [users, setUsers] = useState<AdminUserResponse[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   // Fetch all system notifications (Admin View)
   const fetchNotifications = useCallback(async () => {
@@ -37,9 +46,45 @@ export function NotificationsPage() {
     }
   }, []);
 
+  // Load users for dropdown — extracted so it can be retried
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const data = await userService.getAllUsers();
+      setUsers(data);
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: string } } };
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.message;
+      if (status === 403) {
+        setUsersError('Không có quyền truy cập (cần role Admin).');
+      } else if (status === 401) {
+        setUsersError('Token hết hạn — vui lòng refresh trang.');
+      } else if (!status) {
+        setUsersError('Không thể kết nối tới server. Kiểm tra Identity Service.');
+      } else {
+        setUsersError(msg ?? `Lỗi HTTP ${status}`);
+      }
+      console.error('[NotificationsPage] loadUsers failed:', err);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchNotifications();
-  }, [fetchNotifications]);
+    void loadUsers();
+
+    const handleRealtimeNotification = () => {
+      void fetchNotifications();
+    };
+
+    window.addEventListener('smartwarehouse-notification', handleRealtimeNotification);
+    return () => {
+      window.removeEventListener('smartwarehouse-notification', handleRealtimeNotification);
+    };
+  }, [fetchNotifications, loadUsers]);
 
   // Handle send notification submit
   const handleSendNotification = async (e: React.FormEvent) => {
@@ -55,25 +100,42 @@ export function NotificationsPage() {
       return;
     }
 
-    if (targetType === 'specific' && !targetUserId.trim()) {
-      setSendError('Vui lòng nhập ID người dùng nhận thông báo.');
+    if (channelType === 'Email' && !selectedUserId) {
+      setSendError('Vui lòng chọn người nhận email.');
+      setSending(false);
+      return;
+    }
+
+    if (channelType === 'Email' && !destinationEmail.trim()) {
+      setSendError('Email người nhận không hợp lệ. Vui lòng chọn lại.');
       setSending(false);
       return;
     }
 
     try {
+      // Email: send to selected user's email + userId
+      // InApp/SMS/Push specific: send userId from dropdown
+      const resolvedUserId =
+        channelType === 'Email'
+          ? selectedUserId || undefined
+          : targetType === 'specific'
+          ? selectedUserId || undefined
+          : undefined;
+
       await notificationService.sendNotification({
-        userId: targetType === 'specific' ? targetUserId.trim() : undefined,
+        userId: resolvedUserId,
         title: title.trim(),
         message: message.trim(),
         type: channelType,
+        destinationEmail: channelType === 'Email' ? destinationEmail.trim() : undefined,
       });
 
       setSendSuccess('Gửi thông báo thành công!');
       // Reset form
       setTitle('');
       setMessage('');
-      setTargetUserId('');
+      setSelectedUserId('');
+      setDestinationEmail('');
       // Refresh list
       fetchNotifications();
       // Auto close modal after 1.5s
@@ -123,6 +185,36 @@ export function NotificationsPage() {
       default:
         return 'bg-amber-50 text-amber-700 border-amber-200';
     }
+  };
+
+  // User options for CustomSelect
+  const userOptions = users.map((u) => ({
+    value: u.id,
+    label: `${u.username} — ${u.email}`,
+  }));
+
+  // Helper: render user picker status (loading / error / hint)
+  const renderUserPickerStatus = () => {
+    if (usersLoading)
+      return (
+        <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+          <Icons.Spinner className="w-3 h-3 animate-spin" /> Đang tải danh sách người dùng...
+        </p>
+      );
+    if (usersError)
+      return (
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-[10px] text-rose-600 font-semibold">⚠ {usersError}</p>
+          <button
+            type="button"
+            onClick={() => void loadUsers()}
+            className="text-[10px] text-brand-600 font-bold underline cursor-pointer hover:text-brand-700"
+          >
+            Thử lại
+          </button>
+        </div>
+      );
+    return null;
   };
 
   return (
@@ -353,21 +445,6 @@ export function NotificationsPage() {
                       </div>
                     </div>
 
-                    {/* Specific User ID Input */}
-                    {targetType === 'specific' && (
-                      <div className="space-y-1.5 animate-fadeIn">
-                        <label className="text-xs font-bold text-slate-600">ID người nhận (UUID)</label>
-                        <input
-                          type="text"
-                          required
-                          value={targetUserId}
-                          onChange={(e) => setTargetUserId(e.target.value)}
-                          placeholder="e.g. 4bad629d-c1cd-485e-b248-ee17f165c7be"
-                          className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-brand-500 transition-colors"
-                        />
-                      </div>
-                    )}
-
                     {/* Channel Selection */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Kênh truyền thông</label>
@@ -388,6 +465,50 @@ export function NotificationsPage() {
                         ))}
                       </div>
                     </div>
+
+                    {/* Email: user picker dropdown */}
+                    {channelType === 'Email' && (
+                      <div className="animate-fadeIn space-y-1">
+                        <CustomSelect
+                          label="Email người nhận"
+                          placeholder="-- Chọn người nhận --"
+                          value={selectedUserId}
+                          onChange={(uid) => {
+                            setSelectedUserId(uid);
+                            const found = users.find((u) => u.id === uid);
+                            setDestinationEmail(found?.email ?? '');
+                          }}
+                          options={userOptions}
+                          icon={<Icons.Mail className="w-4 h-4 text-slate-400" />}
+                        />
+                        {destinationEmail && (
+                          <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-semibold">
+                            <Icons.Mail className="w-3 h-3" />
+                            Gửi đến: {destinationEmail}
+                          </p>
+                        )}
+                        {renderUserPickerStatus()}
+                      </div>
+                    )}
+
+                    {/* Specific non-Email: user picker dropdown */}
+                    {channelType !== 'Email' && targetType === 'specific' && (
+                      <div className="animate-fadeIn space-y-1">
+                        <CustomSelect
+                          label="Người nhận"
+                          placeholder="-- Chọn người nhận --"
+                          value={selectedUserId}
+                          onChange={setSelectedUserId}
+                          options={userOptions}
+                          icon={
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-400">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                            </svg>
+                          }
+                        />
+                        {renderUserPickerStatus()}
+                      </div>
+                    )}
 
                     {/* Title */}
                     <div className="space-y-1.5">

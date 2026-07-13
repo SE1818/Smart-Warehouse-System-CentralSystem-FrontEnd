@@ -52,22 +52,28 @@ vi.mock('@/services/api', () => ({
   },
 }));
 
-vi.mock('@microsoft/signalr', () => ({
-  __esModule: true,
-  HubConnectionBuilder: function HubConnectionBuilder() {
-    return {
-      withUrl: () => ({
-        withAutomaticReconnect: () => ({
-          build: () => ({
-            start: () => Promise.resolve(),
-            on: () => {},
-            stop: () => Promise.resolve(),
-          }),
-        }),
-      }),
-    };
-  },
-}));
+vi.mock('@microsoft/signalr', () => {
+  const mockBuilder = {
+    withUrl: () => mockBuilder,
+    configureLogging: () => mockBuilder,
+    withAutomaticReconnect: () => mockBuilder,
+    build: () => ({
+      start: () => Promise.resolve(),
+      on: () => {},
+      stop: () => Promise.resolve(),
+      onreconnecting: () => {},
+      onreconnected: () => {},
+      onclose: () => {},
+    }),
+  };
+  return {
+    __esModule: true,
+    LogLevel: { Information: 1 },
+    HubConnectionBuilder: function HubConnectionBuilder() {
+      return mockBuilder;
+    },
+  };
+});
 
 const renderRobotMonitorPage = () =>
   render(<BrowserRouter><RobotMonitorPage /></BrowserRouter>);
@@ -269,7 +275,7 @@ describe('RobotMonitorPage', () => {
     });
     renderRobotMonitorPage();
     await waitFor(() =>
-      expect(screen.getByText(/Đã đồng bộ thông tin của 1 robot/)).toBeInTheDocument(),
+      expect(screen.getAllByText(/Đã đồng bộ thông tin của 1 robot/)[0]).toBeInTheDocument(),
     );
   });
 

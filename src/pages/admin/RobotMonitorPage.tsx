@@ -1,19 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from 'react';
-import * as signalR from '@microsoft/signalr';
+import { useRobotStore } from '@/stores/robotStore';
 import { Icons } from '@/components/Icons';
-import apiClient from '@/services/api';
-
-export interface Robot {
-  id: string;
-  name: string;
-  currentX: number;
-  currentY: number;
-  batteryLevel: number;
-  status: string;
-  ipAddress?: string;
-  updatedAt: string;
-}
 
 interface LogEntry {
   timestamp: string;
@@ -22,90 +10,32 @@ interface LogEntry {
 }
 
 export function RobotMonitorPage() {
-  const [robots, setRobots] = useState<Robot[]>([]);
+  const { 
+    robots, 
+    status: signalRStatus, 
+    logs, 
+    connect: connectRobotHub, 
+    disconnect: disconnectRobotHub, 
+    fetchRobots, 
+    clearLogs 
+  } = useRobotStore();
   const [loading, setLoading] = useState(true);
-  const [signalRStatus, setSignalRStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
   const mqttStatus: 'online' | 'offline' = 'online';
   const rabbitmqStatus: 'online' | 'offline' = 'online';
-  const [logs, setLogs] = useState<LogEntry[]>([]);
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
-  const addLog = (message: string, type: LogEntry['type'] = 'info') => {
-    const newLog = {
-      timestamp: new Date().toLocaleTimeString('vi-VN'),
-      type,
-      message
-    };
-    setLogs(prev => [...prev.slice(-99), newLog]); // Keep last 100 logs
-  };
-
-  const loadRobots = async () => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get<Robot[]>('/v1/robots');
-      setRobots(response.data);
-      addLog(`Đã đồng bộ thông tin của ${response.data.length} robot AMR từ database.`, 'success');
-    } catch (err) {
-      console.error(err);
-      addLog('Không thể kết nối API để tải danh sách robot.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    void loadRobots();
-    
-    // Connect to SignalR
-    setSignalRStatus('connecting');
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/hub`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      })
-      .withAutomaticReconnect()
-      .build();
-
-    connection.start()
-      .then(() => {
-        setSignalRStatus('connected');
-        addLog('Kết nối SignalR Hub thành công.', 'success');
-        
-        connection.on('ReceiveRobotLocation', (updatedRobot: Robot) => {
-          setRobots(prev => {
-            const idx = prev.findIndex(r => r.id === updatedRobot.id);
-            if (idx > -1) {
-              const clone = [...prev];
-              clone[idx] = { ...clone[idx], ...updatedRobot };
-              return clone;
-            }
-            return [...prev, updatedRobot];
-          });
-          addLog(`Robot [${updatedRobot.name || updatedRobot.id.substring(0, 8)}] cập nhật vị trí: (${updatedRobot.currentX}, ${updatedRobot.currentY}) | Pin: ${updatedRobot.batteryLevel?.toFixed(0)}%`, 'info');
-        });
-
-        connection.on('ReceiveRobotStatusChanged', (data: { robotId: string; status: string; batteryLevel: number }) => {
-          setRobots(prev => {
-            const idx = prev.findIndex(r => r.id === data.robotId);
-            if (idx > -1) {
-              const clone = [...prev];
-              clone[idx] = { ...clone[idx], status: data.status, batteryLevel: data.batteryLevel };
-              return clone;
-            }
-            return prev;
-          });
-          addLog(`Robot [ID: ${data.robotId.substring(0, 8)}] thay đổi trạng thái sang "${data.status}"`, 'warning');
-        });
-      })
-      .catch((err) => {
-        setSignalRStatus('disconnected');
-        addLog(`Kết nối SignalR Hub thất bại: ${err.message}`, 'error');
-      });
-
-    return () => {
-      connection.stop().catch(() => {});
+    const init = async () => {
+      setLoading(true);
+      await fetchRobots();
+      setLoading(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void init();
+    connectRobotHub();
+    return () => {
+      disconnectRobotHub();
+    };
+  }, [fetchRobots, connectRobotHub, disconnectRobotHub]);
 
   // Auto-scroll terminal log
   useEffect(() => {
@@ -253,7 +183,7 @@ export function RobotMonitorPage() {
               <span>Real-Time Command Stream Console</span>
             </h2>
             <button 
-              onClick={() => setLogs([])}
+              onClick={clearLogs}
               className="text-xs text-slate-500 hover:text-slate-350 transition-all font-bold px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer"
             >
               Clear Log

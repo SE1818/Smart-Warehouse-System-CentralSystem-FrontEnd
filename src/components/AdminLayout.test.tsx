@@ -45,7 +45,10 @@ vi.mock('@microsoft/signalr', () => ({
       return {
         on: () => {},
         start: () => Promise.resolve(),
-        stop: () => {},
+        stop: () => Promise.resolve(),
+        onreconnecting: () => {},
+        onreconnected: () => {},
+        onclose: () => {},
       };
     }
   },

@@ -1,20 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import * as signalR from '@microsoft/signalr';
+import { useRobotStore } from '@/stores/robotStore';
 import { orderService, productService, stockService } from '@/services';
 import { transferService } from '@/services/transferService';
 import { STATUS_COLORS, STATUS_LABELS, DEFAULT_PRODUCTS } from '@/constants';
 import { Icons } from '@/components/Icons';
 
 
-interface Robot {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  battery: number;
-  status: 'Idle' | 'Moving' | 'Error' | 'Charging';
-}
 
 interface DashboardOrder {
   id: string;
@@ -51,18 +43,16 @@ const getRobotStatusLabel = (status: string) => {
   }
 };
 
+const PRODUCT_NAME_MAP = new Map(DEFAULT_PRODUCTS.map((p) => [p.id, p.name]));
+
 const getProductName = (productId: string) => {
-  const prod = DEFAULT_PRODUCTS.find(p => p.id === productId);
-  return prod ? prod.name : `Sản phẩm (${productId.substring(0, 8)})`;
+  const name = PRODUCT_NAME_MAP.get(productId);
+  return name ?? `Sản phẩm (${productId.substring(0, 8)})`;
 };
 
 export function DashboardPage() {
-  const [robots, setRobots] = useState<Robot[]>([
-    { id: 'AMR-01', name: 'AMR-01 (Mantis)', x: 2, y: 3, battery: 84, status: 'Moving' },
-    { id: 'AMR-02', name: 'AMR-02 (Scarab)', x: 7, y: 1, battery: 95, status: 'Idle' },
-    { id: 'AMR-03', name: 'AMR-03 (Hornet)', x: 0, y: 9, battery: 18, status: 'Charging' }
-  ]);
-  const [signalRConnected, setSignalRConnected] = useState(false);
+  const { robots, status: robotConnectionStatus, connect: connectRobotHub, disconnect: disconnectRobotHub, fetchRobots } = useRobotStore();
+  const signalRConnected = robotConnectionStatus === 'connected';
 
   const [loading, setLoading] = useState(true);
   const [productsCount, setProductsCount] = useState(0);
@@ -73,13 +63,19 @@ export function DashboardPage() {
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch products
-      const prods = await productService.getProducts().catch(() => []);
+      // Parallelize all 4 API calls
+      const [prods, apiOrders, stockLevels, stats] = await Promise.all([
+        productService.getProducts().catch(() => []),
+        orderService.getPendingOrders().catch(() => []),
+        stockService.getStockLevels().catch(() => null),
+        transferService.getTransferStats().catch(() => null),
+      ]);
+
+      // Set products count and calculate stock fallback sum
       setProductsCount(prods.length);
       const stockSum = (prods as { stockQuantity?: number }[]).reduce((sum: number, p) => sum + (p.stockQuantity || 0), 0);
-      
-      // Fetch pending orders
-      const apiOrders = await orderService.getPendingOrders().catch(() => []);
+
+      // Map pending orders
       interface ApiOrderItem {
         productId: string;
         quantity: number;
@@ -92,6 +88,7 @@ export function DashboardPage() {
         deliveryNodeId?: string;
         items?: ApiOrderItem[];
       }
+
       const mapped: DashboardOrder[] = (apiOrders as unknown as ApiOrder[]).map((o) => ({
         id: o.id,
         date: o.createdAt ? o.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
@@ -106,22 +103,18 @@ export function DashboardPage() {
       }));
       setPendingOrders(mapped.slice(0, 5));
 
-
-
-      // Fetch stock levels to get total quantity
-      try {
-        const stockLevels = await stockService.getStockLevels();
+      // Set total stock
+      if (stockLevels) {
         const totalStockQty = stockLevels.reduce<number>((sum, l) => sum + (l.quantity || 0), 0);
         setTotalStock(totalStockQty);
-      } catch {
+      } else {
         setTotalStock(stockSum || 0);
       }
 
-      // Fetch active transfers
-      try {
-        const stats = await transferService.getTransferStats();
+      // Set active transfers
+      if (stats) {
         setActiveTransfers(stats.active);
-      } catch {
+      } else {
         setActiveTransfers(0);
       }
     } catch (err) {
@@ -131,53 +124,26 @@ export function DashboardPage() {
     }
   }, []);
 
-  const handleRobotLocationUpdate = useCallback((updatedRobot: Robot) => {
-    setRobots(prev => {
-      const idx = prev.findIndex(r => r.id === updatedRobot.id);
-      if (idx > -1) {
-        const clone = [...prev];
-        clone[idx] = { ...clone[idx], ...updatedRobot };
-        return clone;
-      }
-      return [...prev, updatedRobot];
-    });
-  }, []);
-
   useEffect(() => {
     const timer = setTimeout(() => {
       loadDashboardData();
+      fetchRobots();
     }, 0);
 
-    // SignalR Connection to Gateway
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/hub`, {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      })
-      .withAutomaticReconnect()
-      .build();
-
-    connection.start()
-      .then(() => {
-        setSignalRConnected(true);
-        connection.on('ReceiveRobotLocation', handleRobotLocationUpdate);
-      })
-      .catch((err: unknown) => {
-        console.warn('SignalR offline on Dashboard. Running with static fleet representation.', err);
-      });
+    connectRobotHub();
 
     const handleRefresh = () => {
       loadDashboardData();
+      fetchRobots();
     };
     window.addEventListener('smartwarehouse-notification', handleRefresh);
 
     return () => {
       clearTimeout(timer);
-      connection.stop().catch(() => {});
+      disconnectRobotHub();
       window.removeEventListener('smartwarehouse-notification', handleRefresh);
     };
-  }, [loadDashboardData, handleRobotLocationUpdate]);
+  }, [loadDashboardData, connectRobotHub, disconnectRobotHub, fetchRobots]);
 
   const cardConfig = [
     { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: <Icons.Product className="w-6 h-6" />, iconColor: 'text-blue-500 bg-blue-50/80 border-blue-100/50' },

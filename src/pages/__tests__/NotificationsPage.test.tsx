@@ -142,6 +142,7 @@ describe('NotificationsPage', () => {
       message: 'Test message content',
       type: 'InApp',
       userId: undefined,
+      destinationEmail: undefined,
     });
 
     // Wait for the async sendNotification and state update to complete
@@ -206,6 +207,7 @@ describe('NotificationsPage', () => {
       message: 'Specific message body',
       type: 'SMS',
       userId: 'some-user-uuid',
+      destinationEmail: undefined,
     });
   });
 

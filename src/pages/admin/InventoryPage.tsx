@@ -1,18 +1,9 @@
-import { useState, useEffect } from 'react';
-import * as signalR from '@microsoft/signalr';
+import { useState, useEffect, useMemo } from 'react';
+import { useRobotStore } from '@/stores/robotStore';
 import { secureRandom } from '@/utils/crypto';
 import { Icons } from '@/components/Icons';
 import { robotService } from '@/services/robot';
 
-interface Robot {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  battery: number;
-  status: 'Idle' | 'Moving' | 'Error' | 'Charging' | 'Offline';
-  destination?: string;
-}
 
 // Grid sizes (10x10 grid)
 const gridRows = 10;
@@ -39,108 +30,102 @@ const chargingDocks = [
   { x: 0, y: 9 }, { x: 1, y: 9 }
 ];
 
-export function InventoryPage() {
-  const [robots, setRobots] = useState<Robot[]>([]);
-  const [selectedRobot, setSelectedRobot] = useState<string | null>(null);
-  const [signalRConnected, setSignalRConnected] = useState(false);
+// Pre-computed Maps for O(1) coordinate lookups
+const shelfMap = new Map<string, boolean>(shelves.map((s) => [`${s.x},${s.y}`, true]));
+const stationMap = new Map<string, typeof deliveryStations[0]>(deliveryStations.map((s) => [`${s.x},${s.y}`, s]));
+const dockMap = new Map<string, boolean>(chargingDocks.map((c) => [`${c.x},${c.y}`, true]));
 
-  const loadRobotsFromApi = () => {
-    robotService.listRobots()
-      .then(data => setRobots(data))
-      .catch(err => console.error('Error loading robots in InventoryPage:', err));
-  };
+export function InventoryPage() {
+  const { robots, status: robotConnectionStatus, connect: connectRobotHub, disconnect: disconnectRobotHub, fetchRobots } = useRobotStore();
+  const signalRConnected = robotConnectionStatus === 'connected';
+  const [selectedRobot, setSelectedRobot] = useState<string | null>(null);
+
+  // Map for active robots to avoid linear searches in the 100-cell grid
+  const robotMap = useMemo(() => {
+    const map = new Map<string, typeof robots[0]>();
+    robots.forEach((r) => map.set(`${r.x},${r.y}`, r));
+    return map;
+  }, [robots]);
 
   useEffect(() => {
-    // Load initial robot list
-    loadRobotsFromApi();
-
-    // Attempt SignalR connection to Gateway
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/hub`, {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      })
-      .withAutomaticReconnect()
-      .build();
-
-    connection.start()
-      .then(() => {
-        setSignalRConnected(true);
-        console.log('SignalR connected to AMR service via gateway');
-        connection.on('ReceiveRobotLocation', (updatedRobot: Robot) => {
-          setRobots(prev => {
-            const idx = prev.findIndex(r => r.id === updatedRobot.id);
-            if (idx > -1) {
-              const clone = [...prev];
-              clone[idx] = { ...clone[idx], ...updatedRobot };
-              return clone;
-            }
-            return [...prev, updatedRobot];
-          });
-        });
-      })
-      .catch((err: unknown) => {
-        console.warn('SignalR fallback. Operating in simulation mode.', err);
-      });
+    fetchRobots();
+    connectRobotHub();
 
     const handleRefresh = () => {
-      loadRobotsFromApi();
+      fetchRobots();
     };
     window.addEventListener('smartwarehouse-notification', handleRefresh);
 
     return () => {
-      connection.stop().catch(() => {});
+      disconnectRobotHub();
       window.removeEventListener('smartwarehouse-notification', handleRefresh);
     };
-  }, [signalRConnected]);
+  }, [connectRobotHub, disconnectRobotHub, fetchRobots]);
 
   useEffect(() => {
     // Fallback simulation timer to make the robots move around
     const interval = setInterval(() => {
       if (signalRConnected) return; // Ignore simulation if real SignalR is online
       
-      setRobots(prev => prev.map(robot => {
-        if (robot.status === 'Moving') {
-          let dx: number;
-          let dy: number;
-          if (robot.id === 'AMR-01') {
-            // Target Trạm A (0,2)
-            dx = Math.sign(0 - robot.x);
-            dy = Math.sign(2 - robot.y);
-          } else {
-            // Random movement
-            dx = Math.floor(secureRandom() * 3) - 1;
-            dy = Math.floor(secureRandom() * 3) - 1;
+      useRobotStore.setState(state => ({
+        robots: state.robots.map(robot => {
+          if (robot.status === 'Moving') {
+            let dx: number;
+            let dy: number;
+            if (robot.id === 'AMR-01') {
+              // Target Trạm A (0,2)
+              dx = Math.sign(0 - robot.x);
+              dy = Math.sign(2 - robot.y);
+            } else {
+              // Random movement
+              dx = Math.floor(secureRandom() * 3) - 1;
+              dy = Math.floor(secureRandom() * 3) - 1;
+            }
+
+            let nextX = Math.max(0, Math.min(gridCols - 1, robot.x + dx));
+            let nextY = Math.max(0, Math.min(gridRows - 1, robot.y + dy));
+
+            // Check if shelf collision
+            const collides = shelfMap.has(`${nextX},${nextY}`);
+            if (collides) {
+              nextX = robot.x;
+              nextY = robot.y;
+            }
+
+            // Arrive at destination check
+            let status: 'Idle' | 'Moving' | 'Error' | 'Charging' | 'Offline' = robot.status;
+            let dest = robot.destination;
+            if (robot.id === 'AMR-01' && nextX === 0 && nextY === 2) {
+              status = 'Idle';
+              dest = undefined;
+            }
+
+            const nextBattery = Math.max(0, robot.battery - 0.5);
+            return { 
+              ...robot, 
+              x: nextX, 
+              y: nextY, 
+              currentX: nextX,
+              currentY: nextY,
+              battery: nextBattery, 
+              batteryLevel: nextBattery,
+              status, 
+              destination: dest 
+            };
+          } else if (robot.status === 'Idle' && secureRandom() < 0.05) {
+            // Randomly trigger wandering
+            return { ...robot, status: 'Moving', destination: 'Tuần tra kho' };
+          } else if (robot.status === 'Charging') {
+            // Recharge battery
+            const nextBattery = Math.min(100, robot.battery + 2);
+            return { 
+              ...robot, 
+              battery: nextBattery,
+              batteryLevel: nextBattery
+            };
           }
-
-          let nextX = Math.max(0, Math.min(gridCols - 1, robot.x + dx));
-          let nextY = Math.max(0, Math.min(gridRows - 1, robot.y + dy));
-
-          // Check if shelf collision
-          const collides = shelves.some(s => s.x === nextX && s.y === nextY);
-          if (collides) {
-            nextX = robot.x;
-            nextY = robot.y;
-          }
-
-          // Arrive at destination check
-          let status: 'Idle' | 'Moving' | 'Error' | 'Charging' | 'Offline' = robot.status;
-          let dest = robot.destination;
-          if (robot.id === 'AMR-01' && nextX === 0 && nextY === 2) {
-            status = 'Idle';
-            dest = undefined;
-          }
-
-          return { ...robot, x: nextX, y: nextY, battery: Math.max(0, robot.battery - 0.5), status, destination: dest };
-        } else if (robot.status === 'Idle' && secureRandom() < 0.05) {
-          // Randomly trigger wandering
-          return { ...robot, status: 'Moving', destination: 'Tuần tra kho' };
-        } else if (robot.status === 'Charging') {
-          // Recharge battery
-          return { ...robot, battery: Math.min(100, robot.battery + 2) };
-        }
-        return robot;
+          return robot;
+        })
       }));
     }, 2000);
 
@@ -149,19 +134,31 @@ export function InventoryPage() {
     };
   }, [signalRConnected]);
 
-  const commandRobotToMove = (_stationX: number, _stationY: number, label: string) => {
+  const commandRobotToMove = (stationX: number, stationY: number, label: string) => {
     if (!selectedRobot) return;
-    setRobots(prev => prev.map(r => {
-      if (r.id === selectedRobot) {
-        return {
-          ...r,
-          status: 'Moving',
-          destination: label,
-          x: r.x,
-          y: r.y
-        };
-      }
-      return r;
+    
+    // Call moveRobot API to update downstream so it propagates via SignalR
+    const activeRobot = robots.find(r => r.id === selectedRobot);
+    if (activeRobot) {
+      robotService.moveRobot(selectedRobot, stationX, stationY, activeRobot)
+        .catch(err => console.error('Error commanding robot via API:', err));
+    }
+
+    useRobotStore.setState(state => ({
+      robots: state.robots.map(r => {
+        if (r.id === selectedRobot) {
+          return {
+            ...r,
+            status: 'Moving',
+            destination: label,
+            x: stationX,
+            y: stationY,
+            currentX: stationX,
+            currentY: stationY
+          };
+        }
+        return r;
+      })
     }));
     setSelectedRobot(null);
   };
@@ -211,12 +208,13 @@ export function InventoryPage() {
                 {Array.from({ length: gridRows * gridCols }).map((_, idx) => {
                   const x = idx % gridCols;
                   const y = Math.floor(idx / gridCols);
+                  const coordKey = `${x},${y}`;
 
-                  // Entity checking
-                  const isShelf = shelves.some(s => s.x === x && s.y === y);
-                  const activeRobot = robots.find(r => r.x === x && r.y === y);
-                  const isCharging = chargingDocks.some(c => c.x === x && c.y === y);
-                  const station = deliveryStations.find(s => s.x === x && s.y === y);
+                  // Entity checking using fast O(1) Map lookups
+                  const isShelf = shelfMap.has(coordKey);
+                  const activeRobot = robotMap.get(coordKey);
+                  const isCharging = dockMap.has(coordKey);
+                  const station = stationMap.get(coordKey);
 
                   return (
                     <div

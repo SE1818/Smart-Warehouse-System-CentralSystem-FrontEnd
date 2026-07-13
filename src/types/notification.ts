@@ -18,4 +18,5 @@ export interface SendNotificationRequest {
   title: string;
   message: string;
   type: NotificationType;
+  destinationEmail?: string;
 }
