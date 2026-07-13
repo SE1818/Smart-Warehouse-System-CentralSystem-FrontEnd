@@ -88,7 +88,13 @@ export const useRobotStore = create<RobotState>((set, get) => {
           headers: import.meta.env.DEV ? { 'ngrok-skip-browser-warning': 'true' } : undefined,
         })
         .configureLogging(signalR.LogLevel.Information)
-        .withAutomaticReconnect()
+        .withAutomaticReconnect({
+          nextRetryDelayInMilliseconds: (retryContext) => {
+            const delay = Math.min(2000 * Math.pow(2, retryContext.previousRetryCount), 30000);
+            get().addLog(`Thử kết nối lại Robot Hub lần #${retryContext.previousRetryCount + 1} sau ${delay}ms...`, 'warning');
+            return delay;
+          }
+        })
         .build();
 
       connection.on('ReceiveRobotLocation', (updatedRobot: any) => {
@@ -154,20 +160,40 @@ export const useRobotStore = create<RobotState>((set, get) => {
         get().fetchRobots();
       });
 
+      const startConnection = () => {
+        if (!get().connection) return;
+        connection.start()
+          .then(() => {
+            set({ status: 'connected', connection });
+            get().addLog('Kết nối SignalR Hub thành công.', 'success');
+          })
+          .catch((err) => {
+            set({ status: 'disconnected' });
+            get().addLog(`Kết nối SignalR Hub thất bại: ${err.message}`, 'error');
+            setTimeout(() => {
+              if (get().connection && get().status === 'disconnected') {
+                get().addLog('Thử kết nối lại Robot Hub...', 'info');
+                set({ status: 'connecting' });
+                startConnection();
+              }
+            }, 5000);
+          });
+      };
+
       connection.onclose((error) => {
-        set({ status: 'disconnected', connection: null });
+        set({ status: 'disconnected' });
         get().addLog(`Kết nối Robot Hub bị đóng: ${error?.message}`, 'error');
+        setTimeout(() => {
+          if (get().connection && get().status === 'disconnected') {
+            get().addLog('Thử khởi động lại kết nối Robot Hub...', 'info');
+            set({ status: 'connecting' });
+            startConnection();
+          }
+        }, 10000);
       });
 
-      connection.start()
-        .then(() => {
-          set({ status: 'connected', connection });
-          get().addLog('Kết nối SignalR Hub thành công.', 'success');
-        })
-        .catch((err) => {
-          set({ status: 'disconnected', connection: null });
-          get().addLog(`Kết nối SignalR Hub thất bại: ${err.message}`, 'error');
-        });
+      set({ connection });
+      startConnection();
     },
 
     disconnect: () => {

@@ -16,7 +16,7 @@ export function AdminLayout() {
 
   const userId = user?.id;
 
-  const { connect, disconnect } = useNotificationStore();
+  const { connect, disconnect, status } = useNotificationStore();
 
   useEffect(() => {
     if (!userId) return;
@@ -111,6 +111,16 @@ export function AdminLayout() {
                 SmartWarehouse
               </h1>
               <p className="text-[9px] font-bold text-brand-600 uppercase tracking-widest mt-1">Hệ Thống Trung Tâm</p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  status === 'connected' ? 'bg-emerald-500 animate-pulse' :
+                  status === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'
+                }`} />
+                <span className="text-[10px] font-semibold text-slate-500">
+                  {status === 'connected' ? 'Hệ thống trực tuyến' :
+                   status === 'connecting' ? 'Đang kết nối...' : 'Mất kết nối'}
+                </span>
+              </div>
             </div>
           </div>
         </div>

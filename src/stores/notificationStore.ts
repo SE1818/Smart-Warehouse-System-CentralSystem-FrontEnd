@@ -35,7 +35,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
           headers: import.meta.env.DEV ? { 'ngrok-skip-browser-warning': 'true' } : undefined,
         })
         .configureLogging(signalR.LogLevel.Information)
-        .withAutomaticReconnect()
+        .withAutomaticReconnect({
+          nextRetryDelayInMilliseconds: (retryContext) => {
+            const delay = Math.min(2000 * Math.pow(2, retryContext.previousRetryCount), 30000);
+            console.log(`[SignalR] Notification Hub reconnect attempt #${retryContext.previousRetryCount + 1} in ${delay}ms`);
+            return delay;
+          }
+        })
         .build();
 
       connection.on('ReceiveNotification', (notification: NotificationPayload) => {
@@ -65,20 +71,40 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
         console.log('[SignalR] Notification Hub reconnected. Connection ID:', connectionId);
       });
 
+      const startConnection = () => {
+        if (!get().connection) return;
+        connection.start()
+          .then(() => {
+            set({ status: 'connected', connection });
+            console.log('[SignalR] Connected to Notification Hub for user:', userId);
+          })
+          .catch((err) => {
+            set({ status: 'disconnected' });
+            console.error('[SignalR] Notification Hub connection failed:', err);
+            setTimeout(() => {
+              if (get().connection && get().status === 'disconnected') {
+                console.log('[SignalR] Retrying initial connection to Notification Hub...');
+                set({ status: 'connecting' });
+                startConnection();
+              }
+            }, 5000);
+          });
+      };
+
       connection.onclose((error) => {
-        set({ status: 'disconnected', connection: null });
+        set({ status: 'disconnected' });
         console.error('[SignalR] Notification Hub connection closed.', error);
+        setTimeout(() => {
+          if (get().connection && get().status === 'disconnected') {
+            console.log('[SignalR] Restarting connection to Notification Hub after close...');
+            set({ status: 'connecting' });
+            startConnection();
+          }
+        }, 10000);
       });
 
-      connection.start()
-        .then(() => {
-          set({ status: 'connected', connection });
-          console.log('[SignalR] Connected to Notification Hub for user:', userId);
-        })
-        .catch((err) => {
-          set({ status: 'disconnected', connection: null });
-          console.error('[SignalR] Notification Hub connection failed:', err);
-        });
+      set({ connection });
+      startConnection();
     },
 
     disconnect: () => {
