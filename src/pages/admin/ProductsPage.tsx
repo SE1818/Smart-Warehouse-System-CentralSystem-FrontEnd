@@ -9,16 +9,16 @@ import { ProductFormModal } from '@/components/ProductFormModal';
 // File-Service returns relative paths (e.g. "/api/files/static/products/…")
 // but the browser resolves those against the frontend origin (5173), not the
 // API gateway (5000), so every image 404s unless we absolutise them here.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const BASE_ORIGIN = API_BASE.includes('://')
+  ? API_BASE.substring(0, API_BASE.lastIndexOf('/'))
+  : window.location.origin;
+
 const resolveImageUrl = (url: string | undefined): string => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api')
-    .replace(/\/$/, ''); // strip trailing slash
-  const baseOrigin = apiBase.includes('://')
-    ? apiBase.substring(0, apiBase.lastIndexOf('/'))
-    : window.location.origin;
-  return `${baseOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
-}
+  return `${BASE_ORIGIN}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);

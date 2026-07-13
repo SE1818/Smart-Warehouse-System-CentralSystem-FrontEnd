@@ -23,6 +23,23 @@ export default defineConfig(({ mode }) => ({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@microsoft/signalr')) {
+              return 'vendor-signalr';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
+  },
   css: {
     postcss: './postcss.config.js',
   },

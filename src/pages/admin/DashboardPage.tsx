@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useRobotStore } from '@/stores/robotStore';
 import { orderService, productService, stockService } from '@/services';
@@ -145,13 +145,13 @@ export function DashboardPage() {
     };
   }, [loadDashboardData, connectRobotHub, disconnectRobotHub, fetchRobots]);
 
-  const cardConfig = [
+  const cardConfig = useMemo(() => [
     { title: 'Sản phẩm trong kho', value: productsCount.toString(), change: 'Danh mục sản phẩm hiện có', icon: <Icons.Product className="w-6 h-6" />, iconColor: 'text-blue-500 bg-blue-50/80 border-blue-100/50' },
     { title: 'Đơn hàng chờ duyệt', value: pendingOrders.length.toString(), change: 'Cần phê duyệt từ quản lý', icon: <Icons.CartOrder className="w-6 h-6" />, iconColor: 'text-purple-500 bg-purple-50/80 border-purple-100/50' },
     { title: 'Robot AMR hoạt động', value: `${robots.filter(r => r.status !== 'Error').length}/${robots.length}`, change: 'Đội robot tự hành', icon: <Icons.Robot className="w-6 h-6" />, iconColor: 'text-emerald-500 bg-emerald-50/80 border-emerald-100/50' },
     { title: 'Vận chuyển đang chạy', value: activeTransfers.toString(), change: 'Số lượng chuyến hoạt động', icon: <Icons.Truck className="w-6 h-6" />, iconColor: 'text-indigo-500 bg-indigo-50/80 border-indigo-100/50' },
     { title: 'Tổng số lượng tồn kho', value: totalStock.toLocaleString(), change: 'Tổng sản phẩm trong các kho', icon: <Icons.StockBox className="w-6 h-6" />, iconColor: 'text-orange-500 bg-orange-50/80 border-orange-100/50' }
-  ];
+  ], [productsCount, pendingOrders.length, robots, activeTransfers, totalStock]);
 
   const statusColors = STATUS_COLORS;
   const statusLabels = STATUS_LABELS;
