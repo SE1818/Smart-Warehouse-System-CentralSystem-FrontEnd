@@ -105,7 +105,7 @@ export function DashboardPage() {
 
       // Set total stock
       if (stockLevels) {
-        const totalStockQty = stockLevels.reduce<number>((sum, l) => sum + (l.quantity || 0), 0);
+        const totalStockQty = stockLevels.reduce((sum: number, l: any) => sum + (l.quantity || 0), 0);
         setTotalStock(totalStockQty);
       } else {
         setTotalStock(stockSum || 0);
