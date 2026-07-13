@@ -371,9 +371,9 @@ export function RobotManagementPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Interactive Map Layout */}
-            <div className="lg:col-span-3 bg-slate-950 rounded-2xl p-4 flex items-center justify-center relative border border-slate-800 shadow-inner overflow-hidden select-none">
+            <div className="lg:col-span-3 bg-slate-950 rounded-2xl p-4 flex items-center justify-center relative border border-slate-800 shadow-inner select-none">
               <div 
-                className="relative w-full aspect-square max-w-[550px] border border-slate-800/80 rounded-lg overflow-hidden cursor-crosshair group/map"
+                className="relative w-full aspect-square max-w-[800px] border border-slate-800/80 rounded-lg cursor-crosshair group/map"
                 onClick={handleMapClick}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
