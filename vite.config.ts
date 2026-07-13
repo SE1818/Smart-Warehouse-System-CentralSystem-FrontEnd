@@ -1,13 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    // Emit bundle-size report only on production builds (opened automatically)
+    mode === 'production' ? visualizer({
+      filename: 'dist/stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    }) : undefined,
+  ].filter(Boolean),
   define: {
     __APP_ENV__: JSON.stringify(process.env.NODE_ENV || 'development'),
   },
-  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

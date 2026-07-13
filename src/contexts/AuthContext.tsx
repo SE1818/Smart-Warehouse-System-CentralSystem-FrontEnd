@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
+import { createContext, useState, useEffect, useMemo, useCallback, useContext, type ReactNode } from 'react';
 import type { User } from '@/types/auth';
 import { authService } from '@/services/auth';
 
@@ -14,6 +14,12 @@ export interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
+
+export function useAuthContext(): AuthContextType {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuthContext must be used within an AuthProvider');
+  return ctx;
+}
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [user, setUser] = useState<User | null>(null);

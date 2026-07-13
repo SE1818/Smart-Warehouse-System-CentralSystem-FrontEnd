@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 
-// Mock useAuth to return a user
+// Mock useAuthContext to return a user
 const mockUser = { id: 'user-123', email: 'test@example.com' };
 
-vi.mock('@/hooks/useAuth', () => ({
-  useAuth: vi.fn(() => ({ user: mockUser })),
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuthContext: vi.fn(() => ({ user: mockUser })),
 }));
 
 import { WalletPage } from '../WalletPage';

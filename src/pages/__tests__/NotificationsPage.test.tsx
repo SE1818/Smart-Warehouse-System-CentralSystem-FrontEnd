@@ -5,8 +5,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { NotificationsPage } from '../NotificationsPage';
 import { notificationService } from '@/services/notification';
 
-vi.mock('@/hooks/useAuth', () => ({
-  useAuth: vi.fn(),
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuthContext: vi.fn(),
 }));
 
 vi.mock('@/components/Icons', () => {

@@ -4,12 +4,10 @@ import type { NotificationDto, NotificationType } from '@/types/notification';
 import { notificationService } from '@/services/notification';
 import { userService } from '@/services/userService';
 import type { AdminUserResponse } from '@/services/userService';
-import { useAuth } from '@/hooks/useAuth';
 import { Icons } from '@/components/Icons';
 import { CustomSelect } from '@/components/CustomSelect';
 
 export function NotificationsPage() {
-  useAuth();
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

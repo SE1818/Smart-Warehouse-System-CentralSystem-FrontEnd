@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import type { Product } from '@/types';
 import { productService } from '@/services';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
-import { CustomSelect } from '@/components/CustomSelect';
+import { ProductFormModal } from '@/components/ProductFormModal';
 
 // Resolve a potentially-relative image URL against the API base.
 // File-Service returns relative paths (e.g. "/api/files/static/products/…")
 // but the browser resolves those against the frontend origin (5173), not the
 // API gateway (5000), so every image 404s unless we absolutise them here.
-function resolveImageUrl(url: string | undefined): string {
+const resolveImageUrl = (url: string | undefined): string => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api')
@@ -29,18 +29,8 @@ export function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<Product> & { _pendingImage?: File }>({
-    sku: '',
-    name: '',
-    category: 'Đồ uống',
-    price: 0,
-    stockQuantity: 0,
-    unit: 'chiếc',
-    description: ''
-  });
-
-  const editImageInputRef = useRef<HTMLInputElement>(null);
-  const addImageInputRef = useRef<HTMLInputElement>(null);
+  const [addImagePreview, setAddImagePreview] = useState<string | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -70,22 +60,22 @@ export function ProductsPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleEditSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // ---- Edit modal submit ----
+  const handleEditSave = async (fd: FormData) => {
     if (!editingProduct) return;
-
     try {
       await productService.updateProduct(editingProduct.id, {
-        sku: editingProduct.sku || '',
-        name: editingProduct.name,
-        description: editingProduct.description || '',
-        price: Number(editingProduct.price),
-        stockQuantity: Number(editingProduct.stockQuantity),
-        category: editingProduct.category,
-        unit: editingProduct.unit,
+        sku: (fd.get('sku') as string) || '',
+        name: fd.get('name') as string,
+        description: (fd.get('description') as string) || '',
+        price: Number(fd.get('price')),
+        stockQuantity: Number(fd.get('stockQuantity')),
+        category: (fd.get('category') as string) || 'Đồ uống',
+        unit: (fd.get('unit') as string) || 'chiếc',
         imageUrl: editingProduct.imageUrl
       });
       setEditingProduct(null);
+      setEditImagePreview(null);
       toast.success('Cập nhật sản phẩm thành công!');
       fetchProducts();
     } catch (err) {
@@ -94,25 +84,28 @@ export function ProductsPage() {
     }
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProduct.name || !newProduct.price || !newProduct.sku) return;
+  // ---- Add modal submit ----
+  const handleAddSubmit = async (fd: FormData) => {
+    const name = fd.get('name') as string;
+    const price = fd.get('price') as string;
+    const sku = fd.get('sku') as string;
+    if (!name || !price || !sku) return;
 
     try {
       const created = await productService.createProduct({
-        sku: newProduct.sku,
-        name: newProduct.name,
-        description: newProduct.description || '',
-        price: Number(newProduct.price),
-        stockQuantity: Number(newProduct.stockQuantity || 0),
-        category: newProduct.category || 'Đồ uống',
-        unit: newProduct.unit || 'chiếc'
+        sku,
+        name,
+        description: (fd.get('description') as string) || '',
+        price: Number(price),
+        stockQuantity: Number(fd.get('stockQuantity') || 0),
+        category: (fd.get('category') as string) || 'Đồ uống',
+        unit: (fd.get('unit') as string) || 'chiếc'
       });
 
-      const pendingFile = newProduct._pendingImage;
-      if (pendingFile) {
+      const pendingImage = fd.get('image') as File | null;
+      if (pendingImage && pendingImage.size > 0) {
         try {
-          const uploadResult = await productService.uploadImage(created.id, pendingFile);
+          const uploadResult = await productService.uploadImage(created.id, pendingImage);
           await productService.updateProduct(created.id, { imageUrl: uploadResult.url });
         } catch {
           toast.error('Đã tạo sản phẩm nhưng không thể tải ảnh lên.');
@@ -120,22 +113,42 @@ export function ProductsPage() {
       }
 
       setIsAdding(false);
-      setNewProduct({
-        sku: '',
-        name: '',
-        category: 'Đồ uống',
-        price: 0,
-        stockQuantity: 0,
-        unit: 'chiếc',
-        description: '',
-        imageUrl: ''
-      });
+      setAddImagePreview(null);
       toast.success('Thêm sản phẩm mới thành công!');
       fetchProducts();
     } catch (err) {
       console.error('Error creating product', err);
       toast.error('Không thể tạo sản phẩm mới. Vui lòng kiểm tra lại.');
     }
+  };
+
+  // ---- Image handling for edit modal ----
+  const handleEditImageUpload = async (file: File) => {
+    if (!file || !editingProduct) return;
+    // Show local preview immediately
+    const reader = new FileReader();
+    reader.onload = () => {
+      setEditImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      const result = await productService.uploadImage(editingProduct.id, file);
+      setEditingProduct({ ...editingProduct, imageUrl: result.url });
+      setEditImagePreview(result.url);
+      toast.success('Đã tải ảnh lên thành công!');
+    } catch {
+      toast.error('Không thể tải ảnh lên. Vui lòng thử lại.');
+    }
+  };
+
+  // ---- Image handling for add modal ----
+  const handleAddImageSelected = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAddImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const deleteProduct = (id: string) => {
@@ -152,34 +165,6 @@ export function ProductsPage() {
       console.error('Error deleting product', err);
       toast.error('Không thể xóa sản phẩm. Vui lòng kiểm tra lại.');
     }
-  };
-
-  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !editingProduct) return;
-    try {
-      const result = await productService.uploadImage(editingProduct.id, file);
-      setEditingProduct({ ...editingProduct, imageUrl: result.url });
-      toast.success('Đã tải ảnh lên thành công!');
-    } catch {
-      toast.error('Không thể tải ảnh lên. Vui lòng thử lại.');
-    }
-    e.target.value = '';
-  };
-
-  const handleAddImagePreview = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setNewProduct({
-        ...newProduct,
-        imageUrl: reader.result as string,
-        _pendingImage: file
-      });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -274,11 +259,11 @@ export function ProductsPage() {
                       <div className="flex items-center gap-3">
                         {p.imageUrl && !imageErrors[p.id] ? (
                           <img
-                        src={resolveImageUrl(p.imageUrl)}
+                            src={resolveImageUrl(p.imageUrl)}
                             alt={p.name}
                             className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
                             loading="lazy"
-                      onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
+                            onError={() => setImageErrors(prev => ({ ...prev, [p.id]: true }))}
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
@@ -372,299 +357,28 @@ export function ProductsPage() {
       )}
 
       {/* Edit Modal */}
-      {editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl relative">
-            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
-              <Icons.Product className="w-5 h-5 text-brand-600" />
-              <span>Chỉnh sửa sản phẩm</span>
-            </h3>
-
-            <form onSubmit={handleEditSave} className="flex flex-col flex-1 min-h-0">
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1 min-h-0 pb-1">
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
-                  <input
-                    type="text"
-                    value={editingProduct.name}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                    required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
-                  <input
-                    type="text"
-                    value={editingProduct.sku || ''}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, sku: e.target.value })}
-                    required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
-                    <input
-                      type="number"
-                      value={editingProduct.price}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
-                      required
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
-                    <input
-                      type="number"
-                      value={editingProduct.stockQuantity}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, stockQuantity: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ảnh sản phẩm</label>
-                  <input
-                    ref={editImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleEditImageUpload}
-                  />
-                  {editingProduct.imageUrl && (
-                    <div className="mb-2">
-                      <img
-                        src={resolveImageUrl(editingProduct.imageUrl)}
-                        alt="Preview"
-                        className="w-16 h-16 rounded-lg object-cover border border-slate-200"
-                  onError={() => setImageErrors(prev => ({ ...prev, [editingProduct.id]: true }))}
-                      />
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => editImageInputRef.current?.click()}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-brand-300 rounded-xl text-xs font-bold text-slate-600 hover:text-brand-600 transition-all cursor-pointer"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                      </svg>
-                      Tải ảnh lên
-                    </button>
-                    <input
-                      type="text"
-                      placeholder="hoặc dán link ảnh..."
-                      value={editingProduct.imageUrl || ''}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
-                      className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <CustomSelect
-                    label="Phân loại"
-                    value={editingProduct.category || ''}
-                    onChange={v => setEditingProduct(prev => prev ? { ...prev, category: v } : null)}
-                    options={[
-                      { value: 'Đồ uống', label: 'Đồ uống' },
-                      { value: 'Vật tư y tế', label: 'Vật tư y tế' },
-                      { value: 'Linh kiện', label: 'Linh kiện' },
-                      { value: 'Khác', label: 'Khác' }
-                    ]}
-                    placeholder="Chọn phân loại..."
-                  />
-                  <CustomSelect
-                    label="Đơn vị"
-                    value={editingProduct.unit || ''}
-                    onChange={v => setEditingProduct(prev => prev ? { ...prev, unit: v } : null)}
-                    options={[
-                      { value: 'chiếc', label: 'chiếc' },
-                      { value: 'hộp', label: 'hộp' },
-                      { value: 'thùng', label: 'thùng' },
-                      { value: 'lít', label: 'lít' },
-                      { value: 'kg', label: 'kg' }
-                    ]}
-                    placeholder="Chọn đơn vị..."
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="px-5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
-                >
-                  Lưu thay đổi
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ProductFormModal
+        open={!!editingProduct}
+        title="Chỉnh sửa sản phẩm"
+        initialData={editingProduct}
+        onClose={() => { setEditingProduct(null); setEditImagePreview(null); }}
+        onSubmit={handleEditSave}
+        onFileSelected={handleEditImageUpload}
+        imagePreviewUrl={editImagePreview || editingProduct?.imageUrl || null}
+        submitLabel="Lưu thay đổi"
+      />
 
       {/* Add Modal */}
-      {isAdding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl relative">
-            <h3 className="text-lg font-heading font-extrabold text-slate-900 mb-5 border-b border-slate-100 pb-3 flex items-center gap-2 shrink-0">
-              <Icons.Plus className="w-5 h-5 text-brand-600" />
-              <span>Thêm sản phẩm mới</span>
-            </h3>
-
-            <form onSubmit={handleAddSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1 min-h-0 pb-1">
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
-                  <input
-                    type="text"
-                    placeholder="Ví dụ: Nước uống đóng chai"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                    required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
-                  <input
-                    type="text"
-                    placeholder="Ví dụ: SKU-WATER-01"
-                    value={newProduct.sku || ''}
-                    onChange={(e) => setNewProduct({ ...newProduct, sku: e.target.value })}
-                    required
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 font-mono"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giá bán (đ)</label>
-                    <input
-                      type="number"
-                      value={newProduct.price || ''}
-                      onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
-                      required
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Số lượng tồn</label>
-                    <input
-                      type="number"
-                      value={newProduct.stockQuantity || 0}
-                      onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: Number(e.target.value) })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ảnh sản phẩm</label>
-                  <input
-                    ref={addImageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAddImagePreview}
-                  />
-                  {newProduct.imageUrl && newProduct.imageUrl.startsWith('data:') && (
-                    <div className="mb-2">
-                      <img
-                        src={newProduct.imageUrl}
-                        alt="Preview"
-                        className="w-16 h-16 rounded-lg object-cover border border-slate-200"
-                      />
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => addImageInputRef.current?.click()}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:border-brand-300 rounded-xl text-xs font-bold text-slate-600 hover:text-brand-600 transition-all cursor-pointer"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                      </svg>
-                      Tải ảnh lên
-                    </button>
-                    <span className="text-xs text-slate-400 self-center">
-                      {newProduct._pendingImage ? newProduct._pendingImage.name : 'Chưa chọn ảnh'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <CustomSelect
-                    label="Phân loại"
-                    value={newProduct.category || ''}
-                    onChange={v => setNewProduct({ ...newProduct, category: v })}
-                    options={[
-                      { value: 'Đồ uống', label: 'Đồ uống' },
-                      { value: 'Vật tư y tế', label: 'Vật tư y tế' },
-                      { value: 'Linh kiện', label: 'Linh kiện' },
-                      { value: 'Khác', label: 'Khác' }
-                    ]}
-                    placeholder="Chọn phân loại..."
-                  />
-                  <CustomSelect
-                    label="Đơn vị"
-                    value={newProduct.unit || ''}
-                    onChange={v => setNewProduct({ ...newProduct, unit: v })}
-                    options={[
-                      { value: 'chiếc', label: 'chiếc' },
-                      { value: 'hộp', label: 'hộp' },
-                      { value: 'thùng', label: 'thùng' },
-                      { value: 'lít', label: 'lít' },
-                      { value: 'kg', label: 'kg' }
-                    ]}
-                    placeholder="Chọn đơn vị..."
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mô tả ngắn</label>
-                  <textarea
-                    placeholder="Mô tả công dụng..."
-                    value={newProduct.description}
-                    onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white text-sm text-slate-800 h-20 resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsAdding(false)}
-                  className="px-5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/10 transition-all cursor-pointer"
-                >
-                  Tạo sản phẩm
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ProductFormModal
+        open={isAdding}
+        title="Thêm sản phẩm mới"
+        initialData={null}
+        onClose={() => { setIsAdding(false); setAddImagePreview(null); }}
+        onSubmit={handleAddSubmit}
+        onFileSelected={handleAddImageSelected}
+        imagePreviewUrl={addImagePreview}
+        submitLabel="Tạo sản phẩm"
+      />
 
       {/* Delete Confirmation Modal */}
       {deletingProductId && (

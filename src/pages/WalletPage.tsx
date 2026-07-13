@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { walletService } from '../services/wallet';
 import type { Wallet, WalletTransaction } from '../types/wallet';
 import { Icons } from '@/components/Icons';
 
 export function WalletPage() {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
