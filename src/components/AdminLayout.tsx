@@ -7,8 +7,7 @@ import { useRobotStore } from '../stores/robotStore';
 // Route → module mapping for hover prefetch
 const ROUTE_MODULES: Record<string, string> = {
   '/admin/dashboard': 'src/pages/admin/DashboardPage',
-  '/admin/inventory': 'src/pages/admin/InventoryPage',
-  '/admin/products': 'src/pages/admin/ProductsPage',
+    '/admin/products': 'src/pages/admin/ProductsPage',
   '/admin/orders': 'src/pages/admin/OrdersPage',
   '/admin/promotions': 'src/pages/PromotionsPage',
   '/admin/reports': 'src/pages/admin/ReportsPage',
@@ -79,8 +78,7 @@ export function AdminLayout() {
     label: 'Tổng quan',
     items: [
       { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" />, visible: true },
-      { path: '/admin/inventory', label: 'Sơ đồ robot', icon: <Icons.Dashboard className="w-5 h-5" />, visible: !isStoreManager },
-    ],
+          ],
   },
   {
     label: 'Kho hàng',

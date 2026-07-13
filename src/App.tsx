@@ -18,7 +18,6 @@ const StoresPage = lazy(() => import('./pages/admin/StoresPage').then(m => ({ de
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const AdminInventory = lazy(() => import('./pages/admin/InventoryPage').then(m => ({ default: m.InventoryPage })));
 const AdminProducts = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
 const AdminOrders = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ default: m.OrdersPage })));
 const AdminUsers = lazy(() => import('./pages/admin/UsersPage').then(m => ({ default: m.UsersPage })));
@@ -137,8 +136,7 @@ function App() {
 							}
 						>
 							<Route path="dashboard" element={<AdminDashboard />} />
-							<Route path="inventory" element={<AdminInventory />} />
-							<Route path="warehouses" element={<WarehousesPage />} />
+														<Route path="warehouses" element={<WarehousesPage />} />
 							<Route path="stocklevels" element={<StockLevelsPage />} />
 							<Route path="stockmovements" element={<StockMovementsPage />} />
 							<Route path="stockadjustments" element={<StockAdjustmentsPage />} />
