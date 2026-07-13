@@ -74,7 +74,26 @@ export function NotificationsPage() {
     void fetchNotifications();
     void loadUsers();
 
-    const handleRealtimeNotification = () => {
+    // Real-time: listen to SignalR events dispatched by notificationStore
+    const handleRealtimeNotification = (event: Event) => {
+      const customEvent = event as CustomEvent<{ title: string; message: string }>;
+      const detail = customEvent.detail;
+      // Optimistically prepend new notification (mapped to NotificationDto shape)
+      if (detail) {
+        setNotifications((prev) => [
+          {
+            id: `rt-${Date.now()}`,
+            title: detail.title,
+            message: detail.message,
+            type: 'InApp',
+            status: 'Sent',
+            createdAt: new Date().toISOString(),
+            userId: '',
+          } as NotificationDto,
+          ...prev,
+        ]);
+      }
+      // Also refresh full list from server in background
       void fetchNotifications();
     };
 
@@ -153,7 +172,7 @@ export function NotificationsPage() {
   // Get statistics
   const stats = {
     total: notifications.length,
-    sent: notifications.filter((n) => n.status === 'Sent').length,
+    sent: notifications.filter((n) => n.status === 'Sent' || n.status === 'Read').length,
     failed: notifications.filter((n) => n.status === 'Failed').length,
     inApp: notifications.filter((n) => n.type === 'InApp').length,
     email: notifications.filter((n) => n.type === 'Email').length,
@@ -176,6 +195,7 @@ export function NotificationsPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'Read':
       case 'Sent':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'Failed':
@@ -347,7 +367,7 @@ export function NotificationsPage() {
                     </td>
                     <td className="py-4 px-6 align-top">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(notification.status)}`}>
-                        {notification.status === 'Sent' ? 'Đã gửi' : notification.status === 'Failed' ? 'Thất bại' : 'Đang xử lý'}
+                        {notification.status === 'Read' ? 'Đã đọc' : notification.status === 'Sent' ? 'Đã gửi' : notification.status === 'Failed' ? 'Thất bại' : 'Đang xử lý'}
                       </span>
                     </td>
                     <td className="py-4 px-6 align-top text-xs text-slate-400 font-medium whitespace-nowrap">

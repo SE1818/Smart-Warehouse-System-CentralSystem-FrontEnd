@@ -7,14 +7,24 @@ import type { AxiosAdapter, AxiosResponse } from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const pendingRequests = new Map<string, Promise<any>>();
-const defaultAdapter = (axios.defaults.adapter as any) || (() => { throw new Error('No axios adapter found'); });
+const getAdapter = (config: any): AxiosAdapter => {
+  const targetAdapter = (config.adapter === dedupeAndRetryAdapter) ? undefined : config.adapter;
+  if (typeof axios.getAdapter === 'function') {
+    return axios.getAdapter(targetAdapter || axios.defaults.adapter || 'xhr');
+  }
+  if (typeof axios.defaults.adapter === 'function') {
+    return axios.defaults.adapter as AxiosAdapter;
+  }
+  throw new Error('No axios adapter found');
+};
 
 const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
+  const adapter = getAdapter(config);
   const key = `${config.method}:${config.url}:${JSON.stringify(config.params)}:${JSON.stringify(config.data)}`;
 
   // Deduplicate only GET requests to avoid breaking mutations
   if (config.method?.toLowerCase() !== 'get') {
-    return defaultAdapter(config);
+    return adapter(config);
   }
 
   if (pendingRequests.has(key)) {
@@ -23,7 +33,7 @@ const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
 
   const executeWithRetry = async (retriesLeft: number): Promise<AxiosResponse<any>> => {
     try {
-      return await defaultAdapter(config);
+      return await adapter(config);
     } catch (error: any) {
       const isNetworkError = !error.response;
       const isServerError = error.response?.status >= 500;

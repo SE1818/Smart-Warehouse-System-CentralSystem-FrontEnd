@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icons } from './Icons';
 import { useNotificationStore } from '../stores/notificationStore';
+import { useRobotStore } from '../stores/robotStore';
 
 // Route → module mapping for hover prefetch
 const ROUTE_MODULES: Record<string, string> = {
@@ -9,23 +10,23 @@ const ROUTE_MODULES: Record<string, string> = {
   '/admin/inventory': 'src/pages/admin/InventoryPage',
   '/admin/products': 'src/pages/admin/ProductsPage',
   '/admin/orders': 'src/pages/admin/OrdersPage',
-  '/admin/promotions': 'src/pages/admin/PromotionsPage',
+  '/admin/promotions': 'src/pages/PromotionsPage',
   '/admin/reports': 'src/pages/admin/ReportsPage',
-  '/admin/wallet': 'src/pages/admin/WalletPage',
-  '/admin/robots': 'src/pages/admin/RobotsPage',
+  '/admin/wallet': 'src/pages/WalletPage',
+  '/admin/robots': 'src/pages/RobotManagementPage',
   '/admin/transfers': 'src/pages/admin/TransfersPage',
   '/admin/robot-monitor': 'src/pages/admin/RobotMonitorPage',
   '/admin/scheduler': 'src/pages/admin/SchedulerPage',
-  '/admin/metrics': 'src/pages/admin/MetricsPage',
-  '/admin/search': 'src/pages/admin/SearchPage',
+  '/admin/metrics': 'src/pages/MetricsPage',
+  '/admin/search': 'src/pages/search/SearchPage',
   '/admin/users': 'src/pages/admin/UsersPage',
   '/admin/storeregistrations': 'src/pages/admin/StoreRegistrationsPage',
   '/admin/stores': 'src/pages/admin/StoresPage',
-  '/admin/notifications': 'src/pages/admin/NotificationsPage',
+  '/admin/notifications': 'src/pages/NotificationsPage',
   '/admin/complaints': 'src/pages/admin/ComplaintsPage',
-  '/admin/files': 'src/pages/admin/FilesPage',
-  '/admin/logs': 'src/pages/admin/LogsPage',
-  '/admin/profile': 'src/pages/admin/ProfilePage',
+  '/admin/files': 'src/pages/admin/FileManagementPage',
+  '/admin/logs': 'src/pages/AuditLogsPage',
+  '/admin/profile': 'src/pages/ProfilePage',
 };
 
 export function AdminLayout() {
@@ -58,6 +59,10 @@ export function AdminLayout() {
   const userId = user?.id;
 
   const { connect, disconnect, status } = useNotificationStore();
+  const { status: robotStatus } = useRobotStore();
+
+  // Connection-loss banner: shown when BOTH hubs are disconnected
+  const bothDisconnected = status === 'disconnected' && robotStatus === 'disconnected';
 
   useEffect(() => {
     if (!userId) return;
@@ -316,6 +321,15 @@ export function AdminLayout() {
           ☰
         </button>
       </header>
+      {/* Connection-loss banner */}
+      {bothDisconnected && (
+        <div className="flex items-center gap-3 px-6 py-2.5 bg-rose-600 text-white text-sm font-semibold animate-pulse shrink-0">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <span>Mất kết nối với hệ thống thời gian thực — dữ liệu có thể không được cập nhật</span>
+        </div>
+      )}
       {/* Content Outlet */}
       <main className="flex-1 overflow-y-auto tech-grid bg-slate-50 text-slate-800">
         <Outlet />

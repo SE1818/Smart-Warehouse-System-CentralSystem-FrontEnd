@@ -1,6 +1,6 @@
 export type NotificationType = 'Email' | 'SMS' | 'InApp' | 'Push';
 
-export type NotificationStatus = 'Pending' | 'Sent' | 'Failed';
+export type NotificationStatus = 'Pending' | 'Sent' | 'Failed' | 'Read';
 
 export interface NotificationDto {
   id: string;

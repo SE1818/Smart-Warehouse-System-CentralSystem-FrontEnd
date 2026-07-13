@@ -1,17 +1,32 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useAuthContext } from '@/contexts/AuthContext';
 import { walletService } from '../services/wallet';
 import type { Wallet, WalletTransaction } from '../types/wallet';
+import type { User } from '@/types/auth';
 import { Icons } from '@/components/Icons';
 
 export function WalletPage() {
-  const { user } = useAuthContext();
+  const [user, setUser] = useState<User | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [topUpAmount, setTopUpAmount] = useState('');
   const [topUpDesc, setTopUpDesc] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Initialize user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const parsed = JSON.parse(userStr) as User;
+        setUser(parsed);
+        return;
+      } catch (err) {
+        console.error('Error parsing user from localStorage:', err);
+      }
+    }
+    setLoading(false);
+  }, []);
 
   const loadWalletData = useCallback(async () => {
     if (!user?.id) return;
