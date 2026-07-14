@@ -117,7 +117,7 @@ const robotHub: HubState = {
   statusListeners: new Set(),
   handlers: new Map(),
   name: 'Robot Hub',
-  path: '/robots/hub',
+  path: '/robots/tracking-hub',
 };
 
 const metricsHub: HubState = {

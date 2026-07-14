@@ -80,7 +80,7 @@ export const useRobotStore = create<RobotState>((set, get) => {
       get().addLog('Đang kết nối đến Robot Hub...', 'info');
 
       const token = localStorage.getItem('authToken');
-      const connectionUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/hub`;
+      const connectionUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/tracking-hub`;
 
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {

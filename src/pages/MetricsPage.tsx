@@ -3,6 +3,7 @@ import { metricsService } from '@/services';
 import { MetricType } from '@/types';
 import { Icons } from '@/components/Icons';
 import { CustomSelect } from '@/components/CustomSelect';
+import { useMetricsStore } from '@/stores/metricsStore';
 
 interface MetricCardProps {
   title: string;
@@ -42,26 +43,36 @@ const metricConfig: Record<string, { label: string; unit: string; icon: React.Re
 
 
 export function MetricsPage() {
-  const [metrics, setMetrics] = useState<Record<string, number>>({});
+  const [initialMetrics, setInitialMetrics] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [selectedWarehouse, setSelectedWarehouse] = useState('WH001');
 
+  const { latestMetrics, connect, disconnect } = useMetricsStore();
+
+  // Connect to Metrics Hub on mount
+  useEffect(() => {
+    connect();
+    return () => {
+      disconnect();
+    };
+  }, [connect, disconnect]);
+
+  // Fetch initial latest metrics when selectedWarehouse changes
   useEffect(() => {
     let active = true;
 
-    const fetchLatestMetrics = async () => {
-      const newMetrics: Record<string, number> = {};
+    const fetchInitialMetrics = async () => {
+      const initial: Record<string, number> = {};
 
       for (const [key, config] of Object.entries(metricConfig)) {
         try {
           const data = await metricsService.getLatestMetric(selectedWarehouse, config.type);
           if (active) {
-            newMetrics[key] = data.metricValue;
+            initial[key] = data.metricValue;
           }
         } catch (err) {
-          console.error(`Error fetching ${key}:`, err);
+          console.error(`Error fetching initial ${key}:`, err);
           if (active) {
-            // Seed realistic numbers as mock fallbacks if service is offline
             const fallbacks: Record<string, number> = {
               temperature: 24.5,
               humidity: 58.2,
@@ -70,27 +81,33 @@ export function MetricsPage() {
               powerConsumption: 142.6,
               inventoryCount: 489
             };
-            newMetrics[key] = fallbacks[key] || 0;
+            initial[key] = fallbacks[key] || 0;
           }
         }
       }
 
       if (active) {
-        setMetrics(newMetrics);
+        setInitialMetrics(initial);
         setLoading(false);
       }
     };
 
-    fetchLatestMetrics();
-
-    // Setup polling for metrics updates
-    const interval = setInterval(fetchLatestMetrics, 8000);
+    setLoading(true);
+    fetchInitialMetrics();
 
     return () => {
       active = false;
-      clearInterval(interval);
     };
   }, [selectedWarehouse]);
+
+  const getMetricValue = (key: string, configType: MetricType): number => {
+    const storeKey = `${selectedWarehouse}:${configType}`;
+    const realtimeMetric = latestMetrics[storeKey];
+    if (realtimeMetric) {
+      return realtimeMetric.metricValue;
+    }
+    return initialMetrics[key] ?? 0;
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
@@ -101,7 +118,7 @@ export function MetricsPage() {
             <Icons.Metrics className="w-8 h-8 text-brand-600" />
             <span>Giám sát chỉ số môi trường</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-550">
             Theo dõi các chỉ số hiệu suất và môi trường kho theo thời gian thực
           </p>
         </div>
@@ -110,7 +127,6 @@ export function MetricsPage() {
             value={selectedWarehouse}
             onChange={(v) => {
               setSelectedWarehouse(v);
-              setLoading(true);
             }}
             options={[
               { value: 'WH001', label: 'WH001 - Kho A (Đồ uống)' },
@@ -134,7 +150,7 @@ export function MetricsPage() {
             <MetricCard
               key={key}
               title={config.label}
-              value={metrics[key] ? metrics[key].toFixed(1) : '0'}
+              value={getMetricValue(key, config.type).toFixed(1)}
               unit={config.unit}
               icon={config.icon}
               color={config.color}
