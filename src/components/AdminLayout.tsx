@@ -12,6 +12,7 @@ const ROUTE_MODULES: Record<string, string> = {
   '/admin/promotions': 'src/pages/PromotionsPage',
   '/admin/reports': 'src/pages/admin/ReportsPage',
   '/admin/wallet': 'src/pages/WalletPage',
+  '/admin/settlement': 'src/pages/admin/SettlementPage',
   '/admin/robots': 'src/pages/RobotManagementPage',
   '/admin/transfers': 'src/pages/admin/TransfersPage',
   '/admin/robot-monitor': 'src/pages/admin/RobotMonitorPage',
@@ -93,6 +94,7 @@ export function AdminLayout() {
       { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" />, visible: true },
       { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isStoreManager },
     ],
   },
   {

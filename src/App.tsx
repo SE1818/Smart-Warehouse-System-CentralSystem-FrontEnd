@@ -23,6 +23,7 @@ const AdminOrders = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ d
 const AdminUsers = lazy(() => import('./pages/admin/UsersPage').then(m => ({ default: m.UsersPage })));
 const AdminComplaints = lazy(() => import('./pages/admin/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })));
 const AdminReports = lazy(() => import('./pages/admin/ReportsPage').then(m => ({ default: m.ReportsPage })));
+const SettlementPage = lazy(() => import('./pages/admin/SettlementPage').then(m => ({ default: m.SettlementPage })));
 
 // Stock pages
 const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
@@ -157,6 +158,7 @@ function App() {
 							<Route path="stores" element={<StoresPage />} />
 							<Route path="complaints" element={<AdminComplaints />} />
 							<Route path="reports" element={<AdminReports />} />
+							<Route path="settlement" element={<SettlementPage />} />
 							<Route path="transfers" element={<TransfersPage />} />
 							<Route path="robot-monitor" element={<RobotMonitorPage />} />
 						</Route>
