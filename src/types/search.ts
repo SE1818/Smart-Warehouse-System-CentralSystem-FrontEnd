@@ -6,6 +6,8 @@ export interface ProductIndex {
 	price: number;
 	stockQuantity: number;
 	storeId?: string;
+	storeName?: string;
+	imageUrl?: string;
 }
 
 export interface AskRequest {

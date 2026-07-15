@@ -209,9 +209,19 @@ export function SearchPage() {
 												{product.description}
 											</p>
 											<div className="flex items-center justify-between text-xs pt-2.5 border-t border-slate-100">
-												<span className="font-extrabold text-brand-600 text-sm">
-													{(product.price / 1000).toFixed(0)}K VND
-												</span>
+												<div className="flex items-center gap-2 flex-wrap">
+													<span className="font-extrabold text-brand-600 text-sm">
+														{(product.price / 1000).toFixed(0)}K VND
+													</span>
+													{product.storeName && (
+														<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-700 rounded-full text-[10px] font-semibold">
+															<svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+															</svg>
+															{product.storeName}
+														</span>
+													)}
+												</div>
 												<span className={`font-bold px-2.5 py-0.5 rounded-full text-[10px] border ${product.stockQuantity > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
 													Tồn: {product.stockQuantity}
 												</span>
