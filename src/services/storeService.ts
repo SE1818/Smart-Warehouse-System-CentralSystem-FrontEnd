@@ -22,6 +22,8 @@ export interface StoreDto {
   ownerEmail: string;
   areaId: string;
   stationId: string;
+  imageUrl?: string;
+  warehouseId?: string | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -31,6 +33,7 @@ export interface StoreRegistrationStatusDto {
   storeName: string;
   ownerName: string;
   ownerEmail: string;
+  imageUrl?: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   rejectionReason?: string;
   createdAt: string;
@@ -38,6 +41,15 @@ export interface StoreRegistrationStatusDto {
 }
 
 export const storeService = {
+  async uploadStoreImage(file: File): Promise<{ imageUrl: string }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await apiClient.post('/v1/storeregistrations/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   async registerStore(data: {
     storeName: string;
     ownerName: string;
@@ -47,6 +59,7 @@ export const storeService = {
     areaName: string;
     stationId: string;
     stationName: string;
+    imageUrl: string;
   }): Promise<{ message: string }> {
     const response = await apiClient.post<{ message: string }>('/v1/storeregistrations/register-store', data);
     return response.data;
@@ -64,9 +77,7 @@ export const storeService = {
   },
 
   async getMyRegistrationStatus(email: string): Promise<StoreRegistrationStatusDto> {
-    const response = await apiClient.get<StoreRegistrationStatusDto>('/v1/storeregistrations/my-status', {
-      params: { email },
-    });
+    const response = await apiClient.get<StoreRegistrationStatusDto>('/v1/storeregistrations/my-status', { params: { email } });
     return response.data;
   },
 

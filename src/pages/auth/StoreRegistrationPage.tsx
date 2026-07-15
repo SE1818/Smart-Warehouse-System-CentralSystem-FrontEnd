@@ -14,6 +14,10 @@ export function StoreRegistrationPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedAreaId, setSelectedAreaId] = useState('');
   const [selectedStationId, setSelectedStationId] = useState('');
+const [selectedFile, setSelectedFile] = useState<File | null>(null);
+const [imagePreview, setImagePreview] = useState<string | null>(null);
+const [uploadingImage, setUploadingImage] = useState(false);
+const [imageUrl, setImageUrl] = useState<string>('');
   
   const [areas, setAreas] = useState<Area[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
@@ -73,9 +77,29 @@ export function StoreRegistrationPage() {
     }
   }, [selectedAreaId, stations, filteredStations]);
 
+const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  setSelectedFile(file);
+  setUploadingImage(true);
+  try {
+    const res = await storeService.uploadStoreImage(file);
+    setImageUrl(res.imageUrl);
+    setImagePreview(res.imageUrl);
+    toast.success('Tải ảnh lên thành công!');
+  } catch (err) {
+    toast.error('Không thể tải ảnh lên. Vui lòng thử lại.');
+    setSelectedFile(null);
+    setImagePreview(null);
+    setImageUrl('');
+  } finally {
+    setUploadingImage(false);
+  }
+};
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeName || !ownerName || !ownerEmail || !phoneNumber || !selectedAreaId || !selectedStationId) {
+  if (!storeName || !ownerName || !ownerEmail || !phoneNumber || !selectedAreaId || !selectedStationId || !imageUrl) {
       toast.error('Vui lòng điền đầy đủ tất cả các trường.');
       return;
     }
@@ -93,7 +117,8 @@ export function StoreRegistrationPage() {
         areaId: selectedAreaId,
         areaName,
         stationId: selectedStationId,
-        stationName
+        stationName,
+  imageUrl,
       });
 
       toast.success(response.message || 'Đăng ký cửa hàng thành công! Đang chờ Admin xác nhận.');
@@ -213,6 +238,32 @@ export function StoreRegistrationPage() {
               </div>
             </div>
           </div>
+
+      <div className="space-y-1">
+        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Logo/Ảnh cửa hàng <span className="text-red-500">*</span></label>
+        <label className="flex items-center justify-center w-full px-4 py-6 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-brand-400 hover:bg-brand-50/30 transition-all">
+          <div className="text-center">
+            {uploadingImage ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-slate-500">Đang tải ảnh lên...</span>
+              </div>
+            ) : imagePreview ? (
+              <img src={imagePreview} alt="Preview" className="max-h-24 max-w-full rounded-lg object-contain mx-auto" />
+            ) : (
+              <>
+                <svg className="mx-auto h-10 w-10 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <p className="mt-1 text-xs text-slate-500">Nhấn để chọn ảnh từ máy tính</p>
+                <p className="text-[10px] text-slate-400">JPG, PNG, WebP — tối đa 5MB</p>
+              </>
+            )}
+          </div>
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+        </label>
+        {selectedFile && !imageUrl && <p className="text-[10px] text-red-400 mt-1">Vui lòng tải lên logo/ảnh cửa hàng</p>}
+      </div>
 
           <div className="pt-2">
             <button
