@@ -1,17 +1,31 @@
 export interface ProductIndex {
-  id: string;
-  sku: string;
-  name: string;
-  description: string;
-  price: number;
-  stockQuantity: number;
+	id: string;
+	sku: string;
+	name: string;
+	description: string;
+	price: number;
+	stockQuantity: number;
+	storeId?: string;
 }
 
 export interface AskRequest {
-  question: string;
+	question: string;
 }
 
 export interface AskResponse {
-  answer: string;
-  contextProducts: ProductIndex[];
+	answer: string;
+	contextProducts: ProductIndex[];
+}
+
+export interface ProductStoreGroup {
+	storeId: string;
+	storeName: string;
+	products: ProductIndex[];
+}
+
+export interface SearchResponseGrouped {
+	products: ProductIndex[];
+	groupedByStore?: ProductStoreGroup[];
+	filteredByStore?: boolean;
+	storeId?: string;
 }
