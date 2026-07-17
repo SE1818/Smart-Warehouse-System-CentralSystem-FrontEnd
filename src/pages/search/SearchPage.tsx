@@ -1,354 +1,314 @@
-import { useState, useEffect } from 'react';
-import type { ProductIndex, AskResponse } from '@/types/search';
+import { useState, useEffect, useRef } from 'react';
+import type { ProductIndex, AskResponse, ChatMessageDto, ChatConversationDto } from '@/types/search';
 import { searchService } from '@/services/search';
 import { Icons } from '@/components/Icons';
 
 export function SearchPage() {
-	const [query, setQuery] = useState('');
-	const [searchResults, setSearchResults] = useState<ProductIndex[]>([]);
-	const [searchLoading, setSearchLoading] = useState(false);
-	const [searchError, setSearchError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ProductIndex[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-	const [suggestions, setSuggestions] = useState<string[]>([]);
-	const [showSuggestions, setShowSuggestions] = useState(false);
+  // Chat state
+  const [question, setQuestion] = useState('');
+  const [askResponse, setAskResponse] = useState<AskResponse | null>(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ChatConversationDto[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatMessageDto[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
-	const [question, setQuestion] = useState('');
-	const [askResponse, setAskResponse] = useState<AskResponse | null>(null);
-	const [askLoading, setAskLoading] = useState(false);
-	const [askError, setAskError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-	useEffect(() => {
-		if (!query.trim() || query.length < 2) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-			setSuggestions([]);
-			return;
-		}
+  useEffect(() => { loadConversations(); }, []);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatHistory]);
 
-		const timer = setTimeout(async () => {
-			try {
-				const results = await searchService.suggestProducts(query, 10);
-				setSuggestions(results);
-			} catch (err) {
-				console.error('Suggest error:', err);
-			}
-		}, 300);
+  // Web Speech API
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SR) {
+      recognitionRef.current = new SR();
+      recognitionRef.current.lang = 'vi-VN';
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.onresult = (e: any) => {
+        setQuestion(prev => prev + (prev ? ' ' : '') + e.results[0][0].transcript);
+        setIsListening(false);
+      };
+      recognitionRef.current.onerror = () => setIsListening(false);
+      recognitionRef.current.onend = () => setIsListening(false);
+    }
+  }, []);
 
-		return () => clearTimeout(timer);
-	}, [query]);
+  const loadConversations = async () => {
+    try { setConversations(await searchService.getConversations(1, 20)); } catch { /* silent */ }
+  };
 
-	const handleSearch = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!query.trim()) return;
+  // --- Search ---
+  useEffect(() => {
+    if (!query.trim() || query.length < 2) { setSuggestions([]); return; }
+    const t = setTimeout(async () => {
+      try { setSuggestions(await searchService.suggestProducts(query, 10)); } catch { /* silent */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
-		setSearchLoading(true);
-		setSearchError(null);
-		setSearchResults([]);
-		setShowSuggestions(false);
-		try {
-			const results = await searchService.searchProducts(query);
-			setSearchResults(results);
-		} catch (err) {
-			console.error('Search error:', err);
-			setSearchError('Không thể tìm kiếm sản phẩm. Vui lòng thử lại.');
-		} finally {
-			setSearchLoading(false);
-		}
-	};
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault(); if (!query.trim()) return;
+    setSearchLoading(true); setSearchError(null); setSearchResults([]); setShowSuggestions(false);
+    try { setSearchResults(await searchService.searchProducts(query)); }
+    catch { setSearchError('Không thể tìm kiếm sản phẩm.'); }
+    finally { setSearchLoading(false); }
+  };
 
-	const handleSearchDirect = async (searchTerm: string) => {
-		setQuery(searchTerm);
-		setShowSuggestions(false);
-		if (!searchTerm.trim()) return;
+  const handleSearchDirect = async (term: string) => {
+    setQuery(term); setShowSuggestions(false);
+    setSearchLoading(true); setSearchError(null); setSearchResults([]);
+    try { setSearchResults(await searchService.searchProducts(term)); }
+    catch { setSearchError('Không thể tìm kiếm.'); }
+    finally { setSearchLoading(false); }
+  };
 
-		setSearchLoading(true);
-		setSearchError(null);
-		setSearchResults([]);
-		try {
-			const results = await searchService.searchProducts(searchTerm);
-			setSearchResults(results);
-		} catch (err) {
-			console.error('Search error:', err);
-			setSearchError('Không thể tìm kiếm sản phẩm. Vui lòng thử lại.');
-		} finally {
-			setSearchLoading(false);
-		}
-	};
+  // --- Chat ---
+  const handleAsk = async (e?: React.FormEvent) => {
+    e?.preventDefault(); if (!question.trim()) return;
+    setAskLoading(true); setAskError(null);
+    try {
+      const res = await searchService.sendMessage({ content: question.trim(), conversationId: activeConversationId ?? undefined });
+      setAskResponse({ answer: res.assistantReply.content, contextProducts: res.contextProducts });
+      setChatHistory(prev => [...prev, res.userMessage, res.assistantReply]);
+      setActiveConversationId(res.userMessage.id);
+      await loadConversations();
+      setQuestion('');
+    } catch { setAskError('Không thể xử lý câu hỏi.'); }
+    finally { setAskLoading(false); }
+  };
 
-	const handleAsk = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!question.trim()) return;
+  const loadConversation = async (id: string) => {
+    setActiveConversationId(id); setShowHistory(false); setAskError(null);
+    try {
+      const detail = await searchService.getConversationDetail(id);
+      setChatHistory(detail.messages);
+      const last = detail.messages[detail.messages.length - 1];
+      if (last?.role === 'assistant') setAskResponse({ answer: last.content, contextProducts: [] });
+      else setAskResponse(null);
+    } catch { setAskError('Không thể tải cuộc trò chuyện.'); }
+  };
 
-		setAskLoading(true);
-		setAskError(null);
-		setAskResponse(null);
-		try {
-			const response = await searchService.askWarehouseAssistant(question);
-			setAskResponse(response);
-		} catch (err) {
-			console.error('Ask error:', err);
-			setAskError('Không thể xử lý câu hỏi. Vui lòng thử lại.');
-		} finally {
-			setAskLoading(false);
-		}
-	};
+  const startNewChat = () => {
+    setActiveConversationId(null); setChatHistory([]); setAskResponse(null); setAskError(null); setQuestion('');
+  };
 
-	return (
-		<div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
-      {/* Soft Background Glows */}
-			<div className="absolute top-0 left-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
-			<div className="absolute bottom-10 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl -z-10"></div>
+  const toggleVoice = () => {
+    if (!recognitionRef.current) { setAskError('Trình duyệt không hỗ trợ giọng nói.'); return; }
+    if (isListening) { recognitionRef.current.stop(); setIsListening(false); return; }
+    try { recognitionRef.current.start(); setIsListening(true); } catch { setIsListening(false); }
+  };
 
-      {/* Header */}
-			<div className="border-b border-slate-200 pb-6">
-				<h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-					<Icons.Search className="w-8 h-8 text-brand-600 glow-blue" />
-					<span>Tìm kiếm & Trợ lý AI</span>
-				</h1>
-				<p className="mt-1 text-sm text-slate-500">
-					Tìm kiếm sản phẩm và hỏi đáp với trợ lý kho thông minh
-				</p>
-			</div>
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+      <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl -z-10"></div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left: Product Search */}
-				<div className="space-y-6">
-					<div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 hover:border-slate-300 transition-all duration-300">
-						<h2 className="text-lg font-heading font-bold text-slate-900 mb-5 flex items-center gap-2.5">
-							<Icons.StockBox className="w-5 h-5 text-brand-600" />
-							<span>Tìm kiếm sản phẩm</span>
-						</h2>
+      <div className="border-b border-slate-200 pb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <Icons.Search className="w-8 h-8 text-brand-600 glow-blue" /><span>Tìm kiếm & Trợ lý AI</span>
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">Tìm kiếm sản phẩm và hỏi đáp với trợ lý kho thông minh</p>
+        </div>
+        <button onClick={startNewChat} className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer">
+          <Icons.Plus className="w-4 h-4" /><span className="hidden sm:inline">Trò chuyện mới</span>
+        </button>
+      </div>
 
-						<form onSubmit={handleSearch} className="space-y-4">
-							<div className="relative">
-								<input
-									type="text"
-									value={query}
-									onChange={(e) => {
-										setQuery(e.target.value);
-										setShowSuggestions(true);
-									}}
-									onFocus={() => setShowSuggestions(true)}
-									onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-									placeholder="Nhập từ khóa, tên sản phẩm, SKU..."
-									className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium placeholder-slate-400"
-								/>
-								<Icons.Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* LEFT: Search */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+            <h2 className="text-lg font-heading font-bold text-slate-900 mb-5 flex items-center gap-2.5">
+              <Icons.StockBox className="w-5 h-5 text-brand-600" /><span>Tìm kiếm sản phẩm</span>
+            </h2>
+            <form onSubmit={handleSearch} className="space-y-4">
+              <div className="relative">
+                <input type="text" value={query} onChange={e => { setQuery(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="Nhập từ khóa, tên sản phẩm, SKU..."
+                  className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium placeholder-slate-400" />
+                <Icons.Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    {suggestions.map((s, i) => (
+                      <button key={i} type="button" onClick={() => handleSearchDirect(s)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-sm text-slate-700 font-medium transition-colors border-b border-slate-100 last:border-0">{s}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button type="submit" disabled={searchLoading || !query.trim()}
+                className="w-full px-4 py-3 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer">
+                {searchLoading ? <><Icons.Spinner className="w-4 h-4 animate-spin" /><span>Đang tìm...</span></> : <span>Tìm kiếm</span>}
+              </button>
+            </form>
 
-								{showSuggestions && suggestions.length > 0 && (
-									<div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-										{suggestions.map((suggestion, idx) => (
-											<button
-												key={idx}
-												type="button"
-												onClick={() => handleSearchDirect(suggestion)}
-												className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-sm text-slate-700 font-medium transition-colors border-b border-slate-100 last:border-0"
-											>
-												{suggestion}
-											</button>
-										))}
-									</div>
-								)}
-							</div>
-							<button
-								type="submit"
-								disabled={searchLoading || !query.trim()}
-								className="w-full px-4 py-3 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
-							>
-								{searchLoading ? (
-									<>
-										<Icons.Spinner className="w-4 h-4 text-white animate-spin" />
-										<span>Đang tìm...</span>
-									</>
-								) : (
-									<span>Tìm kiếm</span>
-								)}
-							</button>
-						</form>
+            {searchError && <div className="mt-4 p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2.5"><Icons.AlertWarning className="w-4 h-4 text-red-600 shrink-0" /><span>{searchError}</span></div>}
+            {searchLoading && <div className="mt-6 text-center py-12 flex flex-col items-center"><Icons.Spinner className="h-8 w-8 text-brand-600 mb-3 animate-spin" /><span className="text-sm font-semibold">Đang tìm kiếm...</span></div>}
+            {!searchLoading && searchResults.length === 0 && query && <div className="mt-6 text-center py-12 text-slate-400 italic border border-dashed border-slate-200 rounded-xl bg-slate-50/50">Không tìm thấy sản phẩm nào</div>}
+            {!searchLoading && searchResults.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>Tìm thấy {searchResults.length} sản phẩm
+                </p>
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {searchResults.map(p => (
+                    <div key={p.id} className="p-4 bg-slate-50/55 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-white transition-all duration-200 group shadow-xs">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">{p.name}</h3>
+                        <span className="text-xs font-mono text-slate-550 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">{p.sku}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">{p.description}</p>
+                      <div className="flex items-center justify-between text-xs pt-2.5 border-t border-slate-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-brand-600 text-sm">{(p.price / 1000).toFixed(0)}K VND</span>
+                          {p.storeName && <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-700 rounded-full text-[10px] font-semibold">{p.storeName}</span>}
+                        </div>
+                        <span className={`font-bold px-2.5 py-0.5 rounded-full text-[10px] border ${p.stockQuantity > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>Tồn: {p.stockQuantity}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
-						{searchError && (
-							<div className="mt-4 p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2.5">
-								<Icons.AlertWarning className="w-4 h-4 text-red-600 shrink-0" />
-								<span>{searchError}</span>
-							</div>
-						)}
+        {/* RIGHT: AI Chat */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-heading font-bold text-slate-900 flex items-center gap-2.5">
+                <Icons.Robot className="w-5 h-5 text-brand-600" /><span>Trợ lý AI kho hàng</span>
+              </h2>
+              <div className="flex items-center gap-2">
+                {conversations.length > 0 && (
+                  <button onClick={() => setShowHistory(!showHistory)}
+                    className={`p-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${showHistory ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    <Icons.History className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Lịch sử</span>
+                    <span className="bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{conversations.length}</span>
+                  </button>
+                )}
+              </div>
+            </div>
 
-						{searchLoading && (
-							<div className="mt-6 text-center py-12 text-slate-505 flex flex-col items-center justify-center">
-								<Icons.Spinner className="h-8 w-8 text-brand-600 mb-3" />
-								<span className="text-sm font-semibold">Đang tìm kiếm sản phẩm...</span>
-							</div>
-						)}
+            {/* History Panel */}
+            {showHistory && conversations.length > 0 && (
+              <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200 max-h-44 overflow-y-auto">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Cuộc trò chuyện gần đây</p>
+                <div className="space-y-1">
+                  {conversations.map(c => (
+                    <button key={c.id} onClick={() => loadConversation(c.id)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all cursor-pointer flex items-center justify-between ${activeConversationId === c.id ? 'bg-brand-100 text-brand-800' : 'hover:bg-slate-200 text-slate-700'}`}>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold truncate block">{c.title || 'Cuộc trò chuyện'}</span>
+                        <span className="text-[10px] text-slate-400">{c.messageCount} tin nhắn · {c.userRole}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 whitespace-nowrap">{new Date(c.updatedAt).toLocaleDateString('vi-VN')}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-						{!searchLoading && searchResults.length === 0 && query && (
-							<div className="mt-6 text-center py-12 text-slate-400 italic border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-								Không tìm thấy sản phẩm nào
-							</div>
-						)}
+            {/* Chat Messages */}
+            {chatHistory.length > 0 && (
+              <div className="mb-4 space-y-3 max-h-72 overflow-y-auto pr-1">
+                {chatHistory.map(m => (
+                  <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-brand-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200'}`}>
+                      {m.content}
+                      {m.responseTimeMs != null && m.role === 'assistant' && <span className="block text-[10px] mt-1 opacity-60">{m.responseTimeMs}ms</span>}
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+            )}
 
-						{!searchLoading && searchResults.length > 0 && (
-							<div className="mt-6 space-y-3">
-								<p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-									<span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
-									Tìm thấy {searchResults.length} sản phẩm
-								</p>
-								<div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-									{searchResults.map((product) => (
-										<div
-											key={product.id}
-											className="p-4 bg-slate-50/55 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-white transition-all duration-200 group shadow-xs"
-										>
-											<div className="flex items-start justify-between gap-2 mb-2">
-												<h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">
-													{product.name}
-												</h3>
-												<span className="text-xs font-mono text-slate-550 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
-													{product.sku}
-												</span>
-											</div>
-											<p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
-												{product.description}
-											</p>
-											<div className="flex items-center justify-between text-xs pt-2.5 border-t border-slate-100">
-												<div className="flex items-center gap-2 flex-wrap">
-													<span className="font-extrabold text-brand-600 text-sm">
-														{(product.price / 1000).toFixed(0)}K VND
-													</span>
-													{product.storeName && (
-														<span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 border border-orange-200 text-orange-700 rounded-full text-[10px] font-semibold">
-															<svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-															</svg>
-															{product.storeName}
-														</span>
-													)}
-												</div>
-												<span className={`font-bold px-2.5 py-0.5 rounded-full text-[10px] border ${product.stockQuantity > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-													Tồn: {product.stockQuantity}
-												</span>
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						)}
-					</div>
-				</div>
+            {/* AI Answer (no history) */}
+            {askResponse && chatHistory.length === 0 && (
+              <div className="mb-4 p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl">
+                <h3 className="font-heading font-bold text-emerald-800 mb-2 text-sm flex items-center gap-2">
+                  <Icons.Info className="w-5 h-5 text-emerald-600" /><span>Trả lời:</span>
+                </h3>
+                <p className="text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap font-medium">{askResponse.answer}</p>
+              </div>
+            )}
 
-				{/* Right: AI Assistant */}
-				<div className="space-y-6">
-					<div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 hover:border-slate-300 transition-all duration-300">
-						<h2 className="text-lg font-heading font-bold text-slate-900 mb-5 flex items-center gap-2.5">
-							<Icons.Robot className="w-5 h-5 text-brand-600" />
-							<span>Trợ lý AI kho hàng</span>
-						</h2>
+            {askError && <div className="mt-4 p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2.5"><Icons.AlertWarning className="w-4 h-4 text-red-600 shrink-0" /><span>{askError}</span></div>}
+            {askLoading && <div className="mt-4 text-center py-6 flex flex-col items-center"><Icons.Spinner className="h-6 w-6 text-brand-600 mb-2 animate-spin" /><span className="text-xs font-semibold text-slate-500">Trợ lý đang suy nghĩ...</span></div>}
 
-						<form onSubmit={handleAsk} className="space-y-4">
-							<div className="relative">
-								<textarea
-									value={question}
-									onChange={(e) => setQuestion(e.target.value)}
-									placeholder="Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm..."
-									rows={3}
-									className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 resize-none placeholder-slate-450 leading-relaxed font-medium"
-								/>
-							</div>
-							<button
-								type="submit"
-								disabled={askLoading || !question.trim()}
-								className="w-full px-4 py-3 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
-							>
-								{askLoading ? (
-									<>
-										<Icons.Spinner className="w-4 h-4 text-white animate-spin" />
-										<span>Trợ lý đang suy nghĩ...</span>
-									</>
-								) : (
-									<span>Hỏi trợ lý</span>
-								)}
-							</button>
-						</form>
+            <form onSubmit={handleAsk} className="space-y-3">
+              <div className="relative">
+                <textarea value={question} onChange={e => setQuestion(e.target.value)}
+                  placeholder="Hỏi về sản phẩm, tư vấn mua hàng..."
+                  rows={2}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
+                  className="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 resize-none placeholder-slate-450 leading-relaxed font-medium" />
+                <button type="button" onClick={toggleVoice}
+                  className={`absolute right-3 top-3 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-white/80 text-slate-600 hover:bg-slate-100 hover:text-slate-800 shadow-sm'}`}
+                  title={isListening ? 'Đang nghe...' : 'Nhập bằng giọng nói'}>
+                  {isListening ? <Icons.Robot className="w-4 h-4" /> : <Icons.Mic className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400">Enter để gửi • 🎤 giọng nói • Shift+Enter xuống dòng</span>
+              </div>
+              <button type="submit" disabled={askLoading || !question.trim()}
+                className="w-full px-4 py-3 bg-brand-600 hover:bg-brand-500 active:scale-98 text-white rounded-xl font-bold text-sm shadow-md shadow-brand-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer">
+                {askLoading ? <><Icons.Spinner className="w-4 h-4 animate-spin" /><span>Đang xử lý...</span></> : <span>Gửi câu hỏi</span>}
+              </button>
+            </form>
 
-						{askError && (
-							<div className="mt-4 p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2.5">
-								<Icons.AlertWarning className="w-4 h-4 text-red-600 shrink-0" />
-								<span>{askError}</span>
-							</div>
-						)}
-
-						{askLoading && (
-							<div className="mt-6 text-center py-12 text-slate-505 flex flex-col items-center justify-center">
-								<Icons.Spinner className="h-8 w-8 text-brand-600 mb-3" />
-								<span className="text-sm font-semibold">Trợ lý đang phân tích câu hỏi của bạn...</span>
-							</div>
-						)}
-
-						{askResponse && (
-							<div className="mt-6 space-y-4">
-								<div className="p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl shadow-xs">
-									<h3 className="font-heading font-bold text-emerald-800 mb-2.5 text-sm flex items-center gap-2">
-										<Icons.Info className="w-5 h-5 text-emerald-600" />
-										<span>Trả lời:</span>
-									</h3>
-									<p className="text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap font-medium">
-										{askResponse.answer}
-									</p>
-								</div>
-
-								{askResponse.contextProducts.length > 0 && (
-									<div className="p-4 bg-slate-50/50 rounded-xl border border-slate-200">
-										<h3 className="font-heading font-bold text-slate-500 mb-3 text-xs uppercase tracking-widest flex items-center gap-2">
-											<span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-											<span>Sản phẩm tham khảo</span>
-										</h3>
-										<div className="space-y-2">
-											{askResponse.contextProducts.map((p) => (
-												<div key={p.id} className="flex items-center justify-between text-xs p-3 bg-white rounded-lg border border-slate-200 hover:border-brand-300 transition-all shadow-xs">
-													<div>
-														<span className="font-bold text-slate-800">{p.name}</span>
-														<span className="text-slate-400 ml-2 font-mono text-[10px]">({p.sku})</span>
-													</div>
-													<div className="flex items-center gap-3">
-														<span className="text-brand-600 font-extrabold">{(p.price / 1000).toFixed(0)}K</span>
-														<span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${p.stockQuantity > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-															{p.stockQuantity > 0 ? 'Còn hàng' : 'Hết hàng'}
-														</span>
-													</div>
-												</div>
-											))}
-										</div>
-									</div>
-								)}
-							</div>
-						)}
-					</div>
+            {askResponse && askResponse.contextProducts.length > 0 && (
+              <div className="mt-4 p-4 bg-slate-50/50 rounded-xl border border-slate-200">
+                <h3 className="font-heading font-bold text-slate-500 mb-3 text-xs uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Sản phẩm tham khảo
+                </h3>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {askResponse.contextProducts.map(p => (
+                    <div key={p.id} className="flex items-center justify-between text-xs p-2.5 bg-white rounded-lg border border-slate-200">
+                      <div><span className="font-bold text-slate-800">{p.name}</span><span className="text-slate-400 ml-2 font-mono text-[10px]">({p.sku})</span></div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-brand-600 font-extrabold">{(p.price / 1000).toFixed(0)}K</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${p.stockQuantity > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{p.stockQuantity > 0 ? 'Còn hàng' : 'Hết'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Info Box */}
           <div className="bg-brand-50 border border-brand-100 rounded-2xl p-6 shadow-sm">
             <h3 className="font-heading font-bold text-brand-700 mb-3 flex items-center gap-2 text-sm">
-              <Icons.LightBulb className="w-5 h-5 text-brand-600" />
-              <span>Cách sử dụng</span>
+              <Icons.LightBulb className="w-5 h-5 text-brand-600" /><span>Cách sử dụng</span>
             </h3>
             <ul className="space-y-2 text-xs text-brand-800 leading-relaxed font-semibold">
-              <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">•</span>
-                <span>Nhập từ khóa để tìm kiếm sản phẩm theo tên, mô tả, hoặc SKU</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">•</span>
-                <span>Hỏi trợ lý AI về gợi ý mua hàng, so sánh sản phẩm</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">•</span>
-                <span>Trợ lý sẽ tìm sản phẩm phù hợp và trả lời dựa trên kho dữ liệu</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-brand-500 mt-0.5">•</span>
-                <span>Kết quả tìm kiếm hiển thị số lượng tồn kho thực tế</span>
-              </li>
+              <li className="flex items-start gap-1.5"><span className="text-brand-500 mt-0.5">•</span><span>Nhập từ khóa để tìm kiếm sản phẩm theo tên, mô tả, hoặc SKU</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-brand-500 mt-0.5">•</span><span>Hỏi trợ lý AI bằng văn bản hoặc giọng nói (🎤) về gợi ý mua hàng</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-brand-500 mt-0.5">•</span><span>Trợ lý sẽ tìm sản phẩm phù hợp và trả lời dựa trên kho dữ liệu</span></li>
+              <li className="flex items-start gap-1.5"><span className="text-brand-500 mt-0.5">•</span><span>Xem lịch sử trò chuyện — klik "Lịch sử" để quay lại câu hỏi cũ</span></li>
             </ul>
           </div>
-				</div>
-			</div>
-		</div>
-	);
+        </div>
+      </div>
+    </div>
+  );
 }
