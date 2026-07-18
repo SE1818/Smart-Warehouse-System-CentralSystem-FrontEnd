@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import type { Product } from '@/types';
-import { productService } from '@/services';
+import { productService, storeService } from '@/services';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
 import { ProductFormModal } from '@/components/ProductFormModal';
 
 // Resolve a potentially-relative image URL against the API base.
-// File-Service returns relative paths (e.g. "/api/files/static/products/…")
+// File-Service returns relative paths (e.g. "/api/files/static/products/...")
 // but the browser resolves those against the frontend origin (5173), not the
 // API gateway (5000), so every image 404s unless we absolutise them here.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
@@ -20,6 +20,12 @@ const resolveImageUrl = (url: string | undefined): string => {
   return `${BASE_ORIGIN}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
+const resolveStoreName = (p: Product, nameMap: Record<string, string>): string => {
+  if (p.storeName) return p.storeName;
+  if (p.storeId && nameMap[p.storeId]) return nameMap[p.storeId];
+  return '—';
+};
+
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
@@ -31,6 +37,7 @@ export function ProductsPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [addImagePreview, setAddImagePreview] = useState<string | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [storeNameMap, setStoreNameMap] = useState<Record<string, string>>({});
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -53,9 +60,23 @@ export function ProductsPage() {
     }
   };
 
+  const fetchStores = async () => {
+    try {
+      const stores = await storeService.getAllStores();
+      const map: Record<string, string> = {};
+      for (const s of stores) {
+        map[s.id] = s.name;
+      }
+      setStoreNameMap(map);
+    } catch {
+      // Stores list is optional — leave map empty on failure
+    }
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchProducts();
+      fetchStores();
     }, 0);
     return () => clearTimeout(timer);
   }, []);
@@ -242,13 +263,14 @@ export function ProductsPage() {
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm min-w-[700px]">
+            <table className="w-full text-left border-collapse text-sm min-w-[900px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold">
                   <th className="p-4 pl-6">Sản phẩm</th>
                   <th className="p-4">Phân loại</th>
                   <th className="p-4">Giá bán</th>
                   <th className="p-4">Tồn kho</th>
+                  <th className="p-4">Cửa hàng</th>
                   <th className="p-4 pr-6 text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -287,13 +309,31 @@ export function ProductsPage() {
                         {p.stockQuantity} chiếc {p.stockQuantity <= 0 && ' (Hết hàng)'}
                       </span>
                     </td>
+                    <td className="p-4">
+                      {p.storeId ? (
+                        <span className="text-xs font-bold bg-amber-50 border border-amber-100/50 text-amber-700 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                          </svg>
+                          {resolveStoreName(p, storeNameMap)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Chung</span>
+                      )}
+                    </td>
                     <td className="p-4 pr-6 text-right space-x-3 whitespace-nowrap">
-                      <button
-                        onClick={() => setEditingProduct(p)}
-                        className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
-                      >
-                        Sửa
-                      </button>
+                      {!p.storeId && (
+                        <button
+                          onClick={() => setEditingProduct(p)}
+                          className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                        >
+                          Sửa
+                        </button>
+                      )}
+                      {p.storeId && (
+                        <span className="text-[10px] text-slate-400 italic">Đã gán cửa hàng</span>
+                      )}
                       <button
                         onClick={() => deleteProduct(p.id)}
                         className="px-3.5 py-1.5 border border-red-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
@@ -305,7 +345,7 @@ export function ProductsPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-16 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
+                    <td colSpan={6} className="p-16 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
                   </tr>
                 )}
               </tbody>
@@ -317,8 +357,8 @@ export function ProductsPage() {
             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
               <span className="text-xs text-slate-500 font-semibold">
                 Hiển thị <span className="font-bold text-slate-800">{startIndex + 1}</span> -{' '}
-                <span className="font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filtered.length)}</span>{' '}
-                trong <span className="font-bold text-slate-800">{filtered.length}</span> sản phẩm
+                <span className="font-bold text-slate-800">{Math.min(startIndex + itemsPerPage, filtered.length)}</span> trong{' '}
+                <span className="font-bold text-slate-800">{filtered.length}</span> sản phẩm
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -335,7 +375,7 @@ export function ProductsPage() {
                     type="button"
                     onClick={() => setCurrentPage(page)}
                     className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 cursor-pointer ${currentPage === page
-                      ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/10"
+                        ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/10"
                       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                       }`}
                   >
