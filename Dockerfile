@@ -20,7 +20,7 @@ COPY . .
 
 # VITE "bake" biến này vào JS tĩnh tại thời điểm build.
 ARG VITE_API_BASE_URL=http://api-gateway:80/api
-ARG VITE_GOOGLE_CLIENT_ID=758030323048-044av75pl7mh64rt0o8d3vdudmrbmjee.apps.googleusercontent.com
+ARG VITE_GOOGLE_CLIENT_ID=633550614146-6bsqe3gp3tu8emssg4bi9l7cbq5psb3q.apps.googleusercontent.com
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 

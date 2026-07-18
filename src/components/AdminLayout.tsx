@@ -93,8 +93,8 @@ export function AdminLayout() {
       { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" />, visible: true },
       { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
+ { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
     ],
   },
   {
