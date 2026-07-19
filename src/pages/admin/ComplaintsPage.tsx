@@ -4,6 +4,7 @@ import { complaintService } from '@/services/complaintService';
 import type { Complaint } from '@/services/complaintService';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 export function ComplaintsPage() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -14,6 +15,8 @@ export function ComplaintsPage() {
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [response, setResponse] = useState('');
   const [submittingResponse, setSubmittingResponse] = useState(false);
+
+  const connection = useNotificationStore((state) => state.connection);
 
   const fetchComplaints = async () => {
     setLoading(true);
@@ -32,6 +35,24 @@ export function ComplaintsPage() {
   useEffect(() => {
     void fetchComplaints();
   }, []);
+
+  useEffect(() => {
+    if (!connection) return;
+
+    const handleRefresh = () => {
+      void fetchComplaints();
+    };
+
+    connection.on('ComplaintResolved', handleRefresh);
+    connection.on('ComplaintUpdated', handleRefresh);
+    connection.on('ComplaintStatusChanged', handleRefresh);
+
+    return () => {
+      connection.off('ComplaintResolved', handleRefresh);
+      connection.off('ComplaintUpdated', handleRefresh);
+      connection.off('ComplaintStatusChanged', handleRefresh);
+    };
+  }, [connection]);
 
   const handleRespond = async (e: React.FormEvent) => {
     e.preventDefault();

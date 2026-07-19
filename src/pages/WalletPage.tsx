@@ -3,6 +3,7 @@ import { walletService } from '../services/wallet';
 import type { Wallet, WalletTransaction } from '../types/wallet';
 import type { User } from '@/types/auth';
 import { Icons } from '@/components/Icons';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 export function WalletPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -12,6 +13,8 @@ export function WalletPage() {
   const [topUpAmount, setTopUpAmount] = useState('');
   const [topUpDesc, setTopUpDesc] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const connection = useNotificationStore((state) => state.connection);
 
   // Initialize user from localStorage
   useEffect(() => {
@@ -53,6 +56,20 @@ export function WalletPage() {
       return () => clearTimeout(timer);
     }
   }, [user, loadWalletData]);
+
+  useEffect(() => {
+    if (!connection) return;
+
+    const handleRefresh = () => {
+      void loadWalletData();
+    };
+
+    connection.on('WalletUpdated', handleRefresh);
+
+    return () => {
+      connection.off('WalletUpdated', handleRefresh);
+    };
+  }, [connection, loadWalletData]);
 
   const handleTopUp = async (e: React.FormEvent) => {
     e.preventDefault();

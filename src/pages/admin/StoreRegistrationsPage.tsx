@@ -97,6 +97,15 @@ export function StoreRegistrationsPage() {
     void fetchRegistrations(activeTab);
   }, [activeTab]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      void fetchCounts();
+      void fetchRegistrations(activeTab);
+    };
+    window.addEventListener('smartwarehouse-notification', handleRefresh);
+    return () => window.removeEventListener('smartwarehouse-notification', handleRefresh);
+  }, [activeTab]);
+
   const handleApprove = async (id: string, name: string) => {
     if (!window.confirm(`Bạn có chắc chắn muốn phê duyệt mở cửa hàng "${name}"?`)) return;
     setActionLoadingId(id);

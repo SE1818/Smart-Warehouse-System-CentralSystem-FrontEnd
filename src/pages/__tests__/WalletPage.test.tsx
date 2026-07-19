@@ -55,6 +55,7 @@ function renderWalletPage() {
 describe('WalletPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.setItem('user', JSON.stringify({ id: 'user-123', email: 'test@example.com', role: 'admin' }));
   });
 
   it('renders balance "Số dư hiện tại" heading', async () => {

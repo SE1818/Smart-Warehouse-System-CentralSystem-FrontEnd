@@ -100,26 +100,6 @@ function startHub(
 
 // ── Hub instances ──────────────────────────────────────────────────────────
 
-const notificationHub: HubState = {
-  connection: null,
-  status: 'disconnected',
-  reconnectCount: 0,
-  statusListeners: new Set(),
-  handlers: new Map(),
-  name: 'Notification Hub',
-  path: '/notifications/hub',
-};
-
-const robotHub: HubState = {
-  connection: null,
-  status: 'disconnected',
-  reconnectCount: 0,
-  statusListeners: new Set(),
-  handlers: new Map(),
-  name: 'Robot Hub',
-  path: '/robots/tracking-hub',
-};
-
 const metricsHub: HubState = {
   connection: null,
   status: 'disconnected',
@@ -137,56 +117,6 @@ function emitStatus(hub: HubState, status: Status) {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 export const signalRService = {
-  // --- Notification Hub ---------------------------------------------------
-
-  connectNotification(userId: string) {
-    startHub(notificationHub, (s) => emitStatus(notificationHub, s), userId);
-  },
-
-  onNotification(event: string, handler: EventHandler) {
-    if (!notificationHub.handlers.has(event)) {
-      notificationHub.handlers.set(event, new Set());
-    }
-    notificationHub.handlers.get(event)!.add(handler);
-    if (notificationHub.connection) {
-      notificationHub.connection.on(event, handler);
-    }
-  },
-
-  offNotification(event: string, handler: EventHandler) {
-    notificationHub.handlers.get(event)?.delete(handler);
-    notificationHub.connection?.off(event, handler);
-  },
-
-  getNotificationStatus(): Status {
-    return notificationHub.status;
-  },
-
-  // --- Robot Hub ----------------------------------------------------------
-
-  connectRobot() {
-    startHub(robotHub, (s) => emitStatus(robotHub, s));
-  },
-
-  onRobot(event: string, handler: EventHandler) {
-    if (!robotHub.handlers.has(event)) {
-      robotHub.handlers.set(event, new Set());
-    }
-    robotHub.handlers.get(event)!.add(handler);
-    if (robotHub.connection) {
-      robotHub.connection.on(event, handler);
-    }
-  },
-
-  offRobot(event: string, handler: EventHandler) {
-    robotHub.handlers.get(event)?.delete(handler);
-    robotHub.connection?.off(event, handler);
-  },
-
-  getRobotStatus(): Status {
-    return robotHub.status;
-  },
-
   // --- Metrics Hub --------------------------------------------------------
 
   connectMetrics() {
@@ -214,24 +144,14 @@ export const signalRService = {
 
   // --- Status subscription (for UI feedback) ------------------------------
 
-  onStatusChange(hub: 'notification' | 'robot' | 'metrics', fn: StatusListener) {
-    const target =
-      hub === 'notification'
-        ? notificationHub
-        : hub === 'robot'
-          ? robotHub
-          : metricsHub;
+  onStatusChange(_hub: 'metrics', fn: StatusListener) {
+    const target = metricsHub;
     target.statusListeners.add(fn);
     fn(target.status);
   },
 
-  offStatusChange(hub: 'notification' | 'robot' | 'metrics', fn: StatusListener) {
-    const target =
-      hub === 'notification'
-        ? notificationHub
-        : hub === 'robot'
-          ? robotHub
-          : metricsHub;
+  offStatusChange(_hub: 'metrics', fn: StatusListener) {
+    const target = metricsHub;
     target.statusListeners.delete(fn);
   },
 
@@ -239,15 +159,9 @@ export const signalRService = {
 
   async disconnectAll() {
     await Promise.all([
-      notificationHub.connection?.stop().catch(() => {}),
-      robotHub.connection?.stop().catch(() => {}),
       metricsHub.connection?.stop().catch(() => {}),
     ]);
-    notificationHub.status = 'disconnected';
-    robotHub.status = 'disconnected';
     metricsHub.status = 'disconnected';
-    emitStatus(notificationHub, 'disconnected');
-    emitStatus(robotHub, 'disconnected');
     emitStatus(metricsHub, 'disconnected');
   },
 };
