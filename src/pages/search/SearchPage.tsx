@@ -3,6 +3,141 @@ import type { ProductIndex, AskResponse, ChatMessageDto, ChatConversationDto } f
 import { searchService } from '@/services/search';
 import { Icons } from '@/components/Icons';
 
+function renderTableHtml(rows: string[]): string {
+  if (rows.length === 0) return '';
+  
+  let html = '<div class="overflow-x-auto my-3 border border-slate-200/60 rounded-xl shadow-xs"><table class="min-w-full divide-y divide-slate-200/60 text-xs">';
+  
+  const parseRow = (rowStr: string) => {
+    return rowStr.split('|').map(s => s.trim()).filter((_, index, arr) => index > 0 && index < arr.length - 1);
+  };
+
+  const headers = parseRow(rows[0]);
+  
+  let startIndex = 1;
+  if (rows.length > 1 && rows[1].includes('---')) {
+    startIndex = 2;
+    html += `<thead class="bg-slate-50/80"><tr>${headers.map(h => `<th class="px-4 py-2.5 text-left font-bold text-slate-700 border-b border-slate-200/60">${h}</th>`).join('')}</tr></thead>`;
+  } else {
+    startIndex = 0;
+  }
+
+  html += '<tbody class="divide-y divide-slate-100 bg-white/50">';
+  for (let i = startIndex; i < rows.length; i++) {
+    const cells = parseRow(rows[i]);
+    html += `<tr class="hover:bg-slate-50/50 transition-colors">${cells.map(c => `<td class="px-4 py-2.5 text-slate-650 font-medium">${c}</td>`).join('')}</tr>`;
+  }
+  html += '</tbody></table></div>';
+  
+  return html;
+}
+
+function parseMarkdown(text: string) {
+  if (!text) return '';
+  
+  // Escape HTML tags to prevent XSS (but allow safe formatting we inject)
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Replace bold
+  escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>');
+  
+  // Replace italic
+  escaped = escaped.replace(/\*(.*?)\*/g, '<em class="italic text-slate-700">$1</em>');
+  
+  // Replace inline code
+  escaped = escaped.replace(/`/g, '`').replace(/`(.*?)`/g, '<code class="bg-slate-200/60 text-slate-800 px-1.5 py-0.5 rounded font-mono text-xs font-bold">$1</code>');
+  
+  const lines = escaped.split('\n');
+  const processedLines: string[] = [];
+  let inTable = false;
+  let tableRows: string[] = [];
+  let inList = false;
+  let listType: 'ul' | 'ol' | null = null;
+
+  const closeListIfOpen = () => {
+    if (inList) {
+      processedLines.push(listType === 'ul' ? '</ul>' : '</ol>');
+      inList = false;
+      listType = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // 1. Table parsing
+    if (line.startsWith('|') && line.endsWith('|')) {
+      closeListIfOpen();
+      if (!inTable) {
+        inTable = true;
+        tableRows = [];
+      }
+      tableRows.push(line);
+      continue;
+    } else {
+      if (inTable) {
+        processedLines.push(renderTableHtml(tableRows));
+        inTable = false;
+      }
+    }
+
+    // 2. Header parsing
+    if (line.startsWith('### ')) {
+      closeListIfOpen();
+      processedLines.push(`<h4 class="text-sm font-bold text-slate-900 mt-4 mb-2 flex items-center gap-1.5"><span class="w-1 h-3.5 bg-brand-500 rounded-full"></span>${line.substring(4)}</h4>`);
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      closeListIfOpen();
+      processedLines.push(`<h3 class="text-base font-bold text-slate-900 mt-5 mb-2.5 flex items-center gap-2">${line.substring(3)}</h3>`);
+      continue;
+    }
+
+    // 3. List parsing
+    const ulMatch = line.match(/^[\*\-]\s+(.*)/);
+    const olMatch = line.match(/^(\d+)\.\s+(.*)/);
+
+    if (ulMatch) {
+      if (!inList || listType !== 'ul') {
+        closeListIfOpen();
+        processedLines.push('<ul class="list-disc pl-5 my-2 space-y-1.5 text-slate-700">');
+        inList = true;
+        listType = 'ul';
+      }
+      processedLines.push(`<li class="leading-relaxed">${ulMatch[1]}</li>`);
+      continue;
+    } else if (olMatch) {
+      if (!inList || listType !== 'ol') {
+        closeListIfOpen();
+        processedLines.push('<ol class="list-decimal pl-5 my-2 space-y-1.5 text-slate-700">');
+        inList = true;
+        listType = 'ol';
+      }
+      processedLines.push(`<li class="leading-relaxed">${olMatch[2]}</li>`);
+      continue;
+    } else {
+      closeListIfOpen();
+    }
+
+    // 4. Default paragraph or blank line
+    if (line === '') {
+      processedLines.push('<div class="h-2"></div>');
+    } else {
+      processedLines.push(`<p class="mb-1 leading-relaxed text-slate-700">${line}</p>`);
+    }
+  }
+
+  closeListIfOpen();
+  if (inTable) {
+    processedLines.push(renderTableHtml(tableRows));
+  }
+
+  return processedLines.join('\n');
+}
+
 export function SearchPage() {
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ProductIndex[]>([]);
@@ -227,12 +362,27 @@ export function SearchPage() {
 
             {/* Chat Messages */}
             {chatHistory.length > 0 && (
-              <div className="mb-4 space-y-3 max-h-72 overflow-y-auto pr-1">
+              <div className="mb-4 space-y-4 max-h-[460px] min-h-[300px] overflow-y-auto pr-1.5 p-3.5 bg-slate-50/40 border border-slate-200/60 rounded-xl">
                 {chatHistory.map(m => (
                   <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-brand-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm border border-slate-200'}`}>
-                      {m.content}
-                      {m.responseTimeMs != null && m.role === 'assistant' && <span className="block text-[10px] mt-1 opacity-60">{m.responseTimeMs}ms</span>}
+                    <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-xs ${
+                      m.role === 'user' 
+                        ? 'bg-gradient-to-tr from-brand-600 to-brand-500 text-white rounded-tr-xs shadow-md shadow-brand-500/10' 
+                        : 'bg-white text-slate-800 rounded-tl-xs border border-slate-250/60'
+                    }`}>
+                      {m.role === 'user' ? (
+                        <p className="whitespace-pre-wrap font-medium">{m.content}</p>
+                      ) : (
+                        <div 
+                          className="prose prose-slate max-w-none text-slate-800 text-sm font-medium space-y-2"
+                          dangerouslySetInnerHTML={{ __html: parseMarkdown(m.content) }}
+                        />
+                      )}
+                      {m.responseTimeMs != null && m.role === 'assistant' && (
+                        <span className="block text-[9px] mt-1.5 opacity-50 font-mono text-right">
+                          {m.responseTimeMs}ms
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -242,11 +392,14 @@ export function SearchPage() {
 
             {/* AI Answer (no history) */}
             {askResponse && chatHistory.length === 0 && (
-              <div className="mb-4 p-4 bg-emerald-50/70 border border-emerald-200/60 rounded-xl">
-                <h3 className="font-heading font-bold text-emerald-800 mb-2 text-sm flex items-center gap-2">
+              <div className="mb-4 p-4 bg-emerald-50/75 border border-emerald-200/50 rounded-xl shadow-xs">
+                <h3 className="font-heading font-bold text-emerald-800 mb-2.5 text-sm flex items-center gap-2">
                   <Icons.Info className="w-5 h-5 text-emerald-600" /><span>Trả lời:</span>
                 </h3>
-                <p className="text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap font-medium">{askResponse.answer}</p>
+                <div 
+                  className="prose prose-emerald max-w-none text-emerald-800 text-sm font-semibold leading-relaxed space-y-2"
+                  dangerouslySetInnerHTML={{ __html: parseMarkdown(askResponse.answer) }}
+                />
               </div>
             )}
 
@@ -259,11 +412,15 @@ export function SearchPage() {
                   placeholder="Hỏi về sản phẩm, tư vấn mua hàng..."
                   rows={2}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
-                  className="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 resize-none placeholder-slate-450 leading-relaxed font-medium" />
+                  className="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 resize-none placeholder-slate-400 leading-relaxed font-semibold" />
                 <button type="button" onClick={toggleVoice}
-                  className={`absolute right-3 top-3 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-white/80 text-slate-600 hover:bg-slate-100 hover:text-slate-800 shadow-sm'}`}
+                  className={`absolute right-3 top-3 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+                    isListening 
+                      ? 'bg-red-500 text-white animate-pulse shadow-md shadow-red-500/30' 
+                      : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-800 border border-slate-200 shadow-xs'
+                  }`}
                   title={isListening ? 'Đang nghe...' : 'Nhập bằng giọng nói'}>
-                  {isListening ? <Icons.Robot className="w-4 h-4" /> : <Icons.Mic className="w-4 h-4" />}
+                  {isListening ? <Icons.Spinner className="w-4 h-4 animate-spin text-white" /> : <Icons.Mic className="w-4 h-4" />}
                 </button>
               </div>
               <div className="flex items-center justify-between">
