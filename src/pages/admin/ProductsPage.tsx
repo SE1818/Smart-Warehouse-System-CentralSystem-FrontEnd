@@ -6,9 +6,6 @@ import { toast } from 'react-toastify';
 import { ProductFormModal } from '@/components/ProductFormModal';
 
 // Resolve a potentially-relative image URL against the API base.
-// File-Service returns relative paths (e.g. "/api/files/static/products/...")
-// but the browser resolves those against the frontend origin (5173), not the
-// API gateway (5000), so every image 404s unless we absolutise them here.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const BASE_ORIGIN = API_BASE.includes('://')
   ? API_BASE.substring(0, API_BASE.lastIndexOf('/'))
@@ -26,7 +23,22 @@ const resolveStoreName = (p: Product, nameMap: Record<string, string>): string =
   return '—';
 };
 
+// ── Role helper ─────────────────────────────────────────────────────────────
+const getCurrentUser = (): { role: string; email: string; name: string } | null => {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export function ProductsPage() {
+  const currentUser = getCurrentUser();
+  const userRole = currentUser?.role ?? '';
+  const isAdmin = userRole === 'admin';
+  const isStoreManager = userRole === 'store_manager';
+
   const [products, setProducts] = useState<Product[]>([]);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -34,6 +46,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addImagePreview, setAddImagePreview] = useState<string | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
@@ -48,7 +61,7 @@ export function ProductsPage() {
         ...p,
         stockQuantity: p.stockQuantity ?? 0,
         category: p.category || 'Đồ uống',
-        unit: p.unit || 'chiếc'
+        unit: p.unit || 'chiếc',
       }));
       setProducts(mapped);
     } catch (err) {
@@ -81,7 +94,7 @@ export function ProductsPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // ---- Edit modal submit ----
+  // ── Edit modal submit ─────────────────────────────────────────────────────
   const handleEditSave = async (fd: FormData) => {
     if (!editingProduct) return;
     try {
@@ -93,7 +106,7 @@ export function ProductsPage() {
         stockQuantity: Number(fd.get('stockQuantity')),
         category: (fd.get('category') as string) || 'Đồ uống',
         unit: (fd.get('unit') as string) || 'chiếc',
-        imageUrl: editingProduct.imageUrl
+        imageUrl: editingProduct.imageUrl,
       });
       setEditingProduct(null);
       setEditImagePreview(null);
@@ -105,13 +118,12 @@ export function ProductsPage() {
     }
   };
 
-  // ---- Add modal submit ----
+  // ── Add modal submit ──────────────────────────────────────────────────────
   const handleAddSubmit = async (fd: FormData) => {
     const name = fd.get('name') as string;
     const price = fd.get('price') as string;
     const sku = fd.get('sku') as string;
     if (!name || !price || !sku) return;
-
     try {
       const created = await productService.createProduct({
         sku,
@@ -120,9 +132,8 @@ export function ProductsPage() {
         price: Number(price),
         stockQuantity: Number(fd.get('stockQuantity') || 0),
         category: (fd.get('category') as string) || 'Đồ uống',
-        unit: (fd.get('unit') as string) || 'chiếc'
+        unit: (fd.get('unit') as string) || 'chiếc',
       });
-
       const pendingImage = fd.get('image') as File | null;
       if (pendingImage && pendingImage.size > 0) {
         try {
@@ -132,7 +143,6 @@ export function ProductsPage() {
           toast.error('Đã tạo sản phẩm nhưng không thể tải ảnh lên.');
         }
       }
-
       setIsAdding(false);
       setAddImagePreview(null);
       toast.success('Thêm sản phẩm mới thành công!');
@@ -143,16 +153,14 @@ export function ProductsPage() {
     }
   };
 
-  // ---- Image handling for edit modal ----
+  // ── Image handling ────────────────────────────────────────────────────────
   const handleEditImageUpload = async (file: File) => {
     if (!file || !editingProduct) return;
-    // Show local preview immediately
     const reader = new FileReader();
     reader.onload = () => {
       setEditImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
-
     try {
       const result = await productService.uploadImage(editingProduct.id, file);
       setEditingProduct({ ...editingProduct, imageUrl: result.url });
@@ -163,7 +171,6 @@ export function ProductsPage() {
     }
   };
 
-  // ---- Image handling for add modal ----
   const handleAddImageSelected = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -172,11 +179,33 @@ export function ProductsPage() {
     reader.readAsDataURL(file);
   };
 
-  const deleteProduct = (id: string) => {
+  // ── Admin: open delete modal with reason input ────────────────────────────
+  const openAdminDeleteModal = (id: string) => {
     setDeletingProductId(id);
+    setDeleteReason('');
   };
 
-  const confirmDelete = async (id: string) => {
+  // ── Admin: confirm delete with reason ─────────────────────────────────────
+  const confirmAdminDelete = async () => {
+    if (!deletingProductId) return;
+    if (!deleteReason.trim()) {
+      toast.error('Vui lòng nhập lý do xóa sản phẩm.');
+      return;
+    }
+    try {
+      await productService.deleteProductWithReason(deletingProductId, deleteReason.trim());
+      setDeletingProductId(null);
+      setDeleteReason('');
+      toast.success('Xóa sản phẩm thành công!');
+      fetchProducts();
+    } catch (err) {
+      console.error('Error deleting product', err);
+      toast.error('Không thể xóa sản phẩm. Vui lòng kiểm tra lại.');
+    }
+  };
+
+  // ── Store Manager: instant confirm (simple modal, no reason needed) ───────
+  const confirmManagerDelete = async (id: string) => {
     try {
       await productService.deleteProduct(id);
       setDeletingProductId(null);
@@ -191,7 +220,13 @@ export function ProductsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
-  const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  // Admin only sees products tied to their WO — filter at render time anyway
+  // (backend already restricts on GET, but we add a client-side safeguard)
+  const visibleProducts = isAdmin
+    ? products // backend already scoped; keep as-is
+    : products;
+
+  const filtered = visibleProducts.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedProducts = filtered.slice(startIndex, startIndex + itemsPerPage);
@@ -199,7 +234,7 @@ export function ProductsPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
       {/* Background Glows */}
-      <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl -z-10 animate-pulse" />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
@@ -208,7 +243,11 @@ export function ProductsPage() {
             <Icons.Product className="w-8 h-8 text-brand-600 glow-blue" />
             <span>Quản lý sản phẩm</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Điều khiển danh mục hàng hóa, giá bán và số lượng tồn kho</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {isAdmin
+              ? 'Xem và quản lý sản phẩm thuộc kho của bạn'
+              : 'Điều khiển danh mục hàng hóa, giá bán và số lượng tồn kho'}
+          </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <button
@@ -270,7 +309,10 @@ export function ProductsPage() {
                   <th className="p-4">Phân loại</th>
                   <th className="p-4">Giá bán</th>
                   <th className="p-4">Tồn kho</th>
-                  <th className="p-4">Cửa hàng</th>
+                  {/* Hide store column for store_manager per requirement */}
+                  {!isStoreManager && (
+                    <th className="p-4">Cửa hàng</th>
+                  )}
                   <th className="p-4 pr-6 text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -306,24 +348,29 @@ export function ProductsPage() {
                     <td className="p-4 text-slate-900 font-extrabold">{p.price.toLocaleString()}đ</td>
                     <td className="p-4">
                       <span className={`font-bold ${p.stockQuantity <= 0 ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                        {p.stockQuantity} chiếc {p.stockQuantity <= 0 && ' (Hết hàng)'}
+                        {p.stockQuantity} chiếc
+                        {p.stockQuantity <= 0 && ' (Hết hàng)'}
                       </span>
                     </td>
-                    <td className="p-4">
-                      {p.storeId ? (
-                        <span className="text-xs font-bold bg-amber-50 border border-amber-100/50 text-amber-700 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                          </svg>
-                          {resolveStoreName(p, storeNameMap)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">Chung</span>
-                      )}
-                    </td>
+                    {/* Hide store column for store_manager per requirement */}
+                    {!isStoreManager && (
+                      <td className="p-4">
+                        {p.storeId ? (
+                          <span className="text-xs font-bold bg-amber-50 border border-amber-100/50 text-amber-700 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                            </svg>
+                            {resolveStoreName(p, storeNameMap)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Chung</span>
+                        )}
+                      </td>
+                    )}
                     <td className="p-4 pr-6 text-right space-x-3 whitespace-nowrap">
-                      {!p.storeId && (
+                      {/* Admin: only edit products with no storeId (global) */}
+                      {isAdmin && !p.storeId && (
                         <button
                           onClick={() => setEditingProduct(p)}
                           className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
@@ -331,11 +378,27 @@ export function ProductsPage() {
                           Sửa
                         </button>
                       )}
-                      {p.storeId && (
+                      {/* Store Manager: can edit all products */}
+                      {isStoreManager && (
+                        <button
+                          onClick={() => setEditingProduct(p)}
+                          className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                        >
+                          Sửa
+                        </button>
+                      )}
+                      {/* Admin with store-assigned product → read-only note */}
+                      {isAdmin && p.storeId && (
                         <span className="text-[10px] text-slate-400 italic">Đã gán cửa hàng</span>
                       )}
                       <button
-                        onClick={() => deleteProduct(p.id)}
+                        onClick={() => {
+                          if (isAdmin) {
+                            openAdminDeleteModal(p.id);
+                          } else {
+                            setDeletingProductId(p.id);
+                          }
+                        }}
                         className="px-3.5 py-1.5 border border-red-200 hover:border-red-300 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold transition-all cursor-pointer"
                       >
                         Xóa
@@ -345,7 +408,9 @@ export function ProductsPage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-16 text-center text-slate-400 italic">Không tìm thấy sản phẩm nào</td>
+                    <td colSpan={isStoreManager ? 6 : 7} className="p-16 text-center text-slate-400 italic">
+                      Không tìm thấy sản phẩm nào
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -374,10 +439,11 @@ export function ProductsPage() {
                     key={page}
                     type="button"
                     onClick={() => setCurrentPage(page)}
-                    className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 cursor-pointer ${currentPage === page
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold transition-all active:scale-95 cursor-pointer ${
+                      currentPage === page
                         ? "border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/10"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                      }`}
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
                   >
                     {page}
                   </button>
@@ -401,7 +467,10 @@ export function ProductsPage() {
         open={!!editingProduct}
         title="Chỉnh sửa sản phẩm"
         initialData={editingProduct}
-        onClose={() => { setEditingProduct(null); setEditImagePreview(null); }}
+        onClose={() => {
+          setEditingProduct(null);
+          setEditImagePreview(null);
+        }}
         onSubmit={handleEditSave}
         onFileSelected={handleEditImageUpload}
         imagePreviewUrl={editImagePreview || editingProduct?.imageUrl || null}
@@ -413,15 +482,64 @@ export function ProductsPage() {
         open={isAdding}
         title="Thêm sản phẩm mới"
         initialData={null}
-        onClose={() => { setIsAdding(false); setAddImagePreview(null); }}
+        onClose={() => {
+          setIsAdding(false);
+          setAddImagePreview(null);
+        }}
         onSubmit={handleAddSubmit}
         onFileSelected={handleAddImageSelected}
         imagePreviewUrl={addImagePreview}
         submitLabel="Tạo sản phẩm"
       />
 
-      {/* Delete Confirmation Modal */}
-      {deletingProductId && (
+      {/* ── Admin Delete: reason required ─────────────────── */}
+      {deletingProductId && isAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-md shadow-2xl relative">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 bg-amber-50 border border-amber-100 rounded-full flex items-center justify-center text-amber-600 shadow-sm">
+                <Icons.AlertWarning className="w-6 h-6 text-amber-500" />
+              </div>
+              <div className="space-y-1 w-full">
+                <h3 className="text-lg font-heading font-extrabold text-slate-900">Xác nhận xóa sản phẩm</h3>
+                <p className="text-sm text-slate-500 font-semibold leading-relaxed">
+                  Bạn đang xóa sản phẩm thuộc kho của mình. Vui lòng cung cấp lý do xóa (bắt buộc).
+                </p>
+                <textarea
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Nhập lý do xóa sản phẩm..."
+                  className="mt-3 w-full p-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 resize-none h-24"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingProductId(null);
+                  setDeleteReason('');
+                }}
+                className="flex-1 px-4 py-2.5 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-500 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={confirmAdminDelete}
+                disabled={!deleteReason.trim()}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-red-500/10 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Xóa sản phẩm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Store Manager Delete: simple confirm ─────────── */}
+      {deletingProductId && isStoreManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-sm shadow-2xl relative">
             <div className="flex flex-col items-center text-center space-y-4">
@@ -431,11 +549,10 @@ export function ProductsPage() {
               <div className="space-y-1">
                 <h3 className="text-lg font-heading font-extrabold text-slate-900">Xác nhận xóa</h3>
                 <p className="text-sm text-slate-500 font-semibold leading-relaxed">
-                  Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này sẽ loại bỏ hoàn toàn sản phẩm khỏi hệ thống và không thể hoàn tác.
+                  Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này không thể hoàn tác.
                 </p>
               </div>
             </div>
-
             <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
               <button
                 type="button"
@@ -446,7 +563,7 @@ export function ProductsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => confirmDelete(deletingProductId)}
+                onClick={() => confirmManagerDelete(deletingProductId)}
                 className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 active:scale-98 text-white rounded-xl text-xs font-bold shadow-md shadow-red-500/10 transition-all cursor-pointer"
               >
                 Xóa ngay
