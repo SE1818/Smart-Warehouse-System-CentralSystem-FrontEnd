@@ -18,14 +18,27 @@ const getAdapter = (config: any): AxiosAdapter => {
   throw new Error('No axios adapter found');
 };
 
-const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
-  const adapter = getAdapter(config);
-  const key = `${config.method}:${config.url}:${JSON.stringify(config.params)}:${JSON.stringify(config.data)}`;
+const sanitizeParams = (obj: any) => {
+  if (!obj || typeof obj !== 'object') return '';
+  const sanitized = { ...obj };
+  const sensitiveKeys = ['password', 'token', 'secret', 'auth', 'card', 'cvv'];
+  for (const k of Object.keys(sanitized)) {
+    if (sensitiveKeys.some((s) => k.toLowerCase().includes(s))) {
+      sanitized[k] = '[REDACTED]';
+    }
+  }
+  return JSON.stringify(sanitized);
+};
 
+const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
   // Deduplicate only GET requests to avoid breaking mutations
   if (config.method?.toLowerCase() !== 'get') {
+    const adapter = getAdapter(config);
     return adapter(config);
   }
+
+  const adapter = getAdapter(config);
+  const key = `${config.method}:${config.url}:${sanitizeParams(config.params)}`;
 
   if (pendingRequests.has(key)) {
     return pendingRequests.get(key)!;
@@ -64,11 +77,16 @@ const apiClient = axios.create({
   adapter: dedupeAndRetryAdapter,
 });
 
-// Attach JWT token on every request
+// Attach JWT token on every request safely
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken');
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    // Ensure token is attached only to requests within local base API or relative paths
+    const url = config.url || '';
+    const isRelativeOrAppDomain = !url.startsWith('http://') && !url.startsWith('https://') || url.startsWith(API_BASE_URL);
+    if (isRelativeOrAppDomain) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
