@@ -90,11 +90,14 @@ export function AdminLayout() {
   {
     label: 'Kinh doanh',
     items: [
+      { path: '/admin/cashier', label: 'Thu ngân & Tính tiền', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
+      { path: '/admin/tables', label: 'Sơ đồ Bàn & Mã QR', icon: <Icons.Store className="w-5 h-5" />, visible: true },
       { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" />, visible: true },
       { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
- { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
+      { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
+      { path: '/admin/integrations', label: 'Tích hợp B2B & API Keys', icon: <Icons.Folder className="w-5 h-5" />, visible: true },
     ],
   },
   {

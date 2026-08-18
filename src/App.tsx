@@ -34,6 +34,7 @@ const StockAdjustmentsPage = lazy(() => import('./pages/stock/StockAdjustmentsPa
 // Customer & Integration pages
 const QrOrderPage = lazy(() => import('./pages/public/QrOrderPage').then(m => ({ default: m.QrOrderPage })));
 const TablesPage = lazy(() => import('./pages/admin/TablesPage').then(m => ({ default: m.TablesPage })));
+const CashierPage = lazy(() => import('./pages/admin/CashierPage').then(m => ({ default: m.CashierPage })));
 const DeveloperIntegrationsPage = lazy(() => import('./pages/admin/DeveloperIntegrationsPage').then(m => ({ default: m.DeveloperIntegrationsPage })));
 
 // Other pages
@@ -163,6 +164,7 @@ function App() {
 							<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
 							<Route path="stores" element={<StoresPage />} />
 							<Route path="tables" element={<TablesPage />} />
+							<Route path="cashier" element={<CashierPage />} />
 							<Route path="integrations" element={<DeveloperIntegrationsPage />} />
 							<Route path="complaints" element={<AdminComplaints />} />
 							<Route path="reports" element={<AdminReports />} />
