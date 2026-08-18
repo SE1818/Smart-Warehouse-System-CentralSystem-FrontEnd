@@ -1,28 +1,32 @@
 import React, { useState, useEffect } from 'react';
 
 interface OrderItem {
+  id: string;
   productId: string;
   variantName?: string;
+  skuCode?: string;
   quantity: number;
   price: number;
 }
 
 interface TableOrder {
   id: string;
-  orderNo: string;
+  tableId?: string;
   tableNo: string;
-  tableName: string;
-  status: 'Serving' | 'PendingPayment' | 'Paid';
-  items: OrderItem[];
+  shippingAddress: string;
+  status: string;
   totalAmount: number;
   createdAt: string;
+  items: OrderItem[];
 }
 
 interface DiningTable {
   id: string;
+  storeId: string;
   tableNo: string;
   tableName: string;
-  status: 'Available' | 'Occupied';
+  capacity: number;
+  status: string;
   currentOrder?: TableOrder;
 }
 
@@ -39,43 +43,45 @@ export const CashierPage: React.FC = () => {
   const storeId = '00000000-0000-0000-0000-000000000001';
 
   useEffect(() => {
-    fetchTablesAndOrders();
+    fetchRealTablesAndOrders();
   }, []);
 
-  const fetchTablesAndOrders = async () => {
+  const fetchRealTablesAndOrders = async () => {
     setLoading(true);
     try {
-      // Mock / API call for cashier tables & active orders
-      const res = await fetch(`/api/v1/tables?storeId=${storeId}`, {
+      // 1. Fetch real dining tables from OrderingPayment DB
+      const tablesRes = await fetch(`/api/v1/tables?storeId=${storeId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) {
-        const tableData = await res.json();
-        // Map active orders if available
-        const mappedTables: DiningTable[] = tableData.map((t: any) => ({
+      const tableData = tablesRes.ok ? await tablesRes.json() : [];
+
+      // 2. Fetch real active orders from OrderingPayment DB
+      const ordersRes = await fetch(`/api/v1/orders/search?status=Pending&pageSize=100`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const ordersData = ordersRes.ok ? await ordersRes.json() : { items: [] };
+      const activeOrders: TableOrder[] = Array.isArray(ordersData) ? ordersData : ordersData.items || [];
+
+      // 3. Map orders to their respective tables in real time
+      const mappedTables: DiningTable[] = tableData.map((t: any) => {
+        const orderForTable = activeOrders.find(
+          o => o.tableNo === t.tableNo || o.tableId === t.id
+        );
+
+        return {
           id: t.id,
+          storeId: t.storeId,
           tableNo: t.tableNo,
           tableName: t.tableName || `Bàn ${t.tableNo}`,
-          status: t.status === 'Occupied' ? 'Occupied' : 'Available',
-          currentOrder: t.status === 'Occupied' ? {
-            id: `ORD-${t.tableNo}-101`,
-            orderNo: `SW-${t.tableNo}-99`,
-            tableNo: t.tableNo,
-            tableName: t.tableName,
-            status: 'PendingPayment',
-            items: [
-              { productId: 'p1', variantName: 'Cà phê sữa đá (Size L)', quantity: 2, price: 35000 },
-              { productId: 'p2', variantName: 'Trà đào cam sả', quantity: 1, price: 45000 },
-              { productId: 'p3', variantName: 'Bánh Mì Chảo Đặc Biệt', quantity: 2, price: 55000 }
-            ],
-            totalAmount: 225000,
-            createdAt: new Date().toISOString()
-          } : undefined
-        }));
-        setTables(mappedTables);
-      }
+          capacity: t.capacity || 4,
+          status: orderForTable ? 'Occupied' : (t.status || 'Available'),
+          currentOrder: orderForTable
+        };
+      });
+
+      setTables(mappedTables);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load cashier data from backend', err);
     } finally {
       setLoading(false);
     }
@@ -92,28 +98,26 @@ export const CashierPage: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      await fetch(`/api/v1/orders/${selectedTable.currentOrder.id}/pay`, {
+      // Real API Call: Update order status to Completed in OrderingPayment microservice
+      const res = await fetch(`/api/v1/orders/${selectedTable.currentOrder.id}/status?status=Completed`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          paymentMethod: paymentMethod,
-          amountPaid: selectedTable.currentOrder.totalAmount,
-          cashReceived: parseFloat(cashGiven) || selectedTable.currentOrder.totalAmount
-        })
+        }
       });
 
-      // Local state update for smooth UX
-      alert(`✅ Thanh toán thành công cho ${selectedTable.tableNo}! Tổng tiền: ${selectedTable.currentOrder.totalAmount.toLocaleString('vi-VN')} đ`);
-
-      setTables(prev => prev.map(t => t.id === selectedTable.id ? { ...t, status: 'Available', currentOrder: undefined } : t));
-      setSelectedTable(null);
-      setCashGiven('');
+      if (res.ok) {
+        alert(`✅ Thanh toán thành công cho ${selectedTable.tableNo}! Hóa đơn đã đóng trên hệ thống.`);
+        fetchRealTablesAndOrders();
+        setSelectedTable(null);
+        setCashGiven('');
+      } else {
+        alert('Lỗi cập nhật thanh toán trên máy chủ.');
+      }
     } catch (err) {
-      console.error(err);
-      alert('Có lỗi khi thanh toán hóa đơn.');
+      console.error('Error settling order', err);
+      alert('Có lỗi kết nối máy chủ.');
     } finally {
       setIsProcessing(false);
     }
@@ -128,21 +132,21 @@ export const CashierPage: React.FC = () => {
             💵
           </div>
           <div>
-            <h1 className="font-extrabold text-lg text-white leading-tight">Màn Hình Thu Ngân & Thanh Toán POS</h1>
-            <p className="text-xs text-slate-400">Quản lý hóa đơn tại bàn, thu tiền mặt & xác nhận thanh toán VietQR.</p>
+            <h1 className="font-extrabold text-lg text-white leading-tight">Màn Hình Thu Ngân POS (Real API Backend)</h1>
+            <p className="text-xs text-slate-400">Dữ liệu đơn hàng & bàn ăn kết nối trực tiếp Cơ sở dữ liệu SmartWarehouse.</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
           <button
-            onClick={fetchTablesAndOrders}
+            onClick={fetchRealTablesAndOrders}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 text-sm font-semibold transition"
           >
             ↻ Làm Mới Sơ Đồ
           </button>
           <div className="text-right">
-            <span className="text-xs text-slate-400 block">Thu ngân ca làm việc</span>
-            <span className="text-sm font-bold text-emerald-400">Nguyễn Văn A (Thu Ngân #01)</span>
+            <span className="text-xs text-slate-400 block">Ca làm việc</span>
+            <span className="text-sm font-bold text-emerald-400">Quầy Thu Ngân #01</span>
           </div>
         </div>
       </header>
@@ -173,6 +177,10 @@ export const CashierPage: React.FC = () => {
                 <div key={i} className="h-36 bg-slate-900 rounded-2xl animate-pulse" />
               ))}
             </div>
+          ) : tables.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+              Chưa có sơ đồ bàn ăn. Vui lòng vào mục <span className="text-indigo-400 font-semibold">"Sơ đồ Bàn & Mã QR"</span> để tạo bàn mới.
+            </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 overflow-y-auto pr-1">
               {tables.map(table => {
@@ -182,12 +190,14 @@ export const CashierPage: React.FC = () => {
                   <div
                     key={table.id}
                     onClick={() => isOccupied && setSelectedTable(table)}
-                    className={`p-5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-5 rounded-2xl border transition flex flex-col justify-between ${
+                      isOccupied ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'
+                    } ${
                       isSelected
                         ? 'bg-indigo-950/60 border-indigo-500 shadow-lg shadow-indigo-500/20'
                         : isOccupied
                         ? 'bg-slate-900 border-amber-500/40 hover:border-amber-500'
-                        : 'bg-slate-900/50 border-slate-800/80 opacity-60 cursor-not-allowed'
+                        : 'bg-slate-900/50 border-slate-800/80'
                     }`}
                   >
                     <div>
@@ -200,7 +210,7 @@ export const CashierPage: React.FC = () => {
                               : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                           }`}
                         >
-                          {isOccupied ? 'Chờ Tính Tiền' : 'Trống'}
+                          {isOccupied ? 'Có Đơn Hàng' : 'Bàn Trống'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-400">{table.tableName}</p>
@@ -228,7 +238,7 @@ export const CashierPage: React.FC = () => {
               <div className="pb-4 border-b border-slate-800 flex justify-between items-center">
                 <div>
                   <h2 className="text-xl font-bold text-white">Hóa Đơn {selectedTable.tableNo}</h2>
-                  <p className="text-xs text-indigo-400 font-mono">Mã đơn: {selectedTable.currentOrder.orderNo}</p>
+                  <p className="text-xs text-indigo-400 font-mono">ID: {selectedTable.currentOrder.id.slice(0, 8).toUpperCase()}</p>
                 </div>
                 <button
                   onClick={() => setSelectedTable(null)}
@@ -240,17 +250,21 @@ export const CashierPage: React.FC = () => {
 
               {/* Order Items List */}
               <div className="flex-1 overflow-y-auto py-4 space-y-3">
-                {selectedTable.currentOrder.items.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-sm bg-slate-800/50 p-2.5 rounded-xl">
-                    <div>
-                      <p className="font-semibold text-white">{item.variantName || item.productId}</p>
-                      <p className="text-xs text-slate-400">{item.price.toLocaleString('vi-VN')} đ x {item.quantity}</p>
+                {selectedTable.currentOrder.items && selectedTable.currentOrder.items.length > 0 ? (
+                  selectedTable.currentOrder.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-sm bg-slate-800/50 p-2.5 rounded-xl">
+                      <div>
+                        <p className="font-semibold text-white">{item.variantName || item.skuCode || item.productId}</p>
+                        <p className="text-xs text-slate-400">{item.price.toLocaleString('vi-VN')} đ x {item.quantity}</p>
+                      </div>
+                      <span className="font-bold text-slate-200">
+                        {(item.price * item.quantity).toLocaleString('vi-VN')} đ
+                      </span>
                     </div>
-                    <span className="font-bold text-slate-200">
-                      {(item.price * item.quantity).toLocaleString('vi-VN')} đ
-                    </span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-400 italic">Đơn hàng tổng: {selectedTable.currentOrder.totalAmount.toLocaleString('vi-VN')} đ</p>
+                )}
               </div>
 
               {/* Payment Methods & Cash Calculator */}
@@ -329,7 +343,7 @@ export const CashierPage: React.FC = () => {
                   disabled={isProcessing}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black py-3.5 rounded-2xl transition shadow-lg shadow-emerald-600/20"
                 >
-                  {isProcessing ? 'Đang xử lý...' : '🖨️ Thanh Toán & In Hóa Đơn'}
+                  {isProcessing ? 'Đang cập nhật CSDL...' : '🖨️ Xác Nhận Thanh Toán & Đóng Hóa Đơn'}
                 </button>
               </div>
             </div>
@@ -338,8 +352,8 @@ export const CashierPage: React.FC = () => {
               <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center text-3xl">
                 🧾
               </div>
-              <h3 className="font-bold text-slate-300">Chưa Chọn Hóa Đơn</h3>
-              <p className="text-xs text-slate-500">Bấm vào bất kỳ bàn ăn nào đang có khách bên trái để mở hóa đơn tính tiền.</p>
+              <h3 className="font-bold text-slate-300">Chưa Chọn Bàn</h3>
+              <p className="text-xs text-slate-500">Bấm vào bất kỳ bàn ăn nào đang có đơn hàng bên trái để tiến hành thanh toán.</p>
             </div>
           )}
         </div>
