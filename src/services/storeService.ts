@@ -20,6 +20,9 @@ export interface StoreDto {
   id: string;
   name: string;
   ownerEmail: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
   areaId: string;
   stationId: string;
   imageUrl?: string;

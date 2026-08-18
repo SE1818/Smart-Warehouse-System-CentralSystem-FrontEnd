@@ -322,8 +322,9 @@ export const QrOrderPage: React.FC = () => {
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="bg-slate-800 text-white border border-slate-700 rounded-lg px-3 py-1.5 text-sm"
                 >
-                  <option value="PAYOS">PayOS QR Code</option>
-                  <option value="Cash">Tiền mặt tại bàn</option>
+                  <option value="PAYOS">📱 Chuyển khoản VietQR (PayOS)</option>
+                  <option value="Cash">💵 Tiền mặt (Tại thu ngân / tại bàn)</option>
+                  <option value="Wallet">💳 Tài khoản Ví cửa hàng</option>
                 </select>
               </div>
 

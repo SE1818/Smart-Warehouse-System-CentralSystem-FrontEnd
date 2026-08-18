@@ -238,6 +238,9 @@ export function StoresPage() {
               <InfoRow label="ID Cửa hàng" value={selectedStore.id} mono />
               <InfoRow label="Tên cửa hàng" value={selectedStore.name} />
               <InfoRow label="Email chủ cửa hàng" value={selectedStore.ownerEmail} />
+              <InfoRow label="Ngân Hàng Chuyển Khoản" value={selectedStore.bankName || 'VietinBank (970403)'} />
+              <InfoRow label="Số Tài Khoản Nhận Tiền" value={selectedStore.bankAccountNumber || '1133669988'} mono />
+              <InfoRow label="Tên Chủ Tài Khoản" value={selectedStore.bankAccountName || selectedStore.name.toUpperCase()} />
               <InfoRow label="Khu vực (AreaId)" value={selectedStore.areaId} mono />
               <InfoRow label="Trạm (StationId)" value={selectedStore.stationId} mono />
               <InfoRow
