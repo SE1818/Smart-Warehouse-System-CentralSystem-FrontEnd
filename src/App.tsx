@@ -31,6 +31,11 @@ const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage').then(
 const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage').then(m => ({ default: m.StockMovementsPage })));
 const StockAdjustmentsPage = lazy(() => import('./pages/stock/StockAdjustmentsPage').then(m => ({ default: m.StockAdjustmentsPage })));
 
+// Customer & Integration pages
+const QrOrderPage = lazy(() => import('./pages/public/QrOrderPage').then(m => ({ default: m.QrOrderPage })));
+const TablesPage = lazy(() => import('./pages/admin/TablesPage').then(m => ({ default: m.TablesPage })));
+const DeveloperIntegrationsPage = lazy(() => import('./pages/admin/DeveloperIntegrationsPage').then(m => ({ default: m.DeveloperIntegrationsPage })));
+
 // Other pages
 const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ default: m.SearchPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
@@ -108,6 +113,7 @@ function App() {
 					<Route path="/forgot-password" element={<ForgotPasswordPage />} />
 					<Route path="/reset-password" element={<ResetPasswordPage />} />
 					<Route path="/unauthorized" element={<UnauthorizedPage />} />
+					<Route path="/qr-order" element={<QrOrderPage />} />
 
 					{/* Redirect Root to Admin */}
 					<Route path="/" element={<Navigate to="/admin" replace />} />
@@ -137,7 +143,7 @@ function App() {
 							}
 						>
 							<Route path="dashboard" element={<AdminDashboard />} />
-														<Route path="warehouses" element={<WarehousesPage />} />
+							<Route path="warehouses" element={<WarehousesPage />} />
 							<Route path="stocklevels" element={<StockLevelsPage />} />
 							<Route path="stockmovements" element={<StockMovementsPage />} />
 							<Route path="stockadjustments" element={<StockAdjustmentsPage />} />
@@ -156,6 +162,8 @@ function App() {
 							<Route path="users" element={<AdminUsers />} />
 							<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
 							<Route path="stores" element={<StoresPage />} />
+							<Route path="tables" element={<TablesPage />} />
+							<Route path="integrations" element={<DeveloperIntegrationsPage />} />
 							<Route path="complaints" element={<AdminComplaints />} />
 							<Route path="reports" element={<AdminReports />} />
 							<Route path="settlement" element={<SettlementPage />} />
