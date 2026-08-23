@@ -131,6 +131,30 @@ export const TablesPage: React.FC = () => {
     }
   };
 
+  const handleSplitTable = async (id: string, tableNo: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn tách bàn ${tableNo} ra thành bàn độc lập?`)) return;
+    try {
+      const res = await fetch(`/api/v1/tables/${id}/split`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ storeId })
+      });
+      if (res.ok) {
+        alert(`✅ Đã tách bàn ${tableNo} thành công! Bàn đã trở lại trạng thái trống.`);
+        fetchTables();
+      } else {
+        const err = await res.json();
+        alert(err.message || 'Lỗi khi tách bàn.');
+      }
+    } catch (err) {
+      console.error('Error splitting table', err);
+      alert('Lỗi kết nối máy chủ.');
+    }
+  };
+
   const handleDeleteTable = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa bàn này?')) return;
     try {
@@ -220,13 +244,23 @@ export const TablesPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-4 mt-4 border-t border-slate-800/80 flex justify-between items-center">
-                <button
-                  onClick={() => setSelectedQrTable(table)}
-                  className="flex items-center gap-1.5 text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg transition"
-                >
-                  📷 Mã QR
-                </button>
+              <div className="pt-4 mt-4 border-t border-slate-800/80 flex justify-between items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedQrTable(table)}
+                    className="flex items-center gap-1.5 text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg transition"
+                  >
+                    📷 Mã QR
+                  </button>
+                  {table.status === 'Merged' && (
+                    <button
+                      onClick={() => handleSplitTable(table.id, table.tableNo)}
+                      className="flex items-center gap-1 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-lg transition"
+                    >
+                      ✂️ Tách Bàn
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={() => handleDeleteTable(table.id)}
                   className="text-slate-500 hover:text-rose-400 p-1 transition"

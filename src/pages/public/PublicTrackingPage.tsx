@@ -54,6 +54,7 @@ export const PublicTrackingPage: React.FC = () => {
   const [unlockMessage, setUnlockMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const [remainingAttempts, setRemainingAttempts] = useState<number>(5);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const [tableNotice, setTableNotice] = useState<string | null>(null);
 
   const hubConnectionRef = useRef<signalR.HubConnection | null>(null);
 
@@ -160,6 +161,19 @@ export const PublicTrackingPage: React.FC = () => {
             robotBattery: data.batteryLevel ?? prev.robotBattery
           };
         });
+      });
+
+      // Destination changed (Table Transfer / Merge)
+      connection.on('DestinationChanged', (data: any) => {
+        if (data.newTableNo) {
+          setTableNotice(`📍 Bàn của quý khách đã được chuyển sang ${data.newTableNo}. Robot AMR đang điều hướng giao hàng tới vị trí mới.`);
+          setTracking(prev => prev ? { ...prev, dropoffLocation: `Bàn ${data.newTableNo}` } : prev);
+        }
+      });
+
+      // Robot connection / offline alert
+      connection.on('RobotConnectionAlert', (data: any) => {
+        setTableNotice(`⚠️ ${data.message || 'Robot giao hàng tạm thời gián đoạn tín hiệu. Nhân viên đang kiểm tra.'}`);
       });
 
       // Locker Unlocked notification
@@ -290,6 +304,21 @@ export const PublicTrackingPage: React.FC = () => {
             </a>
           )}
         </header>
+
+        {/* Real-time Table Change & Heartbeat Notice Banner */}
+        {tableNotice && (
+          <div className="bg-indigo-950/90 border-b border-indigo-500/50 p-3 text-xs text-indigo-200 flex items-center justify-between animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <span>{tableNotice}</span>
+            </div>
+            <button
+              onClick={() => setTableNotice(null)}
+              className="text-slate-400 hover:text-white p-1 ml-2 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Live Map / Telemetry Floorplan Simulation */}
         <div className="relative w-full h-56 bg-slate-950 border-b border-slate-800 overflow-hidden flex items-center justify-center">
