@@ -27,6 +27,7 @@ interface DiningTable {
   tableName: string;
   capacity: number;
   status: string;
+  stationId?: string;
   currentOrder?: TableOrder;
 }
 
@@ -39,6 +40,12 @@ export const CashierPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'PAYOS' | 'Card'>('Cash');
   const [cashGiven, setCashGiven] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Transfer Order states
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
+  const [targetTransferTableId, setTargetTransferTableId] = useState<string>('');
+  const [transferReason, setTransferReason] = useState<string>('Khách yêu cầu chuyển bàn');
+  const [isTransferring, setIsTransferring] = useState<boolean>(false);
 
   const storeId = '00000000-0000-0000-0000-000000000001';
 
@@ -75,11 +82,18 @@ export const CashierPage: React.FC = () => {
           tableName: t.tableName || `Bàn ${t.tableNo}`,
           capacity: t.capacity || 4,
           status: orderForTable ? 'Occupied' : (t.status || 'Available'),
+          stationId: t.stationId,
           currentOrder: orderForTable
         };
       });
 
       setTables(mappedTables);
+      
+      // Update selectedTable reference if open
+      if (selectedTable) {
+        const updatedSelected = mappedTables.find(t => t.id === selectedTable.id);
+        setSelectedTable(updatedSelected || null);
+      }
     } catch (err) {
       console.error('Failed to load cashier data from backend', err);
     } finally {
@@ -123,6 +137,46 @@ export const CashierPage: React.FC = () => {
     }
   };
 
+  const handleTransferOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTable?.currentOrder || !targetTransferTableId) {
+      alert('Vui lòng chọn bàn đích để chuyển đơn.');
+      return;
+    }
+
+    setIsTransferring(true);
+    try {
+      const res = await fetch(`/api/v1/tables/${targetTransferTableId}/transfer-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          orderId: selectedTable.currentOrder.id,
+          reason: transferReason
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        alert(`✅ Đã chuyển đơn ${selectedTable.currentOrder.id.substring(0, 8)} sang bàn ${result.newTableNo}! Robot AMR sẽ tự động đổi lộ trình nếu đang giao hàng.`);
+        setIsTransferModalOpen(false);
+        setTargetTransferTableId('');
+        setSelectedTable(null);
+        await fetchRealTablesAndOrders();
+      } else {
+        const err = await res.json();
+        alert(err.message || 'Lỗi khi chuyển bàn.');
+      }
+    } catch (err) {
+      console.error('Error transferring order to new table', err);
+      alert('Có lỗi kết nối máy chủ.');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Cashier Top Navigation Bar */}
@@ -132,8 +186,8 @@ export const CashierPage: React.FC = () => {
             💵
           </div>
           <div>
-            <h1 className="font-extrabold text-lg text-white leading-tight">Màn Hình Thu Ngân POS (Real API Backend)</h1>
-            <p className="text-xs text-slate-400">Dữ liệu đơn hàng & bàn ăn kết nối trực tiếp Cơ sở dữ liệu SmartWarehouse.</p>
+            <h1 className="font-extrabold text-lg text-white leading-tight">Màn Hình Thu Ngân POS & AMR Dispatch</h1>
+            <p className="text-xs text-slate-400">Quản lý hóa đơn bàn ăn, chuyển bàn và điều phối robot giao hàng tự động.</p>
           </div>
         </div>
 
@@ -167,7 +221,7 @@ export const CashierPage: React.FC = () => {
                 Bàn trống: {tables.filter(t => t.status === 'Available').length}
               </span>
             </div>
-            <p className="text-xs text-slate-400 italic">Bấm vào bàn đang có khách để mở hóa đơn tính tiền</p>
+            <p className="text-xs text-slate-400 italic">Bấm vào bàn đang có khách để mở hóa đơn hoặc chuyển bàn</p>
           </div>
 
           {/* Table Cards */}
@@ -202,7 +256,7 @@ export const CashierPage: React.FC = () => {
                   >
                     <div>
                       <div className="flex justify-between items-start mb-2">
-                        <span className="text-2xl font-black text-white">{table.tableNo}</span>
+                        <span className="font-black text-xl text-white">{table.tableNo}</span>
                         <span
                           className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                             isOccupied
@@ -210,18 +264,28 @@ export const CashierPage: React.FC = () => {
                               : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                           }`}
                         >
-                          {isOccupied ? 'Có Đơn Hàng' : 'Bàn Trống'}
+                          {isOccupied ? 'Đang Phục Vụ' : 'Trống'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400">{table.tableName}</p>
+                      <p className="text-xs text-slate-400 font-medium">{table.tableName}</p>
                     </div>
 
-                    {isOccupied && table.currentOrder && (
-                      <div className="mt-4 pt-3 border-t border-slate-800">
-                        <p className="text-xs text-slate-400">Tổng tạm tính:</p>
-                        <p className="text-lg font-black text-emerald-400">
-                          {table.currentOrder.totalAmount.toLocaleString('vi-VN')} đ
-                        </p>
+                    {isOccupied && table.currentOrder ? (
+                      <div className="mt-4 pt-3 border-t border-slate-800 space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Trạng thái:</span>
+                          <span className="font-bold text-indigo-400">{table.currentOrder.status}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Tổng tiền:</span>
+                          <span className="font-extrabold text-emerald-400">
+                            {table.currentOrder.totalAmount.toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-500 flex items-center gap-1">
+                        👥 {table.capacity} chỗ ngồi
                       </div>
                     )}
                   </div>
@@ -231,21 +295,23 @@ export const CashierPage: React.FC = () => {
           )}
         </div>
 
-        {/* Right Section: Bill Settlement Panel */}
-        <div className="w-96 bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between">
-          {selectedTable && selectedTable.currentOrder ? (
-            <div className="flex-1 flex flex-col">
-              <div className="pb-4 border-b border-slate-800 flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-bold text-white">Hóa Đơn {selectedTable.tableNo}</h2>
-                  <p className="text-xs text-indigo-400 font-mono">ID: {selectedTable.currentOrder.id.slice(0, 8).toUpperCase()}</p>
+        {/* Right Section: Bill Details & Payment / Transfer Actions */}
+        <div className="w-96 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col p-5">
+          {selectedTable?.currentOrder ? (
+            <div className="flex-1 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+                  <div>
+                    <h2 className="font-extrabold text-lg text-white">Hóa Đơn {selectedTable.tableNo}</h2>
+                    <p className="text-xs text-slate-400">Mã đơn: {selectedTable.currentOrder.id.substring(0, 8)}</p>
+                  </div>
+                  <button
+                    onClick={() => setIsTransferModalOpen(true)}
+                    className="flex items-center gap-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl font-bold transition"
+                  >
+                    🔄 Chuyển Bàn
+                  </button>
                 </div>
-                <button
-                  onClick={() => setSelectedTable(null)}
-                  className="text-slate-400 hover:text-white p-1"
-                >
-                  ✕
-                </button>
               </div>
 
               {/* Order Items List */}
@@ -353,11 +419,74 @@ export const CashierPage: React.FC = () => {
                 🧾
               </div>
               <h3 className="font-bold text-slate-300">Chưa Chọn Bàn</h3>
-              <p className="text-xs text-slate-500">Bấm vào bất kỳ bàn ăn nào đang có đơn hàng bên trái để tiến hành thanh toán.</p>
+              <p className="text-xs text-slate-500">Bấm vào bất kỳ bàn ăn nào đang có đơn hàng bên trái để xem chi tiết, chuyển bàn hoặc thanh toán.</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Transfer Order Modal */}
+      {isTransferModalOpen && selectedTable?.currentOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-white mb-1">🔄 Chuyển Bàn Phục Vụ</h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Chuyển đơn từ <span className="text-amber-400 font-bold">{selectedTable.tableNo}</span> sang bàn khác.
+            </p>
+
+            <div className="bg-indigo-950/40 border border-indigo-800/40 rounded-xl p-3 mb-4 text-xs text-indigo-300">
+              💡 <strong>Cơ chế tự động điều hướng Robot AMR:</strong> Nếu robot đang vận chuyển đơn hàng này, hệ thống sẽ tự động cập nhật trạm đích tới tọa độ bàn mới.
+            </div>
+
+            <form onSubmit={handleTransferOrder} className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Chọn Bàn Đích</label>
+                <select
+                  required
+                  value={targetTransferTableId}
+                  onChange={(e) => setTargetTransferTableId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
+                >
+                  <option value="">-- Chọn bàn chuyển đến --</option>
+                  {tables.filter(t => t.id !== selectedTable.id).map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.tableNo} - {t.tableName} ({t.status === 'Available' ? 'Bàn trống' : 'Có khách'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Lý Do Chuyển Bàn</label>
+                <input
+                  type="text"
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
+                  placeholder="Khách muốn đổi chỗ ngồi..."
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="flex-1 bg-slate-800 text-slate-300 py-2.5 rounded-xl hover:bg-slate-700"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isTransferring}
+                  className="flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl hover:bg-amber-500 disabled:opacity-50"
+                >
+                  {isTransferring ? 'Đang chuyển...' : 'Xác Nhận Chuyển'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
