@@ -33,6 +33,8 @@ const StockAdjustmentsPage = lazy(() => import('./pages/stock/StockAdjustmentsPa
 
 // Customer & Integration pages
 const QrOrderPage = lazy(() => import('./pages/public/QrOrderPage').then(m => ({ default: m.QrOrderPage })));
+const PublicTrackingPage = lazy(() => import('./pages/public/PublicTrackingPage').then(m => ({ default: m.PublicTrackingPage })));
+const WhiteLabelSettingsPage = lazy(() => import('./pages/admin/WhiteLabelSettingsPage').then(m => ({ default: m.WhiteLabelSettingsPage })));
 const TablesPage = lazy(() => import('./pages/admin/TablesPage').then(m => ({ default: m.TablesPage })));
 const CashierPage = lazy(() => import('./pages/admin/CashierPage').then(m => ({ default: m.CashierPage })));
 const DeveloperIntegrationsPage = lazy(() => import('./pages/admin/DeveloperIntegrationsPage').then(m => ({ default: m.DeveloperIntegrationsPage })));
@@ -114,7 +116,11 @@ function App() {
 					<Route path="/forgot-password" element={<ForgotPasswordPage />} />
 					<Route path="/reset-password" element={<ResetPasswordPage />} />
 					<Route path="/unauthorized" element={<UnauthorizedPage />} />
+					{/* Public & Customer routes */}
 					<Route path="/qr-order" element={<QrOrderPage />} />
+					<Route path="/track/:trackingToken" element={<PublicTrackingPage />} />
+					<Route path="/track" element={<PublicTrackingPage />} />
+					<Route path="/tracking/:trackingToken" element={<PublicTrackingPage />} />
 
 					{/* Redirect Root to Admin */}
 					<Route path="/" element={<Navigate to="/admin" replace />} />
@@ -166,6 +172,7 @@ function App() {
 							<Route path="tables" element={<TablesPage />} />
 							<Route path="cashier" element={<CashierPage />} />
 							<Route path="integrations" element={<DeveloperIntegrationsPage />} />
+							<Route path="white-label" element={<WhiteLabelSettingsPage />} />
 							<Route path="complaints" element={<AdminComplaints />} />
 							<Route path="reports" element={<AdminReports />} />
 							<Route path="settlement" element={<SettlementPage />} />
