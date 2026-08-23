@@ -151,7 +151,7 @@ export function ReportsPage() {
               </div>
             </div>
 
-            {/* Most Ordered Products mock ratios replaced with actual product proportions */}
+            {/* Product price distribution based on active inventory */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-6">
               <h3 className="font-heading font-bold text-slate-900 text-base flex items-center gap-2.5">
                 <Icons.AnalyticsReport className="w-5 h-5 text-brand-600" />

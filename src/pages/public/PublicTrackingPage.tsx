@@ -223,13 +223,7 @@ export const PublicTrackingPage: React.FC = () => {
         setUnlockMessage({ text: data.message || 'Mã OTP không đúng.', isError: true });
       }
     } catch (err) {
-      // Mock unlock for test tokens
-      if (otpCode === '123456' || otpCode === '888888') {
-        setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
-        setUnlockMessage({ text: 'Mở cốp thành công! Xin mời quý khách lấy hàng.', isError: false });
-      } else {
-        setUnlockMessage({ text: 'Không thể kết nối máy chủ xác thực.', isError: true });
-      }
+      setUnlockMessage({ text: 'Không thể kết nối máy chủ xác thực OTP. Vui lòng kiểm tra mạng và thử lại.', isError: true });
     } finally {
       setUnlockLoading(false);
     }
