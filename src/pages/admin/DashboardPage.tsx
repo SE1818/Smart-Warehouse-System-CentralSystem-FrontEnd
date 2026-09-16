@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useRobotStore } from '@/stores/robotStore';
-import { orderService, productService, stockService } from '@/services';
-import { transferService } from '@/services/transferService';
+import { orderService, productService, stockService, transferService } from '@/services';
 import { STATUS_COLORS, STATUS_LABELS, DEFAULT_PRODUCTS } from '@/constants';
 import { Icons } from '@/components/Icons';
 
@@ -125,21 +124,17 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      loadDashboardData();
-      fetchRobots();
-    }, 0);
-
+    void loadDashboardData();
+    void fetchRobots();
     connectRobotHub();
 
     const handleRefresh = () => {
-      loadDashboardData();
-      fetchRobots();
+      void loadDashboardData();
+      void fetchRobots();
     };
     window.addEventListener('smartwarehouse-notification', handleRefresh);
 
     return () => {
-      clearTimeout(timer);
       disconnectRobotHub();
       window.removeEventListener('smartwarehouse-notification', handleRefresh);
     };

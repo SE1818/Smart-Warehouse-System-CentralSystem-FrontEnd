@@ -117,6 +117,12 @@ export function NotificationsPage() {
       return;
     }
 
+    if (targetType === 'specific' && !selectedUserId) {
+      setSendError('Vui lòng chọn người nhận thông báo.');
+      setSending(false);
+      return;
+    }
+
     if (channelType === 'Email' && !selectedUserId) {
       setSendError('Vui lòng chọn người nhận email.');
       setSending(false);

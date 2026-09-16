@@ -99,7 +99,7 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  if (!storeName || !ownerName || !ownerEmail || !phoneNumber || !selectedAreaId || !selectedStationId || !imageUrl) {
+    if (!storeName || !ownerName || !ownerEmail || !phoneNumber || !selectedAreaId || !selectedStationId) {
       toast.error('Vui lòng điền đầy đủ tất cả các trường.');
       return;
     }
