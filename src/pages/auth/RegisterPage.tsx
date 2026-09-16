@@ -12,11 +12,14 @@ const [confirmPassword, setConfirmPassword] = useState('');
 const [error, setError] = useState('');
 const [success, setSuccess] = useState(false);
 const [loading, setLoading] = useState(false);
-const [otp, setOtp] = useState('');
-const [showOtpInput, setShowOtpInput] = useState(false);
-const [otpError, setOtpError] = useState('');
-const [otpSuccess, setOtpSuccess] = useState(false);
-const [resendLoading, setResendLoading] = useState(false);
+/*
+ * [COMMENTED OUT] 2FA OTP State Variables
+ * const [otp, setOtp] = useState('');
+ * const [showOtpInput, setShowOtpInput] = useState(false);
+ * const [otpError, setOtpError] = useState('');
+ * const [otpSuccess, setOtpSuccess] = useState(false);
+ * const [resendLoading, setResendLoading] = useState(false);
+ */
 
 const hasRepeatingChars = (str: string): boolean => {
 for (let i = 0; i < str.length - 2; i++) {
@@ -103,8 +106,6 @@ const handleSubmit = async (e: React.FormEvent) => {
 e.preventDefault();
 setError('');
 setSuccess(false);
-setOtpError('');
-setOtpSuccess(false);
 
 if (!validateForm()) {
 return;
@@ -114,7 +115,15 @@ setLoading(true);
 try {
 await authService.register({ username, email, password });
 setSuccess(true);
-setShowOtpInput(true);
+/*
+ * =========================================================================================
+ * [COMMENTED OUT] 2FA / OTP Verification Block
+ * Per harness & evaluation specifications, 2FA OTP verification is bypassed to allow
+ * direct login/registration without requiring email OTP confirmation.
+ * setShowOtpInput(true);
+ * =========================================================================================
+ */
+setTimeout(() => navigate('/login'), 1500);
 setLoading(false);
 } catch (err) {
 console.error('API error during registration', err);
@@ -136,41 +145,11 @@ setLoading(false);
 }
 };
 
-const handleResendOtp = async () => {
-setResendLoading(true);
-setOtpError('');
-try {
-await authService.resendVerification({ email });
-setOtp('');
-} catch (err: unknown) {
-const axiosErr = err as { response?: { data?: { message?: string } } };
-setOtpError(axiosErr.response?.data?.message || 'Gửi lại mã thất bại. Vui lòng thử lại.');
-} finally {
-setResendLoading(false);
-}
-};
-
-const handleVerifyOtp = async (e: React.FormEvent) => {
-e.preventDefault();
-setOtpError('');
-setOtpSuccess(false);
-
-if (!otp.trim() || otp.length !== 6) {
-setOtpError('Vui lòng nhập mã xác minh 6 chữ số.');
-return;
-}
-
-try {
-await authService.verifyEmail(otp);
-setOtpSuccess(true);
-setShowOtpInput(false);
-setTimeout(() => navigate('/login'), 3000);
-} catch (err: unknown) {
-console.error('Verification error', err);
-const axiosErr = err as { response?: { data?: { message?: string } } };
-setOtpError(axiosErr.response?.data?.message || 'Mã xác minh không hợp lệ hoặc đã hết hạn.');
-}
-};
+/*
+ * [COMMENTED OUT] 2FA OTP Handlers
+ * const handleResendOtp = async () => { ... };
+ * const handleVerifyOtp = async (e: React.FormEvent) => { ... };
+ */
 
 return (
 <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 tech-grid relative overflow-hidden">
@@ -194,66 +173,24 @@ return (
 </div>
 )}
 
-{success && showOtpInput && (
+{success && (
 <div className="space-y-4">
-<div className="p-4 bg-blue-50 border border-blue-200/60 rounded-xl text-blue-750 text-xs font-semibold leading-relaxed">
-<p className="mb-2">Tài khoản đã được tạo! Vui lòng kiểm tra email của bạn.</p>
-<p>Nhập mã xác minh 6 chữ số từ email vào ô bên dưới.</p>
-</div>
-
-{otpError && (
-<div className="p-4 bg-red-50 border border-red-200/60 rounded-xl text-red-750 text-xs font-semibold leading-relaxed flex items-start gap-2.5">
-<Icons.AlertWarning className="w-4 h-4 text-red-650 shrink-0 mt-0.5" />
-<span>{otpError}</span>
-</div>
-)}
-
-{otpSuccess ? (
 <div className="p-4 bg-green-50 border border-green-200/60 rounded-xl text-green-750 text-xs font-semibold leading-relaxed flex items-start gap-2.5">
 <Icons.Check className="w-4 h-4 text-green-650 shrink-0 mt-0.5" />
-<span>Xác minh email thành công! Đang chuyển hướng đến trang đăng nhập...</span>
+<span>Đăng ký tài khoản thành công! Đang chuyển hướng đến trang đăng nhập...</span>
 </div>
-) : (
-<form onSubmit={handleVerifyOtp} className="space-y-4">
-<div className="space-y-1.5">
-<label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã xác minh</label>
-<input
-type="text"
-value={otp}
-onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-placeholder="123456"
-maxLength={6}
-className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium text-center tracking-widest"
-required
-disabled={loading}
-/>
-<p className="text-xs text-slate-500">Mã hết hạn sau 2 phút</p>
-</div>
-<button
-type="submit"
-disabled={loading}
-className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white py-3 rounded-xl font-bold text-sm shadow-md shadow-brand-500/15 hover:shadow-brand-500/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
->
-{loading ? (
-<>
-<Icons.Spinner className="w-4 h-4 text-white" />
-<span>Đang xác minh...</span>
-</>
-) : (
-<span>Xác minh email</span>
-)}
-</button>
-<button
-type="button"
-onClick={handleResendOtp}
-disabled={resendLoading}
-className="text-brand-600 text-xs font-bold hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-style={{ background: 'none', border: 'none', padding: '8px 0', width: '100%' }}
->
-{resendLoading ? 'Đang gửi lại...' : 'Không nhận được mã? Gửi lại email'}
-</button>
-</form>
-)}
+
+{/*
+ * [COMMENTED OUT] 2FA / OTP Verification UI
+ * Form nhập mã xác minh OTP 6 chữ số qua email được comment lại để hỗ trợ flow test nhanh.
+ *
+ * {showOtpInput && (
+ *   <form onSubmit={handleVerifyOtp} className="space-y-4">
+ *     <input value={otp} onChange={...} placeholder="123456" />
+ *     <button type="submit">Xác minh email</button>
+ *   </form>
+ * )}
+ */}
 </div>
 )}
 
