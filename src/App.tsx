@@ -52,6 +52,8 @@ const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ de
 const SchedulerPage = lazy(() => import('./pages/admin/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
 const TransfersPage = lazy(() => import('./pages/admin/TransfersPage').then(m => ({ default: m.TransfersPage })));
 const RobotMonitorPage = lazy(() => import('./pages/admin/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
+const StoreEdgeSetupPage = lazy(() => import('./pages/admin/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
+
 
 
 function UnauthorizedPage() {
@@ -178,8 +180,12 @@ function App() {
 							<Route path="settlement" element={<SettlementPage />} />
 							<Route path="transfers" element={<TransfersPage />} />
 							<Route path="robot-monitor" element={<RobotMonitorPage />} />
+							<Route path="edge-setup" element={<StoreEdgeSetupPage />} />
 						</Route>
 					</Route>
+
+					{/* Direct setup route for Technicians at the store */}
+					<Route path="/edge-setup" element={<StoreEdgeSetupPage />} />
 
 					{/* Fallback */}
 					<Route path="*" element={<Navigate to="/" replace />} />

@@ -104,6 +104,7 @@ export function AdminLayout() {
     label: 'Vận hành',
     items: [
       { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/edge-setup', label: 'Cài đặt Edge Box & POS', icon: <Icons.Store className="w-5 h-5" />, visible: true },
       { path: '/admin/transfers', label: 'Chuyến vận chuyển', icon: <Icons.Truck className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/robot-monitor', label: 'AMR Monitor', icon: <Icons.Metrics className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
