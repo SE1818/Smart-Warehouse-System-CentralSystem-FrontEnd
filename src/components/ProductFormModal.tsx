@@ -130,6 +130,7 @@ export function ProductFormModal({
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tên sản phẩm</label>
               <input
                 type="text"
+                placeholder="Ví dụ: Nước uống đóng chai"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
@@ -142,6 +143,7 @@ export function ProductFormModal({
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mã SKU</label>
               <input
                 type="text"
+                placeholder="Ví dụ: SKU-WATER-01"
                 value={form.sku || ''}
                 onChange={(e) => setForm({ ...form, sku: e.target.value })}
                 required

@@ -87,11 +87,8 @@ export function ProductsPage() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchProducts();
-      fetchStores();
-    }, 0);
-    return () => clearTimeout(timer);
+    fetchProducts();
+    fetchStores();
   }, []);
 
   // ── Edit modal submit ─────────────────────────────────────────────────────
@@ -369,27 +366,16 @@ export function ProductsPage() {
                       </td>
                     )}
                     <td className="p-4 pr-6 text-right space-x-3 whitespace-nowrap">
-                      {/* Admin: only edit products with no storeId (global) */}
-                      {isAdmin && !p.storeId && (
-                        <button
-                          onClick={() => setEditingProduct(p)}
-                          className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
-                        >
-                          Sửa
-                        </button>
-                      )}
-                      {/* Store Manager: can edit all products */}
-                      {isStoreManager && (
-                        <button
-                          onClick={() => setEditingProduct(p)}
-                          className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
-                        >
-                          Sửa
-                        </button>
-                      )}
                       {/* Admin with store-assigned product → read-only note */}
-                      {isAdmin && p.storeId && (
+                      {isAdmin && p.storeId ? (
                         <span className="text-[10px] text-slate-400 italic">Đã gán cửa hàng</span>
+                      ) : (
+                        <button
+                          onClick={() => setEditingProduct(p)}
+                          className="px-3.5 py-1.5 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                        >
+                          Sửa
+                        </button>
                       )}
                       <button
                         onClick={() => {
@@ -538,8 +524,8 @@ export function ProductsPage() {
         </div>
       )}
 
-      {/* ── Store Manager Delete: simple confirm ─────────── */}
-      {deletingProductId && isStoreManager && (
+      {/* ── Store Manager / Non-admin Delete: simple confirm ─── */}
+      {deletingProductId && !isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 w-full max-w-sm shadow-2xl relative">
             <div className="flex flex-col items-center text-center space-y-4">

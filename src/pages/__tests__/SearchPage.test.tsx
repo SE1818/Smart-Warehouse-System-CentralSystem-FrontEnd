@@ -7,27 +7,27 @@ import { SearchPage } from '../search/SearchPage';
 import type { ProductIndex, AskResponse } from '@/types/search';
 
 vi.mock('@/components/Icons', () => ({
-  Icons: {
-    Search: () => <span data-testid="icon-search" />,
-    StockBox: () => <span data-testid="icon-stock-box" />,
-    Spinner: () => <span data-testid="icon-spinner" />,
-    Robot: () => <span data-testid="icon-robot" />,
-    AlertWarning: () => <span data-testid="icon-alert-warning" />,
-    LightBulb: () => <span data-testid="icon-lightbulb" />,
-    Info: () => <span data-testid="icon-info" />,
-  },
+  Icons: new Proxy({}, {
+    get: (_target, prop: string) => {
+      return (props: any) => <span data-testid={`icon-${prop.toLowerCase()}`} className={props?.className}>{prop}</span>;
+    },
+  }),
 }));
 
 // Declare mock variables BEFORE vi.mock so the factory can reference them
 const mockSuggestProducts = vi.fn();
 const mockSearchProducts = vi.fn();
 const mockAskWarehouseAssistant = vi.fn();
+const mockGetConversations = vi.fn();
+const mockSendMessage = vi.fn();
 
 vi.mock('@/services/search', () => ({
   searchService: {
     suggestProducts: (...args: unknown[]) => mockSuggestProducts(...args) as Promise<string[]>,
     searchProducts: (...args: unknown[]) => mockSearchProducts(...args) as unknown as Promise<ProductIndex[]>,
     askWarehouseAssistant: (...args: unknown[]) => mockAskWarehouseAssistant(...args) as unknown as Promise<AskResponse>,
+    getConversations: (...args: unknown[]) => mockGetConversations(...args) as Promise<any>,
+    sendMessage: (...args: unknown[]) => mockSendMessage(...args) as Promise<any>,
   },
 }));
 
@@ -49,6 +49,13 @@ describe('SearchPage', () => {
     mockSuggestProducts.mockResolvedValue([]);
     mockSearchProducts.mockResolvedValue([]);
     mockAskWarehouseAssistant.mockResolvedValue({ answer: '', contextProducts: [] });
+    mockGetConversations.mockResolvedValue([]);
+    mockSendMessage.mockResolvedValue({
+      conversationId: 'c1',
+      userMessage: { id: '1', role: 'user', content: '', createdAt: '' },
+      assistantReply: { id: '2', role: 'assistant', content: '', createdAt: '' },
+      contextProducts: [],
+    });
   });
 
   it('renders search input with placeholder text', async () => {
@@ -81,7 +88,7 @@ describe('SearchPage', () => {
     fireEvent.submit(searchInput.closest('form')!);
 
     await waitFor(() => {
-      expect(screen.getByText('Đang tìm kiếm sản phẩm...')).toBeDefined();
+      expect(screen.getByText('Đang tìm kiếm...')).toBeDefined();
     });
 
     searchResolve!([]);
@@ -136,7 +143,7 @@ describe('SearchPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Trợ lý AI kho hàng')).toBeDefined();
     });
-    expect(screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...')).toBeDefined();
+    expect(screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...')).toBeDefined();
   });
 
   it('submits search and renders result name and price', async () => {
@@ -246,54 +253,59 @@ describe('SearchPage', () => {
   });
 
   it('AI ask renders response and context products', async () => {
-    mockAskWarehouseAssistant.mockResolvedValue({
-      answer: 'Goi y: nen mua loai A',
+    mockSendMessage.mockResolvedValue({
+      conversationId: 'conv-1',
+      userMessage: { id: 'msg-u1', role: 'user', content: 'tu van', createdAt: new Date().toISOString() },
+      assistantReply: { id: 'msg-a1', role: 'assistant', content: 'Goi y: nen mua loai A', createdAt: new Date().toISOString() },
       contextProducts: [
         { id: 'ap1', name: 'AIProduct', sku: 'AP1', description: 'D', price: 30000, stockQuantity: 5 },
       ] as ProductIndex[],
     });
 
     renderSearchPage();
-    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...'));
+    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...'));
 
-    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...');
+    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...');
     fireEvent.change(ta, { target: { value: 'tu van' } });
     fireEvent.submit(ta.closest('form')!);
 
-    await waitFor(() => expect(screen.getByText('Trả lời:')).toBeDefined());
-    expect(screen.getByText('Goi y: nen mua loai A')).toBeDefined();
+    await waitFor(() => expect(screen.getByText('Goi y: nen mua loai A')).toBeDefined());
     expect(screen.getByText('Sản phẩm tham khảo')).toBeDefined();
     expect(screen.getByText('AIProduct')).toBeDefined();
     expect(screen.getByText(/30K/)).toBeDefined();
   });
 
   it('AI ask shows loading while waiting for response', async () => {
-    let askResolve: (v: { answer: string; contextProducts: unknown[] }) => void;
-    mockAskWarehouseAssistant.mockReturnValue(
-      new Promise<{ answer: string; contextProducts: unknown[] }>((r) => {
+    let askResolve: (v: any) => void;
+    mockSendMessage.mockReturnValue(
+      new Promise((r) => {
         askResolve = r;
       }),
     );
 
     renderSearchPage();
-    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...'));
+    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...'));
 
-    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...');
+    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...');
     fireEvent.change(ta, { target: { value: 'loading test?' } });
     fireEvent.submit(ta.closest('form')!);
 
     expect(screen.getByText('Trợ lý đang suy nghĩ...')).toBeDefined();
-    expect(screen.getByText(/Trợ lý đang phân tích câu hỏi/)).toBeDefined();
-    askResolve!({ answer: '', contextProducts: [] });
+    askResolve!({
+      conversationId: 'conv-1',
+      userMessage: { id: '1', role: 'user', content: '', createdAt: '' },
+      assistantReply: { id: '2', role: 'assistant', content: '', createdAt: '' },
+      contextProducts: [],
+    });
   });
 
   it('AI ask shows error on failure', async () => {
-    mockAskWarehouseAssistant.mockRejectedValue(new Error('ai fail'));
+    mockSendMessage.mockRejectedValue(new Error('ai fail'));
 
     renderSearchPage();
-    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...'));
+    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...'));
 
-    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...');
+    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...');
     fireEvent.change(ta, { target: { value: 'err' } });
     fireEvent.submit(ta.closest('form')!);
 
@@ -302,14 +314,14 @@ describe('SearchPage', () => {
 
   it('does not call ask AI when question is empty', async () => {
     renderSearchPage();
-    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...'));
+    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...'));
 
-    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...');
+    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...');
     fireEvent.change(ta, { target: { value: ' ' } });
     fireEvent.submit(ta.closest('form')!);
 
     await new Promise<void>((r) => setTimeout(r, 100));
-    expect(mockAskWarehouseAssistant).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   it('clears suggestions and hides dropdown after search submit', async () => {
@@ -366,17 +378,19 @@ describe('SearchPage', () => {
   });
 
   it('renders context products with names in AI response', async () => {
-    mockAskWarehouseAssistant.mockResolvedValue({
-      answer: 'Check these',
+    mockSendMessage.mockResolvedValue({
+      conversationId: 'c1',
+      userMessage: { id: '1', role: 'user', content: 'ctx?', createdAt: '' },
+      assistantReply: { id: '2', role: 'assistant', content: 'Check these', createdAt: '' },
       contextProducts: [
         { id: 'cp1', name: 'CtxProduct 1', sku: 'CP1', description: 'D', price: 75000, stockQuantity: 3 },
       ] as ProductIndex[],
     });
 
     renderSearchPage();
-    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...'));
+    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...'));
 
-    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...');
+    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...');
     fireEvent.change(ta, { target: { value: 'ctx?' } });
     fireEvent.submit(ta.closest('form')!);
 
@@ -385,15 +399,17 @@ describe('SearchPage', () => {
   });
 
   it('renders AI answer with multiline whitespace preserved', async () => {
-    mockAskWarehouseAssistant.mockResolvedValue({
-      answer: 'Line 1\nLine 2\nLine 3',
+    mockSendMessage.mockResolvedValue({
+      conversationId: 'c1',
+      userMessage: { id: '1', role: 'user', content: 'nl?', createdAt: '' },
+      assistantReply: { id: '2', role: 'assistant', content: 'Line 1\nLine 2\nLine 3', createdAt: '' },
       contextProducts: [],
     });
 
     renderSearchPage();
-    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...'));
+    await waitFor(() => screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...'));
 
-    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng, tìm kiếm...');
+    const ta = screen.getByPlaceholderText('Hỏi về sản phẩm, tư vấn mua hàng...');
     fireEvent.change(ta, { target: { value: 'nl?' } });
     fireEvent.submit(ta.closest('form')!);
 

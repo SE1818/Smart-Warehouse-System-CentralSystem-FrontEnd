@@ -14,7 +14,7 @@ function renderTableHtml(rows: string[]): string {
 
   const headers = parseRow(rows[0]);
   
-  let startIndex = 1;
+  let startIndex: number;
   if (rows.length > 1 && rows[1].includes('---')) {
     startIndex = 2;
     html += `<thead class="bg-slate-50/80"><tr>${headers.map(h => `<th class="px-4 py-2.5 text-left font-bold text-slate-700 border-b border-slate-200/60">${h}</th>`).join('')}</tr></thead>`;
@@ -97,7 +97,7 @@ function parseMarkdown(text: string) {
     }
 
     // 3. List parsing
-    const ulMatch = line.match(/^[\*\-]\s+(.*)/);
+    const ulMatch = line.match(/^[*-]\s+(.*)/);
     const olMatch = line.match(/^(\d+)\.\s+(.*)/);
 
     if (ulMatch) {
@@ -161,7 +161,7 @@ export function SearchPage() {
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => { loadConversations(); }, []);
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatHistory]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView?.({ behavior: 'smooth' }); }, [chatHistory]);
 
   // Web Speech API
   useEffect(() => {
@@ -181,7 +181,10 @@ export function SearchPage() {
   }, []);
 
   const loadConversations = async () => {
-    try { setConversations(await searchService.getConversations(1, 20)); } catch { /* silent */ }
+    try {
+      const res = await searchService.getConversations(1, 20);
+      setConversations(Array.isArray(res) ? res : []);
+    } catch { /* silent */ }
   };
 
   // --- Search ---

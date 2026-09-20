@@ -33,6 +33,14 @@ vi.mock('@/services/notification', () => ({
   },
 }));
 
+vi.mock('@/services/userService', () => ({
+  userService: {
+    getAllUsers: vi.fn().mockResolvedValue([
+      { id: 'some-user-uuid', username: 'testuser', email: 'test@example.com' },
+    ]),
+  },
+}));
+
 describe('NotificationsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -174,10 +182,8 @@ describe('NotificationsPage', () => {
     // Fill spaces to bypass required validation
     const titleInput = screen.getByPlaceholderText('Nhập tiêu đề...');
     const messageInput = screen.getByPlaceholderText('Nhập nội dung thông báo cụ thể...');
-    const userIdInput = screen.getByPlaceholderText('e.g. 4bad629d-c1cd-485e-b248-ee17f165c7be');
     fireEvent.change(titleInput, { target: { value: ' ' } });
     fireEvent.change(messageInput, { target: { value: ' ' } });
-    fireEvent.change(userIdInput, { target: { value: ' ' } });
 
     const submitBtn = screen.getByText('Gửi ngay');
     fireEvent.click(submitBtn);
@@ -187,13 +193,15 @@ describe('NotificationsPage', () => {
     fireEvent.change(titleInput, { target: { value: 'Specific Title' } });
     fireEvent.change(messageInput, { target: { value: 'Specific message body' } });
 
-    // Try submit again (still missing user id, type space to bypass HTML5 validation)
-    fireEvent.change(userIdInput, { target: { value: ' ' } });
+    // Try submit again (still missing user selection)
     fireEvent.click(submitBtn);
-    expect(screen.getByText('Vui lòng nhập ID người dùng nhận thông báo.')).toBeInTheDocument();
+    expect(screen.getByText('Vui lòng chọn người nhận thông báo.')).toBeInTheDocument();
 
-    // Enter user ID
-    fireEvent.change(userIdInput, { target: { value: 'some-user-uuid' } });
+    // Select user from dropdown
+    const selectTrigger = screen.getByRole('combobox');
+    fireEvent.click(selectTrigger);
+    const userOption = await screen.findByText('testuser — test@example.com');
+    fireEvent.click(userOption);
 
     // Select channel SMS
     const smsChannelBtn = screen.getByText('SMS');
