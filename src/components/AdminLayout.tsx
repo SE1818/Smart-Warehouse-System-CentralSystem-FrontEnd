@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icons } from './Icons';
+import { Building2, CreditCard, Database, Sliders } from 'lucide-react';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useRobotStore } from '../stores/robotStore';
 
@@ -27,6 +28,10 @@ const ROUTE_MODULES: Record<string, string> = {
   '/admin/files': 'src/pages/admin/FileManagementPage',
   '/admin/logs': 'src/pages/AuditLogsPage',
   '/admin/profile': 'src/pages/ProfilePage',
+  '/admin/tenants': 'src/pages/admin/TenantsPage',
+  '/admin/subscriptions': 'src/pages/admin/SubscriptionsPage',
+  '/admin/databases': 'src/pages/admin/DatabasesPage',
+  '/admin/feature-flags': 'src/pages/admin/FeatureFlagsPage',
 };
 
 export function AdminLayout() {
@@ -129,7 +134,17 @@ export function AdminLayout() {
       { path: '/admin/profile', label: 'Hồ sơ cá nhân', icon: <Icons.Profile className="w-5 h-5" />, visible: true },
     ],
   },
+  {
+    label: 'Nền tảng SaaS',
+    items: [
+      { path: '/admin/tenants', label: 'Chuỗi Quán & Tenant', icon: <Building2 className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/subscriptions', label: 'Gói Cước & Doanh Thu', icon: <CreditCard className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/databases', label: 'Cụm Database Tenant', icon: <Database className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/feature-flags', label: 'Feature Flags Động', icon: <Sliders className="w-5 h-5" />, visible: !isStoreManager },
+    ],
+  },
   ];
+
 
   const navGroups = rawNavGroups
   .map(g => ({

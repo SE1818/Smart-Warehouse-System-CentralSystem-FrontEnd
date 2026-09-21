@@ -25,6 +25,12 @@ const AdminComplaints = lazy(() => import('./pages/admin/ComplaintsPage').then(m
 const AdminReports = lazy(() => import('./pages/admin/ReportsPage').then(m => ({ default: m.ReportsPage })));
 const SettlementPage = lazy(() => import('./pages/admin/SettlementPage').then(m => ({ default: m.SettlementPage })));
 
+// SaaS Platform Admin pages
+const TenantsPage = lazy(() => import('./pages/admin/TenantsPage').then(m => ({ default: m.TenantsPage })));
+const SubscriptionsPage = lazy(() => import('./pages/admin/SubscriptionsPage').then(m => ({ default: m.SubscriptionsPage })));
+const DatabasesPage = lazy(() => import('./pages/admin/DatabasesPage').then(m => ({ default: m.DatabasesPage })));
+const FeatureFlagsPage = lazy(() => import('./pages/admin/FeatureFlagsPage').then(m => ({ default: m.FeatureFlagsPage })));
+
 // Stock pages
 const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
 const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage').then(m => ({ default: m.StockLevelsPage })));
@@ -181,6 +187,11 @@ function App() {
 							<Route path="transfers" element={<TransfersPage />} />
 							<Route path="robot-monitor" element={<RobotMonitorPage />} />
 							<Route path="edge-setup" element={<StoreEdgeSetupPage />} />
+							{/* SaaS Super Admin routes */}
+							<Route path="tenants" element={<TenantsPage />} />
+							<Route path="subscriptions" element={<SubscriptionsPage />} />
+							<Route path="databases" element={<DatabasesPage />} />
+							<Route path="feature-flags" element={<FeatureFlagsPage />} />
 						</Route>
 					</Route>
 
