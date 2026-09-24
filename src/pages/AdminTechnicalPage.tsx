@@ -22,7 +22,6 @@ import {
   Database,
   Users,
 } from 'lucide-react';
-import { RoleSwitcher } from '../components/layout/RoleSwitcher';
 import { ZaloSupportDesk } from '../components/admin/ZaloSupportDesk';
 import {
   fleetService,
@@ -347,9 +346,8 @@ export const AdminTechnicalPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Actions & Universal Role Switcher */}
+        {/* Right Actions */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-          <RoleSwitcher />
 
           {/* Simulation Toggle Button */}
           <button

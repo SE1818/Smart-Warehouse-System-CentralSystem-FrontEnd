@@ -12,7 +12,6 @@ import {
   Store,
   Send,
 } from 'lucide-react';
-import { RoleSwitcher } from '../components/layout/RoleSwitcher';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
 import { fixMojibake } from '../utils/textUtils';
 
@@ -319,8 +318,6 @@ export const StaffKdsPage: React.FC = () => {
               {tables.filter((t) => t.status === 'waiting').length} Bàn Chờ Ra Món
             </span>
           </div>
-
-          <RoleSwitcher />
         </div>
       </header>
 

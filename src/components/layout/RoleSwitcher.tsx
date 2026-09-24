@@ -53,6 +53,12 @@ const ROLES: RoleOption[] = [
 ];
 
 export const RoleSwitcher: React.FC = () => {
+  // Gỡ bỏ chức năng chuyển đổi góc nhìn vai trò nhưng giữ nguyên mã nguồn
+  const isEnabled = false;
+  if (!isEnabled) {
+    return null;
+  }
+
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
