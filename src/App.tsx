@@ -16,6 +16,10 @@ const StoreRegistrationPage = lazy(() => import('./pages/auth/StoreRegistrationP
 const StoreRegistrationsPage = lazy(() => import('./pages/admin/StoreRegistrationsPage').then(m => ({ default: m.StoreRegistrationsPage })));
 const StoresPage = lazy(() => import('./pages/admin/StoresPage').then(m => ({ default: m.StoresPage })));
 
+// Technical Engineer & Staff KDS pages
+const AdminTechnicalPage = lazy(() => import('./pages/AdminTechnicalPage').then(m => ({ default: m.AdminTechnicalPage })));
+const StaffKdsPage = lazy(() => import('./pages/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
+
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const AdminProducts = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
@@ -130,8 +134,12 @@ function App() {
 					<Route path="/track" element={<PublicTrackingPage />} />
 					<Route path="/tracking/:trackingToken" element={<PublicTrackingPage />} />
 
-					{/* Redirect Root to Admin */}
-					<Route path="/" element={<Navigate to="/admin" replace />} />
+					{/* Redirect Root to Login */}
+					<Route path="/" element={<Navigate to="/login" replace />} />
+
+					{/* Technical Engineer & Staff KDS routes */}
+					<Route path="/technical" element={<AdminTechnicalPage />} />
+					<Route path="/staff" element={<StaffKdsPage />} />
 
 					{/* Admin routes */}
 					<Route
