@@ -7,6 +7,7 @@ import {
   type CanonicalAmrTask,
   type DynamicMapperConfig,
   type PosSystemType,
+  type PosLearningResult,
 } from '@/services/posIngestionService';
 import { robotMonitorService } from '@/services/robotMonitorService';
 import { toast } from 'react-toastify';
@@ -83,6 +84,11 @@ export function StoreEdgeSetupPage() {
     }>
   >([]);
 
+  // AI Once, Run Forever States (Chỉ dùng AI để Học -> Vận hành thuần Rule Engine <1ms)
+  const [isAiLearning, setIsAiLearning] = useState(false);
+  const [aiLearningResult, setAiLearningResult] = useState<PosLearningResult | null>(null);
+  const [isRuleSaved, setIsRuleSaved] = useState(false);
+
   // Log filter
   const [severityFilter, setSeverityFilter] = useState<'ALL' | 'INFO' | 'WARNING' | 'ERROR'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,6 +106,50 @@ export function StoreEdgeSetupPage() {
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+
+  // AI Once, Run Forever - Bước 1: Gọi Backend AI phân tích cấu trúc Schema POS lạ
+  const handleAiLearnSchema = async () => {
+    setIsAiLearning(true);
+    try {
+      const result = await posIngestionService.learnSchemaWithAi(customJsonInput);
+      setAiLearningResult(result);
+      if (result.success) {
+        setDynamicConfig(result.mappings);
+        setIsRuleSaved(false);
+        addLog(
+          `[AI Once Learning] Đã nhận diện xong cấu trúc POS: ${result.posNameDetected} (Độ tin cậy: ${(result.confidence * 100).toFixed(0)}% qua ${result.aiModelUsed})`,
+          'info'
+        );
+        toast.success(`AI đã nhận diện xong: ${result.posNameDetected}! Hãy kiểm tra các trường và bấm Lưu Quy Tắc.`);
+      } else {
+        toast.error('Không thể phân tích gói tin JSON. Vui lòng kiểm tra lại định dạng JSON.');
+      }
+    } catch {
+      toast.error('Lỗi khi gọi AI phân tích.');
+    } finally {
+      setIsAiLearning(false);
+    }
+  };
+
+  // AI Once, Run Forever - Human-in-the-loop: Lưu Quy Tắc Vào Database
+  const handleSaveRuleToDb = async () => {
+    if (!aiLearningResult) return;
+    try {
+      const res = await posIngestionService.saveMappingTemplate({
+        posBrand: aiLearningResult.posNameDetected,
+        mappingRules: JSON.stringify(dynamicConfig, null, 2),
+        samplePayload: customJsonInput,
+      });
+      setIsRuleSaved(true);
+      addLog(
+        `[Rule Engine Saved] Đã lưu quy tắc cho ${aiLearningResult.posNameDetected} vào Database. Từ nay mọi gói tin sẽ chạy thuần Rule Engine (< 1ms, không tốn AI).`,
+        'success'
+      );
+      toast.success(res.message || 'Đã lưu quy tắc! Từ nay chạy thuần Rule Engine (<1ms).');
+    } catch {
+      toast.error('Lỗi khi lưu quy tắc.');
+    }
+  };
 
   // Handle POS Packet Ingestion Test
   const handleTestIngest = () => {
@@ -382,81 +432,158 @@ export function StoreEdgeSetupPage() {
                   </div>
                 )}
 
-                {/* Subview 2: Dynamic JSON Mapper */}
+                {/* Subview 2: Dynamic JSON Mapper & AI Once, Run Forever Engine */}
                 {integrationMode === 'DYNAMIC_MAPPER' && (
-                  <div className="space-y-3 text-xs">
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-[11px] leading-relaxed">
-                      💡 <strong>Dành cho POS lạ:</strong> Cấu hình đường dẫn trường (JSONPath) để hệ thống tự động bóc tách số bàn và danh sách món từ JSON tùy ý của quán.
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">Trường Số Bàn:</label>
-                        <input
-                          type="text"
-                          value={dynamicConfig.tableNumberPath}
-                          onChange={(e) => setDynamicConfig({ ...dynamicConfig, tableNumberPath: e.target.value })}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-[11px]"
-                          placeholder="order.table"
-                        />
+                  <div className="space-y-4 text-xs">
+                    {/* Architectural Concept Banner */}
+                    <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl text-blue-900 space-y-1.5">
+                      <div className="flex items-center gap-2 font-bold text-xs">
+                        <span>🤖</span>
+                        <span>Kiến Trúc Tối Ưu: "AI Once, Run Forever"</span>
                       </div>
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">Trường Mã Đơn:</label>
-                        <input
-                          type="text"
-                          value={dynamicConfig.orderIdPath}
-                          onChange={(e) => setDynamicConfig({ ...dynamicConfig, orderIdPath: e.target.value })}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-[11px]"
-                          placeholder="order.id"
-                        />
-                      </div>
+                      <p className="text-[11px] text-blue-700 leading-relaxed">
+                        <strong>Bước 1 (Lần đầu):</strong> Dán JSON lạ ➔ Bấm <strong>Phân Tích AI</strong> để sinh ra bản đồ ánh xạ ➔ Bấm <strong>Lưu Quy Tắc</strong>.<br />
+                        <strong>Bước 2 (Vận hành):</strong> Các lần sau chạy thuần <strong>Rule Engine (JSONPath)</strong> độ trễ &lt; 1ms, hoàn toàn không tốn chi phí AI!
+                      </p>
                     </div>
 
                     <div>
-                      <label className="font-bold text-slate-700 block mb-1">Mảng Món Ăn:</label>
-                      <input
-                        type="text"
-                        value={dynamicConfig.itemsArrayPath}
-                        onChange={(e) => setDynamicConfig({ ...dynamicConfig, itemsArrayPath: e.target.value })}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-[11px]"
-                        placeholder="order.items"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">Tên Món:</label>
-                        <input
-                          type="text"
-                          value={dynamicConfig.itemNameField}
-                          onChange={(e) => setDynamicConfig({ ...dynamicConfig, itemNameField: e.target.value })}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-[11px]"
-                          placeholder="name"
-                        />
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-slate-700 block">Dán Payload JSON Của POS Lạ Cần Học:</label>
+                        <span className="text-[10px] text-slate-400 font-mono">Hỗ trợ mọi loại JSON</span>
                       </div>
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">Số Lượng:</label>
-                        <input
-                          type="text"
-                          value={dynamicConfig.itemQtyField}
-                          onChange={(e) => setDynamicConfig({ ...dynamicConfig, itemQtyField: e.target.value })}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-[11px]"
-                          placeholder="quantity"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="font-bold text-slate-700 block mb-1">JSON Mẫu Máy POS Bắn Sang:</label>
                       <textarea
                         rows={4}
                         value={customJsonInput}
                         onChange={(e) => setCustomJsonInput(e.target.value)}
-                        className="w-full p-2 rounded-lg border border-slate-300 font-mono text-[10px] bg-slate-50"
+                        className="w-full p-2.5 rounded-xl border border-slate-300 font-mono text-[10px] bg-slate-50 focus:bg-white focus:outline-none focus:border-brand-500"
+                        placeholder="Dán JSON của máy POS quán vào đây..."
                       />
                     </div>
+
+                    {/* AI Learn Button */}
+                    <div className="pt-0.5">
+                      <button
+                        type="button"
+                        onClick={handleAiLearnSchema}
+                        disabled={isAiLearning}
+                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-brand-600 hover:from-indigo-500 hover:to-brand-500 text-white font-bold text-xs shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer disabled:opacity-60"
+                      >
+                        {isAiLearning ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>AI Đang Phân Tích Cấu Trúc Payload...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>✨</span>
+                            <span>BƯỚC 1: Phân Tích & Học Quy Tắc Bằng AI (AI Once)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* AI Learned Result & Human-in-the-loop Approval */}
+                    {aiLearningResult && (
+                      <div className={`p-4 rounded-2xl border transition-all space-y-3 animate-fade-up ${
+                        isRuleSaved
+                          ? 'bg-emerald-50/70 border-emerald-300'
+                          : 'bg-indigo-50/60 border-indigo-200'
+                      }`}>
+                        <div className="flex items-center justify-between pb-2 border-b border-indigo-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{isRuleSaved ? '⚡' : '🧠'}</span>
+                            <div>
+                              <strong className="text-slate-900 block text-xs">
+                                {isRuleSaved
+                                  ? `Đã Lưu Quy Tắc: ${aiLearningResult.posNameDetected}`
+                                  : `AI Nhận Diện: ${aiLearningResult.posNameDetected}`}
+                              </strong>
+                              <span className="text-[10px] text-slate-500">
+                                Model: {aiLearningResult.aiModelUsed} • Độ tin cậy: {(aiLearningResult.confidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isRuleSaved
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-indigo-600 text-white'
+                          }`}>
+                            {isRuleSaved ? 'Rule Engine Active (<1ms)' : 'Chờ Xác Nhận'}
+                          </span>
+                        </div>
+
+                        {/* Mapping Fields (Editable by Human-in-the-loop) */}
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Đường Dẫn Số Bàn:</span>
+                            <input
+                              type="text"
+                              value={dynamicConfig.tableNumberPath}
+                              onChange={(e) => setDynamicConfig({ ...dynamicConfig, tableNumberPath: e.target.value })}
+                              className="w-full px-2 py-1 rounded-lg border border-slate-300 font-mono text-[10px] bg-white font-bold text-brand-700"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Đường Dẫn Mã Đơn:</span>
+                            <input
+                              type="text"
+                              value={dynamicConfig.orderIdPath}
+                              onChange={(e) => setDynamicConfig({ ...dynamicConfig, orderIdPath: e.target.value })}
+                              className="w-full px-2 py-1 rounded-lg border border-slate-300 font-mono text-[10px] bg-white font-bold text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Mảng Danh Sách Món:</span>
+                            <input
+                              type="text"
+                              value={dynamicConfig.itemsArrayPath}
+                              onChange={(e) => setDynamicConfig({ ...dynamicConfig, itemsArrayPath: e.target.value })}
+                              className="w-full px-2 py-1 rounded-lg border border-slate-300 font-mono text-[10px] bg-white"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block text-[10px]">Tên Món / Số Lượng:</span>
+                            <div className="flex gap-1">
+                              <input
+                                type="text"
+                                value={dynamicConfig.itemNameField}
+                                onChange={(e) => setDynamicConfig({ ...dynamicConfig, itemNameField: e.target.value })}
+                                className="w-1/2 px-1.5 py-1 rounded-lg border border-slate-300 font-mono text-[10px] bg-white"
+                                placeholder="name"
+                              />
+                              <input
+                                type="text"
+                                value={dynamicConfig.itemQtyField}
+                                onChange={(e) => setDynamicConfig({ ...dynamicConfig, itemQtyField: e.target.value })}
+                                className="w-1/2 px-1.5 py-1 rounded-lg border border-slate-300 font-mono text-[10px] bg-white"
+                                placeholder="qty"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Save Action Button */}
+                        {!isRuleSaved ? (
+                          <button
+                            type="button"
+                            onClick={handleSaveRuleToDb}
+                            className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>💾</span>
+                            <span>Xác Nhận & Lưu Vào Database (Chuyển Sang Rule Engine)</span>
+                          </button>
+                        ) : (
+                          <div className="p-2.5 rounded-xl bg-emerald-100/70 border border-emerald-300 text-emerald-800 text-[10px] leading-relaxed flex items-center gap-2">
+                            <span className="text-sm">✅</span>
+                            <span><strong>Quy tắc đã lưu thành công!</strong> Từ nay khi máy POS này gửi đơn, hệ thống sẽ parse bằng code thường trong <strong>0.2ms</strong>, không tốn AI token.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
+
 
                 {/* Subview 3: Open API */}
                 {integrationMode === 'OPEN_API' && (
