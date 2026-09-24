@@ -128,6 +128,40 @@ export const useRobotStore = create<RobotState>((set, get) => {
         );
       });
 
+      connection.on('ReceiveRobotLocationReplay', (data: any) => {
+        if (data?.points && Array.isArray(data.points) && data.points.length > 0) {
+          const sorted = [...data.points].sort(
+            (a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+          const latest = sorted[sorted.length - 1];
+          if (latest) {
+            set((state) => {
+              const idx = state.robots.findIndex((r) => r.id === data.robotId);
+              if (idx > -1) {
+                const newRobots = [...state.robots];
+                newRobots[idx] = {
+                  ...newRobots[idx],
+                  x: latest.x,
+                  y: latest.y,
+                  currentX: latest.x,
+                  currentY: latest.y,
+                  battery: latest.battery ?? newRobots[idx].battery,
+                  batteryLevel: latest.battery ?? newRobots[idx].batteryLevel,
+                  status: (latest.status || newRobots[idx].status) as any,
+                };
+                return { robots: newRobots };
+              }
+              return {};
+            });
+          }
+
+          get().addLog(
+            `Robot [${data.robotName || (data.robotId ? data.robotId.substring(0, 8) : 'AMR')}] đồng bộ bù ${data.count || sorted.length} tọa độ đệm từ vùng mất sóng (BurstSync Replay)`,
+            'info'
+          );
+        }
+      });
+
       connection.on('ReceiveRobotStatusChanged', (data: { robotId: string; status: string; batteryLevel: number }) => {
         set((state) => {
           const idx = state.robots.findIndex((r) => r.id === data.robotId);

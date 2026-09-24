@@ -44,10 +44,11 @@ interface TrackingData {
 export const PublicTrackingPage: React.FC = () => {
   const { trackingToken } = useParams<{ trackingToken: string }>();
   const [searchParams] = useSearchParams();
-  const token = trackingToken || searchParams.get('token') || 'demo-token';
+  const token = trackingToken || searchParams.get('token') || '';
 
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
   const [otpCode, setOtpCode] = useState<string>('');
   const [unlockLoading, setUnlockLoading] = useState<boolean>(false);
@@ -55,10 +56,12 @@ export const PublicTrackingPage: React.FC = () => {
   const [remainingAttempts, setRemainingAttempts] = useState<number>(5);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [tableNotice, setTableNotice] = useState<string | null>(null);
+  const [replayNotice, setReplayNotice] = useState<string | null>(null);
+  const [trajectoryTrail, setTrajectoryTrail] = useState<Array<{ x: number; y: number; isReplay?: boolean }>>([]);
 
   const hubConnectionRef = useRef<signalR.HubConnection | null>(null);
 
-  // Default WhiteLabel Fallback
+  // Default WhiteLabel Brand Structure
   const defaultBrand: WhiteLabelBrand = {
     displayName: 'VORA Robotics Delivery',
     logoUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=128&auto=format&fit=crop&q=60',
@@ -75,8 +78,13 @@ export const PublicTrackingPage: React.FC = () => {
     : '#FF6B00';
 
   useEffect(() => {
-    fetchTrackingInfo();
-    setupSignalR();
+    if (token) {
+      fetchTrackingInfo();
+      setupSignalR();
+    } else {
+      setErrorMessage('Không tìm thấy mã phiên theo dõi (Tracking Token).');
+      setLoading(false);
+    }
 
     return () => {
       if (hubConnectionRef.current) {
@@ -87,36 +95,22 @@ export const PublicTrackingPage: React.FC = () => {
 
   const fetchTrackingInfo = async () => {
     try {
+      setErrorMessage(null);
       const res = await fetch(`/api/v1/tracking/public/${token}`);
       if (res.ok) {
         const data = await res.json();
         setTracking(data);
+        if (data.robotX !== undefined && data.robotY !== undefined) {
+          setTrajectoryTrail([{ x: data.robotX, y: data.robotY, isReplay: false }]);
+        }
       } else {
-        // Fallback demo data for preview
-        setTracking({
-          orderId: '00000000-0000-0000-0000-000000000001',
-          orderCode: 'ORD-2026-VORA',
-          status: 'InTransit',
-          customerName: 'Nguyễn Văn A',
-          customerPhoneMasked: '090****123',
-          pickupLocation: 'Trạm Pha Chế ST05 (Tầng 1)',
-          dropoffLocation: 'Landmark 81 - Tầng 12 - P. 1204',
-          totalAmount: 85000,
-          paymentStatus: 'Paid',
-          createdAt: new Date().toISOString(),
-          robotName: 'AMR-01 (Mantis)',
-          robotX: 4.2,
-          robotY: 3.8,
-          robotBattery: 86,
-          robotStatus: 'in_transit',
-          estimatedArrivalMinutes: 3,
-          isLockerUnlocked: false,
-          isOtpRequired: true,
-          brand: defaultBrand
-        });
+        setErrorMessage('Không tìm thấy thông tin đơn hàng hoặc mã theo dõi không hợp lệ.');
+        setTracking(null);
       }
     } catch (err) {
-      console.warn('Could not fetch tracking info from API, using demo data', err);
+      console.error('Không thể kết nối máy chủ theo dõi', err);
+      setErrorMessage('Không thể kết nối đến máy chủ. Vui lòng kiểm tra đường truyền mạng.');
+      setTracking(null);
     } finally {
       setLoading(false);
     }
@@ -135,7 +129,7 @@ export const PublicTrackingPage: React.FC = () => {
       connection.onreconnected(() => setIsReconnecting(false));
       connection.onclose(() => setIsReconnecting(true));
 
-      // Telemetry updates
+      // Realtime Telemetry updates
       connection.on('ReceiveRobotLocation', (packet: any) => {
         setTracking(prev => {
           if (!prev) return prev;
@@ -147,6 +141,40 @@ export const PublicTrackingPage: React.FC = () => {
             robotStatus: packet.status ?? prev.robotStatus
           };
         });
+
+        if (packet.x !== undefined && packet.y !== undefined) {
+          setTrajectoryTrail(prev => [...prev.slice(-99), { x: packet.x, y: packet.y, isReplay: false }]);
+        }
+      });
+
+      // Telemetry Replay from Circular Buffer (ETM-07 BurstSync)
+      connection.on('ReceiveRobotLocationReplay', (data: any) => {
+        if (data?.points && Array.isArray(data.points) && data.points.length > 0) {
+          // ETM-07: Process buffered points in chronological sequence
+          const sorted = [...data.points].sort(
+            (a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+
+          const replayedPoints = sorted.map((p: any) => ({ x: p.x, y: p.y, isReplay: true }));
+          setTrajectoryTrail(prev => [...prev, ...replayedPoints].slice(-100));
+
+          const latest = sorted[sorted.length - 1];
+          if (latest) {
+            setTracking(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                robotX: latest.x ?? prev.robotX,
+                robotY: latest.y ?? prev.robotY,
+                robotBattery: latest.battery ?? prev.robotBattery,
+                robotStatus: latest.status ?? prev.robotStatus
+              };
+            });
+          }
+
+          setReplayNotice(`⚡ Đã đồng bộ bù ${sorted.length} tọa độ telemetry từ vùng khuất sóng Wi-Fi (BurstSync Replay)`);
+          setTimeout(() => setReplayNotice(null), 6000);
+        }
       });
 
       // Status changes
@@ -238,6 +266,31 @@ export const PublicTrackingPage: React.FC = () => {
     );
   }
 
+  if (!loading && (!tracking || errorMessage)) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white p-4">
+        <div className="max-w-sm w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+          <div className="w-14 h-14 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
+            📦
+          </div>
+          <h2 className="text-base font-bold text-white mb-2">Không tìm thấy thông tin đơn hàng</h2>
+          <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+            {errorMessage || 'Mã theo dõi không hợp lệ hoặc phiên giao hàng đã hoàn tất.'}
+          </p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchTrackingInfo();
+            }}
+            className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-orange-600/20"
+          >
+            Thử tải lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Steps indicator logic
   const steps = [
     { key: 'Created', label: 'Đã tạo' },
@@ -257,6 +310,13 @@ export const PublicTrackingPage: React.FC = () => {
       {isReconnecting && (
         <div className="w-full bg-amber-500 text-slate-950 font-bold text-xs py-1.5 px-4 text-center sticky top-0 z-50 animate-pulse">
           ⚠️ Đang kết nối lại tín hiệu thời gian thực với Robot...
+        </div>
+      )}
+
+      {/* Telemetry Replay Notice (BurstSync ETM-07) */}
+      {replayNotice && (
+        <div className="w-full bg-emerald-600 text-white font-semibold text-xs py-1.5 px-4 text-center sticky top-0 z-50 animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
+          <span>{replayNotice}</span>
         </div>
       )}
 
@@ -335,15 +395,28 @@ export const PublicTrackingPage: React.FC = () => {
             <span className="text-[10px] text-slate-400 mt-1 font-medium">Điểm nhận</span>
           </div>
 
-          {/* Path Line */}
+          {/* Path Line & Historical Reconstructed Trajectory Trail (ETM-07) */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
             <path
               d="M 60 170 Q 180 120 330 50"
               fill="none"
-              stroke="#475569"
+              stroke="#334155"
               strokeWidth="2"
               strokeDasharray="4 4"
             />
+            {trajectoryTrail.length > 1 && (
+              <polyline
+                points={trajectoryTrail
+                  .map(p => `${Math.min(350, Math.max(30, (p.x ?? 0) * 34 + 30))},${Math.min(190, Math.max(30, (p.y ?? 0) * 18 + 30))}`)
+                  .join(' ')}
+                fill="none"
+                stroke="#06b6d4"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="opacity-90"
+              />
+            )}
           </svg>
 
           {/* Animated Robot AMR Marker */}
