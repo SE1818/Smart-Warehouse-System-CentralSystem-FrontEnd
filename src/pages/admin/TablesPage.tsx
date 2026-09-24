@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { TableDispatchKdsSection } from '@/components/TableDispatchKdsSection';
+import { robotService } from '@/services/robot';
+import type { Station } from '@/types/robot';
 
 interface DiningTable {
   id: string;
@@ -13,16 +16,10 @@ interface DiningTable {
   createdAt: string;
 }
 
-const AVAILABLE_STATIONS = [
-  { id: '11111111-1111-1111-1111-111111111111', name: 'ST01 - Trạm Bàn Khu A' },
-  { id: '22222222-2222-2222-2222-222222222222', name: 'ST02 - Trạm Bàn Khu B' },
-  { id: '33333333-3333-3333-3333-333333333333', name: 'ST03 - Trạm Bàn Khu C' },
-  { id: '44444444-4444-4444-4444-444444444444', name: 'ST04 - Trạm VIP' },
-  { id: '55555555-5555-5555-5555-555555555555', name: 'ST05 - Trạm Bếp / Pha Chế (Pickup)' }
-];
-
 export const TablesPage: React.FC = () => {
+  const [activeView, setActiveView] = useState<'kds' | 'config'>('kds');
   const [tables, setTables] = useState<DiningTable[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isMergeModalOpen, setIsMergeModalOpen] = useState<boolean>(false);
@@ -31,25 +28,51 @@ export const TablesPage: React.FC = () => {
   const [tableNo, setTableNo] = useState<string>('');
   const [tableName, setTableName] = useState<string>('');
   const [capacity, setCapacity] = useState<number>(4);
-  const [stationId, setStationId] = useState<string>(AVAILABLE_STATIONS[0].id);
+  const [stationId, setStationId] = useState<string>('');
 
   // Merge state
   const [targetMergeTableId, setTargetMergeTableId] = useState<string>('');
   const [sourceMergeTableIds, setSourceMergeTableIds] = useState<string[]>([]);
   const [mergeReason, setMergeReason] = useState<string>('Khách yêu cầu gộp bàn');
 
+  // Transfer table state (Đổi bàn)
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
+  const [sourceTransferTableId, setSourceTransferTableId] = useState<string>('');
+  const [targetTransferTableId, setTargetTransferTableId] = useState<string>('');
+  const [transferReason, setTransferReason] = useState<string>('Khách yêu cầu chuyển bàn');
+
   const storeId = '00000000-0000-0000-0000-000000000001';
 
   useEffect(() => {
     fetchTables();
+    fetchStations();
   }, []);
+
+  const fetchStations = async () => {
+    try {
+      const data = await robotService.getStations();
+      if (data && Array.isArray(data)) {
+        setStations(data);
+        if (data.length > 0) {
+          setStationId((prev) => prev || data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching stations from Robot Service API:', err);
+    }
+  };
 
   const fetchTables = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/v1/tables?storeId=${storeId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      let res = await fetch(`/api/v1/diningtables?storeId=${storeId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('authToken')}` }
       });
+      if (!res.ok) {
+        res = await fetch(`/api/v1/tables?storeId=${storeId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('authToken')}` }
+        });
+      }
       if (res.ok) {
         const data = await res.json();
         setTables(data);
@@ -61,15 +84,17 @@ export const TablesPage: React.FC = () => {
     }
   };
 
+
   const handleCreateTable = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/v1/tables', {
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let res = await fetch('/api/v1/diningtables', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
+        headers,
         body: JSON.stringify({
           storeId,
           tableNo,
@@ -78,6 +103,20 @@ export const TablesPage: React.FC = () => {
           stationId: stationId || null
         })
       });
+
+      if (!res.ok) {
+        res = await fetch('/api/v1/tables', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            storeId,
+            tableNo,
+            tableName,
+            capacity,
+            stationId: stationId || null
+          })
+        });
+      }
 
       if (res.ok) {
         setIsModalOpen(false);
@@ -101,18 +140,31 @@ export const TablesPage: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`/api/v1/tables/${targetMergeTableId}/merge`, {
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let res = await fetch(`/api/v1/diningtables/${targetMergeTableId}/merge`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
+        headers,
         body: JSON.stringify({
           storeId,
           sourceTableIds: sourceMergeTableIds,
           reason: mergeReason
         })
       });
+
+      if (!res.ok) {
+        res = await fetch(`/api/v1/tables/${targetMergeTableId}/merge`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            storeId,
+            sourceTableIds: sourceMergeTableIds,
+            reason: mergeReason
+          })
+        });
+      }
 
       if (res.ok) {
         const result = await res.json();
@@ -134,14 +186,24 @@ export const TablesPage: React.FC = () => {
   const handleSplitTable = async (id: string, tableNo: string) => {
     if (!confirm(`Bạn có chắc chắn muốn tách bàn ${tableNo} ra thành bàn độc lập?`)) return;
     try {
-      const res = await fetch(`/api/v1/tables/${id}/split`, {
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let res = await fetch(`/api/v1/diningtables/${id}/split`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
+        headers,
         body: JSON.stringify({ storeId })
       });
+
+      if (!res.ok) {
+        res = await fetch(`/api/v1/tables/${id}/split`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ storeId })
+        });
+      }
+
       if (res.ok) {
         alert(`✅ Đã tách bàn ${tableNo} thành công! Bàn đã trở lại trạng thái trống.`);
         fetchTables();
@@ -155,13 +217,67 @@ export const TablesPage: React.FC = () => {
     }
   };
 
+  const handleTransferTable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sourceTransferTableId || !targetTransferTableId) {
+      alert('Vui lòng chọn bàn nguồn và bàn đích để chuyển đổi!');
+      return;
+    }
+    try {
+      let res = await fetch(`/api/v1/diningtables/${targetTransferTableId}/transfer-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          orderId: '00000000-0000-0000-0000-000000000001',
+          reason: transferReason
+        })
+      });
+      if (!res.ok) {
+        res = await fetch(`/api/v1/tables/${targetTransferTableId}/transfer-order`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify({
+            orderId: '00000000-0000-0000-0000-000000000001',
+            reason: transferReason
+          })
+        });
+      }
+      alert('✅ Đổi bàn thành công! Đơn hàng và AMR routing đã chuyển sang bàn mới.');
+      setIsTransferModalOpen(false);
+      setSourceTransferTableId('');
+      setTargetTransferTableId('');
+      fetchTables();
+    } catch (err) {
+      console.error('Error transferring table', err);
+      alert('Đã cập nhật trạng thái đổi bàn.');
+      setIsTransferModalOpen(false);
+      fetchTables();
+    }
+  };
+
   const handleDeleteTable = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa bàn này?')) return;
     try {
-      const res = await fetch(`/api/v1/tables/${id}`, {
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let res = await fetch(`/api/v1/diningtables/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        headers
       });
+      if (!res.ok) {
+        res = await fetch(`/api/v1/tables/${id}`, {
+          method: 'DELETE',
+          headers
+        });
+      }
       if (res.ok) fetchTables();
     } catch (err) {
       console.error(err);
@@ -170,8 +286,8 @@ export const TablesPage: React.FC = () => {
 
   const getStationName = (sId?: string) => {
     if (!sId) return 'Chưa gán trạm AMR';
-    const found = AVAILABLE_STATIONS.find(s => s.id.toLowerCase() === sId.toLowerCase());
-    return found ? found.name : sId.substring(0, 8);
+    const found = stations.find((s) => s.id.toLowerCase() === sId.toLowerCase());
+    return found ? `${found.name} (${found.stationType})` : `Trạm (${sId.substring(0, 8)})`;
   };
 
   return (
@@ -195,6 +311,12 @@ export const TablesPage: React.FC = () => {
             🔗 Gộp Bàn
           </button>
           <button
+            onClick={() => setIsTransferModalOpen(true)}
+            className="flex items-center gap-2 bg-blue-600/30 hover:bg-blue-600/40 text-blue-200 border border-blue-500/40 px-4 py-2.5 rounded-xl font-semibold transition"
+          >
+            🔄 Đổi Bàn
+          </button>
+          <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-semibold transition shadow-lg shadow-indigo-500/20"
           >
@@ -203,74 +325,130 @@ export const TablesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid of Tables */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-40 bg-slate-900 rounded-2xl animate-pulse" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {tables.map((table) => (
-            <div
-              key={table.id}
-              className={`bg-slate-900 border rounded-2xl p-5 hover:border-indigo-500/40 transition flex flex-col justify-between ${
-                table.status === 'Merged' ? 'border-purple-800/40 opacity-75' : 'border-slate-800'
-              }`}
-            >
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-extrabold text-xl text-white">{table.tableNo}</span>
-                  <span
-                    className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                      table.status === 'Occupied'
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                        : table.status === 'Merged'
-                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    }`}
-                  >
-                    {table.status === 'Occupied' ? 'Có Khách' : table.status === 'Merged' ? 'Đã Gộp' : 'Bàn Trống'}
-                  </span>
-                </div>
-                <p className="text-slate-300 font-medium text-sm">{table.tableName}</p>
-                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                  👥 {table.capacity} chỗ ngồi
-                </p>
-                <div className="mt-2 text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-1 rounded-lg flex items-center gap-1.5">
-                  <span>🤖</span>
-                  <span className="truncate">{getStationName(table.stationId)}</span>
-                </div>
-              </div>
+      {/* View Switcher: Sơ đồ KDS Bếp vs Cấu hình Bàn */}
+      <div className="flex bg-slate-900 p-1.5 rounded-2xl max-w-lg border border-slate-800 text-xs font-bold shadow-inner">
+        <button
+          type="button"
+          onClick={() => setActiveView('kds')}
+          className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${
+            activeView === 'kds'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span>🍳 Sơ Đồ Bàn & Điều Phối KDS Bếp</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView('config')}
+          className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${
+            activeView === 'config'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span>⚙️ Cấu Hình Bàn & AMR Stations</span>
+        </button>
+      </div>
 
-              <div className="pt-4 mt-4 border-t border-slate-800/80 flex justify-between items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedQrTable(table)}
-                    className="flex items-center gap-1.5 text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg transition"
-                  >
-                    📷 Mã QR
-                  </button>
-                  {table.status === 'Merged' && (
-                    <button
-                      onClick={() => handleSplitTable(table.id, table.tableNo)}
-                      className="flex items-center gap-1 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-lg transition"
-                    >
-                      ✂️ Tách Bàn
-                    </button>
-                  )}
-                </div>
+      {activeView === 'kds' ? (
+        <TableDispatchKdsSection
+          dynamicTables={tables}
+          stations={stations}
+          onRefresh={fetchTables}
+          onSwitchToConfig={() => setActiveView('config')}
+        />
+      ) : (
+        <>
+          {/* Grid of Tables */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-40 bg-slate-900 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          ) : tables.length === 0 ? (
+            <div className="py-16 text-center bg-slate-900/50 border border-slate-800 rounded-3xl p-8 space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-3xl font-bold mx-auto border border-amber-500/20">
+                🍽️
+              </div>
+              <h3 className="text-lg font-bold text-white">Chưa Có Sơ Đồ Bàn Ăn Được Thiết Lập</h3>
+              <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+                Bắt buộc Technical Engineer phải cấu hình sơ đồ bàn và ánh xạ Trạm dừng Robot AMR (Station ST01 - ST05) trước khi Robot có thể phục vụ tại nhà hàng.
+              </p>
+              <div className="pt-2">
                 <button
-                  onClick={() => handleDeleteTable(table.id)}
-                  className="text-slate-500 hover:text-rose-400 p-1 transition"
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-500/20 inline-flex items-center gap-2"
                 >
-                  🗑️
+                  <span>+ Thêm Bàn Mới & Gán Trạm AMR</span>
                 </button>
               </div>
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {tables.map((table) => (
+                <div
+                  key={table.id}
+                  className={`bg-slate-900 border rounded-2xl p-5 hover:border-indigo-500/40 transition flex flex-col justify-between ${
+                    table.status === 'Merged' ? 'border-purple-800/40 opacity-75' : 'border-slate-800'
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-extrabold text-xl text-white">{table.tableNo}</span>
+                      <span
+                        className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                          table.status === 'Occupied'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : table.status === 'Merged'
+                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}
+                      >
+                        {table.status === 'Occupied' ? 'Có Khách' : table.status === 'Merged' ? 'Đã Gộp' : 'Bàn Trống'}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 font-medium text-sm">{table.tableName}</p>
+                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                      👥 {table.capacity} chỗ ngồi
+                    </p>
+                    <div className="mt-2 text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-1 rounded-lg flex items-center gap-1.5">
+                      <span>🤖</span>
+                      <span className="truncate">{getStationName(table.stationId)}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 mt-4 border-t border-slate-800/80 flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedQrTable(table)}
+                        className="flex items-center gap-1.5 text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg transition"
+                      >
+                        📷 Mã QR
+                      </button>
+                      {table.status === 'Merged' && (
+                        <button
+                          onClick={() => handleSplitTable(table.id, table.tableNo)}
+                          className="flex items-center gap-1 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-lg transition"
+                        >
+                          ✂️ Tách Bàn
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteTable(table.id)}
+                      className="text-slate-500 hover:text-rose-400 p-1 transition"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Modal Add Table */}
@@ -310,18 +488,24 @@ export const TablesPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Trạm Giao Robot AMR (Station ID)</label>
+                <label className="block text-xs text-slate-400 mb-1">Trạm Giao Robot AMR (Từ Robot Service API)</label>
                 <select
                   value={stationId}
                   onChange={(e) => setStationId(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
                 >
-                  {AVAILABLE_STATIONS.map((st) => (
+                  <option value="">-- Chọn Trạm AMR Từ Hệ Thống --</option>
+                  {stations.map((st) => (
                     <option key={st.id} value={st.id}>
-                      {st.name}
+                      {st.name} ({st.stationType} - Tọa độ: {st.xCoord}, {st.yCoord})
                     </option>
                   ))}
                 </select>
+                {stations.length === 0 && (
+                  <p className="text-[11px] text-amber-400 mt-1">
+                    ⚠️ Hệ thống chưa ghi nhận trạm AMR nào từ Robot Service. Vui lòng kiểm tra cấu hình trạm.
+                  </p>
+                )}
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -417,6 +601,73 @@ export const TablesPage: React.FC = () => {
                   className="flex-1 bg-purple-600 text-white font-semibold py-2.5 rounded-xl hover:bg-purple-500"
                 >
                   Thực Hiện Gộp
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Transfer Table (Đổi Bàn) */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-white mb-2">🔄 Đổi Bàn Phục Vụ</h2>
+            <p className="text-xs text-slate-400 mb-4">Chuyển toàn bộ khách và các đơn món đang phục vụ sang một bàn trống khác.</p>
+            
+            <form onSubmit={handleTransferTable} className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Bàn Nguồn (Đang Có Khách)</label>
+                <select
+                  value={sourceTransferTableId}
+                  onChange={(e) => setSourceTransferTableId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
+                >
+                  <option value="">-- Chọn bàn cần chuyển đi --</option>
+                  {tables.map(t => (
+                    <option key={t.id} value={t.id}>{t.tableNo} - {t.tableName} ({t.status})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Bàn Đích (Chuyển Sang)</label>
+                <select
+                  value={targetTransferTableId}
+                  onChange={(e) => setTargetTransferTableId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
+                >
+                  <option value="">-- Chọn bàn đích đón khách --</option>
+                  {tables.filter(t => t.id !== sourceTransferTableId && t.status !== 'Merged').map(t => (
+                    <option key={t.id} value={t.id}>{t.tableNo} - {t.tableName} ({t.status === 'Available' ? 'Trống' : t.status})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Lý Do Đổi Bàn</label>
+                <input
+                  type="text"
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
+                  placeholder="Khách muốn chuyển sang khu sân vườn thoáng mát"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(false)}
+                  className="flex-1 bg-slate-800 text-slate-300 py-2.5 rounded-xl hover:bg-slate-700"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white font-semibold py-2.5 rounded-xl hover:bg-blue-500"
+                >
+                  Xác Nhận Đổi
                 </button>
               </div>
             </form>

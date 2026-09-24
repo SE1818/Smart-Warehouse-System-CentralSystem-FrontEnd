@@ -156,11 +156,10 @@ export function StoreEdgeSetupPage() {
         <div className="flex bg-slate-200/70 p-1.5 rounded-2xl max-w-md text-xs font-bold">
           <button
             onClick={() => setActiveTab('pos')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'pos'
+            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'pos'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Icons.Store className="w-4 h-4" />
             <span>Bắt Gói Tin POS Quán</span>
@@ -168,11 +167,10 @@ export function StoreEdgeSetupPage() {
 
           <button
             onClick={() => setActiveTab('robots')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'robots'
+            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'robots'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Icons.Robot className="w-4 h-4" />
             <span>Log Robot (RobotService)</span>
@@ -180,11 +178,10 @@ export function StoreEdgeSetupPage() {
 
           <button
             onClick={() => setActiveTab('db')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${
-              activeTab === 'db'
+            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'db'
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
-            }`}
+              }`}
           >
             <Icons.Warehouse className="w-4 h-4" />
             <span>Local DB & Sync</span>
@@ -222,21 +219,20 @@ export function StoreEdgeSetupPage() {
                         key={type}
                         type="button"
                         onClick={() => setSelectedPosType(type)}
-                        className={`p-3 rounded-2xl border text-left transition-all ${
-                          selectedPosType === type
+                        className={`p-3 rounded-2xl border text-left transition-all ${selectedPosType === type
                             ? 'bg-brand-50 border-brand-500 text-brand-700 shadow-sm'
                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                        }`}
+                          }`}
                       >
                         <div className="font-mono text-sm">{type}</div>
                         <span className="text-[10px] text-slate-400 block font-normal mt-0.5">
                           {type === 'IPOS'
                             ? 'Chuẩn iPOS F&B'
                             : type === 'CUKCUK'
-                            ? 'MISA CukCuk POS'
-                            : type === 'KIOTVIET'
-                            ? 'KiotViet Bar/Cafe'
-                            : 'Raw TCP / Webhook'}
+                              ? 'MISA CukCuk POS'
+                              : type === 'KIOTVIET'
+                                ? 'KiotViet Bar/Cafe'
+                                : 'Raw TCP / Webhook'}
                         </span>
                       </button>
                     ))}
@@ -271,13 +267,12 @@ export function StoreEdgeSetupPage() {
                     >
                       <div className="flex items-center space-x-2.5">
                         <div
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            r.status.toLowerCase() === 'idle'
+                          className={`w-2.5 h-2.5 rounded-full ${r.status.toLowerCase() === 'idle'
                               ? 'bg-emerald-500'
                               : r.status.toLowerCase() === 'moving'
-                              ? 'bg-blue-500 animate-ping'
-                              : 'bg-amber-500'
-                          }`}
+                                ? 'bg-blue-500 animate-ping'
+                                : 'bg-amber-500'
+                            }`}
                         />
                         <span className="font-bold text-slate-900">{r.name}</span>
                       </div>
@@ -467,9 +462,8 @@ export function StoreEdgeSetupPage() {
                       key={sev}
                       type="button"
                       onClick={() => setSeverityFilter(sev)}
-                      className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                        severityFilter === sev ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
-                      }`}
+                      className={`px-3 py-1 rounded-lg font-bold transition-all ${severityFilter === sev ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
                     >
                       {sev === 'ALL' ? 'Tất Cả' : sev}
                     </button>
@@ -495,15 +489,14 @@ export function StoreEdgeSetupPage() {
                   filteredLogs.map((log, i) => (
                     <div
                       key={i}
-                      className={`p-2 rounded-xl border flex items-start gap-2.5 ${
-                        log.type === 'error'
+                      className={`p-2 rounded-xl border flex items-start gap-2.5 ${log.type === 'error'
                           ? 'bg-rose-950/30 border-rose-500/40 text-rose-300'
                           : log.type === 'warning'
-                          ? 'bg-amber-950/30 border-amber-500/40 text-amber-300'
-                          : log.type === 'success'
-                          ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
-                          : 'bg-slate-900/60 border-slate-800 text-slate-300'
-                      }`}
+                            ? 'bg-amber-950/30 border-amber-500/40 text-amber-300'
+                            : log.type === 'success'
+                              ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                        }`}
                     >
                       <span className="text-slate-500 text-[10px] shrink-0 font-mono">{log.timestamp}</span>
                       <span className="px-1 py-0.5 rounded text-[9px] font-black uppercase shrink-0 bg-slate-800">
