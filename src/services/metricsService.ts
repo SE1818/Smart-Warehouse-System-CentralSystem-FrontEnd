@@ -56,4 +56,19 @@ export const metricsService = {
     );
     return response.data;
   },
-};
+
+  async getWarehousePerformance(warehouseId: string, date?: string) {
+    const params = new URLSearchParams();
+    if (date) params.append('date', date);
+    const queryString = params.toString();
+    const response = await apiClient.get(
+      `/admin/metrics/performance/${warehouseId}${queryString ? `?${queryString}` : ''}`
+    );
+    return response.data;
+  },
+
+  async upsertWarehousePerformance(data: any) {
+    const response = await apiClient.post('/admin/metrics/performance', data);
+    return response.data;
+  },
+};
