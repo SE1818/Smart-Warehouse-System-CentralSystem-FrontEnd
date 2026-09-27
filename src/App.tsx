@@ -1,11 +1,22 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminLayout } from './components/AdminLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ToastContainer } from 'react-toastify';
 import { Icons } from './components/Icons';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
+
+const queryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			staleTime: 30 * 1000,
+			refetchOnWindowFocus: false,
+			retry: 1,
+		},
+	},
+});
 
 // Auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -84,7 +95,8 @@ function UnauthorizedPage() {
 
 function App() {
 	return (
-		<BrowserRouter>
+		<QueryClientProvider client={queryClient}>
+			<BrowserRouter>
 			<ToastContainer
 				position="top-right"
 				autoClose={3000}
@@ -211,6 +223,7 @@ function App() {
 				</Routes>
 			</Suspense>
 		</BrowserRouter>
+		</QueryClientProvider>
 	);
 }
 

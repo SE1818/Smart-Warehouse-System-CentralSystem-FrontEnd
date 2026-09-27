@@ -63,16 +63,15 @@ export function MetricsPage() {
 
     const fetchInitialMetrics = async () => {
       const initial: Record<string, number> = {};
+      const entries = Object.entries(metricConfig);
 
-      for (const [key, config] of Object.entries(metricConfig)) {
-        try {
-          const data = await metricsService.getLatestMetric(selectedWarehouse, config.type);
-          if (active) {
-            initial[key] = data.metricValue;
-          }
-        } catch (err) {
-          console.error(`Error fetching initial ${key}:`, err);
-          if (active) {
+      const results = await Promise.allSettled(
+        entries.map(async ([key, config]) => {
+          try {
+            const data = await metricsService.getLatestMetric(selectedWarehouse, config.type);
+            return { key, value: data.metricValue };
+          } catch (err) {
+            console.error(`Error fetching initial ${key}:`, err);
             const fallbacks: Record<string, number> = {
               temperature: 24.5,
               humidity: 58.2,
@@ -81,12 +80,17 @@ export function MetricsPage() {
               powerConsumption: 142.6,
               inventoryCount: 489
             };
-            initial[key] = fallbacks[key] || 0;
+            return { key, value: fallbacks[key] || 0 };
           }
-        }
-      }
+        })
+      );
 
       if (active) {
+        results.forEach((res) => {
+          if (res.status === 'fulfilled') {
+            initial[res.value.key] = res.value.value;
+          }
+        });
         setInitialMetrics(initial);
         setLoading(false);
       }
