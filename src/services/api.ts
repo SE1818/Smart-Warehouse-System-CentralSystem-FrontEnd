@@ -1,10 +1,40 @@
 import axios from 'axios';
 import type { AxiosAdapter, AxiosResponse } from 'axios';
 
-// When running `npm run dev` (localhost:5173), .env.local sets VITE_API_BASE_URL=http://localhost:8000/api
-// When running in Docker (nginx), VITE_API_BASE_URL is baked in at build time as http://api-gateway:8000/api
-// Fallback: if nothing is set, use Vite proxy path /api (works only in dev with proxy enabled in vite.config.ts)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+export const resolveBaseUrl = (): string => {
+  // 1. Runtime override via localStorage for quick testing without redeploying
+  if (typeof window !== 'undefined') {
+    const override = localStorage.getItem('API_BASE_URL')?.trim();
+    if (override) {
+      return override.replace(/\/+$/, '');
+    }
+  }
+
+  // 2. Read environment variable
+  let envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+
+  // 3. Automatically replace expired ngrok URL with active tunnel
+  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
+    envUrl = 'https://briar-snoring-submerge.ngrok-free.dev/api';
+  }
+
+  const cleanUrl = envUrl.replace(/\/+$/, '');
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    try {
+      const parsed = new URL(cleanUrl);
+      if (parsed.pathname === '' || parsed.pathname === '/') {
+        return `${cleanUrl}/api`;
+      }
+    } catch {
+      if (!cleanUrl.endsWith('/api')) {
+        return `${cleanUrl}/api`;
+      }
+    }
+  }
+  return cleanUrl;
+};
+
+export const API_BASE_URL = resolveBaseUrl();
 
 const pendingRequests = new Map<string, Promise<any>>();
 const getAdapter = (config: any): AxiosAdapter => {

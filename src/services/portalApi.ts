@@ -1,9 +1,46 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL || import.meta.env.VITE_API_BASE_URL || '/api/v1';
+export const resolvePortalBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const override = localStorage.getItem('API_GATEWAY_URL')?.trim() || localStorage.getItem('API_BASE_URL')?.trim();
+    if (override) {
+      const clean = override.replace(/\/+$/, '');
+      return clean.endsWith('/api') ? `${clean}/v1` : clean.endsWith('/api/v1') ? clean : `${clean}/v1`;
+    }
+  }
+
+  let envUrl = (import.meta.env.VITE_API_GATEWAY_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
+    envUrl = 'https://briar-snoring-submerge.ngrok-free.dev/api/v1';
+  }
+
+  const cleanUrl = envUrl.replace(/\/+$/, '');
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    try {
+      const parsed = new URL(cleanUrl);
+      if (parsed.pathname === '' || parsed.pathname === '/') {
+        return `${cleanUrl}/api/v1`;
+      }
+      if (cleanUrl.endsWith('/api')) {
+        return `${cleanUrl}/v1`;
+      }
+    } catch {
+      if (!cleanUrl.endsWith('/api/v1')) {
+        return cleanUrl.endsWith('/api') ? `${cleanUrl}/v1` : `${cleanUrl}/api/v1`;
+      }
+    }
+  } else {
+    if (cleanUrl === '/api') {
+      return '/api/v1';
+    }
+  }
+  return cleanUrl.endsWith('/api') ? `${cleanUrl}/v1` : cleanUrl;
+};
+
+export const API_BASE_URL = resolvePortalBaseUrl();
 
 export const portalClient = axios.create({
-  baseURL: API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}/v1` : API_BASE_URL,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
