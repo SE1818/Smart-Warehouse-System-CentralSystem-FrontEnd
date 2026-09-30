@@ -121,14 +121,20 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 → redirect to login
+// Handle 401 → redirect to login only for expired authenticated sessions, never for login requests themselves
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const url = error.config?.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/external-login');
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
     }
     return Promise.reject(error);
   }
