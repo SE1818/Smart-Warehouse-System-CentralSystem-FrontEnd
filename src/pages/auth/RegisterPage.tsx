@@ -158,12 +158,19 @@ return (
 <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
 <div className="glass-panel rounded-3xl border border-slate-200/80 shadow-2xl p-8 w-full max-w-md space-y-6 glow-blue relative z-10">
-<div className="text-center space-y-2">
-<div className="w-16 h-16 bg-gradient-to-br from-brand-600 to-brand-500 text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-brand-500/20">
-<Icons.Robot className="w-9 h-9" />
-</div>
-<h1 className="text-3xl font-heading font-black text-slate-900 tracking-tight">SmartWarehouse</h1>
-<p className="text-slate-500 text-sm font-medium">Tạo tài khoản mới</p>
+<div className="text-center space-y-3">
+  <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/90 p-2 mx-auto flex items-center justify-center shadow-xl shadow-[#0062FF]/20">
+    <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
+  </div>
+  <div>
+    <div className="flex items-center justify-center gap-2">
+      <h1 className="text-2xl font-black text-slate-900 tracking-tight font-heading">VORA</h1>
+      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
+        CENTRAL
+      </span>
+    </div>
+    <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mt-1">Đăng ký tài khoản vận hành</p>
+  </div>
 </div>
 
 {error && (

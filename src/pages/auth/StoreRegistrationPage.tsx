@@ -133,20 +133,26 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
-        <div>
-          <div className="flex justify-center">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
-              <Icons.Truck className="w-6 h-6" />
-            </div>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 tech-grid relative overflow-hidden">
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="max-w-md w-full space-y-6 bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-slate-200/80 relative z-10 glow-blue">
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center p-1 bg-gradient-to-tr from-brand-600/10 to-brand-500/5 border border-brand-500/20 shadow-lg">
+            <img src="/brand/vora-icon.png" alt="VORA Logo" className="w-12 h-12 object-contain filter drop-shadow-md" />
           </div>
-          <h2 className="mt-4 text-center text-2xl font-black text-slate-800 tracking-tight">
-            Đăng ký mở cửa hàng
-          </h2>
-          <p className="mt-2 text-center text-sm text-slate-500">
-            Trở thành đối tác kinh doanh của SmartWarehouse
-          </p>
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-50 border border-brand-200/60 text-[10px] font-bold text-brand-700 uppercase tracking-widest mb-1.5">
+              VORA
+            </div>
+            <h2 className="text-2xl font-heading font-black text-slate-900 tracking-tight">
+              Đăng ký mở cửa hàng
+            </h2>
+            <p className="mt-1 text-xs text-slate-500 font-medium">
+              Trở thành đối tác kinh doanh của Hệ thống VORA
+            </p>
+          </div>
         </div>
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>

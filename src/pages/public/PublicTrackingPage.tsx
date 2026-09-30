@@ -64,9 +64,9 @@ export const PublicTrackingPage: React.FC = () => {
   // Default WhiteLabel Brand Structure
   const defaultBrand: WhiteLabelBrand = {
     displayName: 'VORA Robotics Delivery',
-    logoUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=128&auto=format&fit=crop&q=60',
-    primaryColorHex: '#FF6B00',
-    secondaryColorHex: '#1F2937',
+    logoUrl: '/brand/vora-icon.png',
+    primaryColorHex: '#0062FF',
+    secondaryColorHex: '#00D2FF',
     supportHotline: '1900 6868'
   };
 
@@ -75,7 +75,7 @@ export const PublicTrackingPage: React.FC = () => {
   // Sanitize hex color to prevent CSS injection (ETM-27)
   const safePrimaryColor = /^#([0-9A-F]{3}){1,2}$/i.test(brand.primaryColorHex)
     ? brand.primaryColorHex
-    : '#FF6B00';
+    : '#0062FF';
 
   useEffect(() => {
     if (token) {
@@ -260,7 +260,7 @@ export const PublicTrackingPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white p-4">
-        <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-slate-300 font-medium">Đang tải hành trình đơn hàng...</p>
       </div>
     );
@@ -282,7 +282,7 @@ export const PublicTrackingPage: React.FC = () => {
               setLoading(true);
               fetchTrackingInfo();
             }}
-            className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-orange-600/20"
+            className="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-brand-600/20"
           >
             Thử tải lại
           </button>

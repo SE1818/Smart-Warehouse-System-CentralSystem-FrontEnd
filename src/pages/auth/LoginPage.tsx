@@ -132,14 +132,21 @@ export function LoginPage() {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="bg-slate-850/95 backdrop-blur-xl rounded-3xl border border-slate-700/80 shadow-2xl p-8 w-full max-w-md space-y-6 relative z-10 text-white">
-        <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/25">
-            <Icons.Robot className="w-9 h-9" />
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl bg-white border border-slate-700/80 p-2 mx-auto flex items-center justify-center shadow-xl shadow-[#0062FF]/25">
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-black text-white tracking-tight">SmartWarehouse Robotics</h1>
-          <p className="text-slate-400 text-xs font-medium uppercase tracking-widest">
-            Hệ thống Quản Trị & Vận Hành AMR
-          </p>
+          <div>
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="text-2xl font-black text-white tracking-tight font-heading">VORA</h1>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/30">
+                CENTRAL OS
+              </span>
+            </div>
+            <p className="text-slate-400 text-xs font-medium uppercase tracking-widest mt-1">
+              Hệ thống Quản Trị & Vận Hành AMR
+            </p>
+          </div>
         </div>
 
         {error && (
