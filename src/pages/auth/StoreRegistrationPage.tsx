@@ -144,13 +144,13 @@ const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
           </div>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-50 border border-brand-200/60 text-[10px] font-bold text-brand-700 uppercase tracking-widest mb-1.5">
-              VORA FMS
+              VORA
             </div>
             <h2 className="text-2xl font-heading font-black text-slate-900 tracking-tight">
               Đăng ký mở cửa hàng
             </h2>
             <p className="mt-1 text-xs text-slate-500 font-medium">
-              Trở thành đối tác kinh doanh của Hệ thống VORA FMS
+              Trở thành đối tác kinh doanh của Hệ thống VORA
             </p>
           </div>
         </div>

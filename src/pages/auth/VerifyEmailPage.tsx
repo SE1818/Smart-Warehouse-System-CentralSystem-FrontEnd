@@ -45,7 +45,7 @@ export function VerifyEmailPage() {
           </div>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-50 border border-brand-200/60 text-[10px] font-bold text-brand-700 uppercase tracking-widest mb-1.5">
-              VORA FMS
+              VORA
             </div>
             <h1 className="text-2xl font-heading font-black text-slate-900 tracking-tight">Xác thực Email</h1>
             <p className="text-slate-500 text-xs font-medium mt-1">

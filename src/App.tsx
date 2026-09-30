@@ -120,7 +120,7 @@ function App() {
 						</div>
 						<div className="flex items-center gap-2 animate-fade-up">
 							<h1 className="text-2xl font-heading font-black text-[#0A192F] tracking-tight">
-								VORA FMS
+								VORA
 							</h1>
 							<span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
 								CENTRAL OS

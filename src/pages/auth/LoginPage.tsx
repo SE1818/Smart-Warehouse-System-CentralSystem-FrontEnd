@@ -138,7 +138,7 @@ export function LoginPage() {
           </div>
           <div>
             <div className="flex items-center justify-center gap-2">
-              <h1 className="text-2xl font-black text-white tracking-tight font-heading">VORA FMS</h1>
+              <h1 className="text-2xl font-black text-white tracking-tight font-heading">VORA</h1>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/30">
                 CENTRAL OS
               </span>

@@ -175,7 +175,7 @@ export function AdminLayout() {
           <div className="overflow-hidden">
             <div className="flex items-center gap-1.5">
               <span className="text-base font-black tracking-tight text-[#0A192F] group-hover:text-[#0062FF] transition-colors font-heading">
-                VORA FMS
+                VORA
               </span>
               <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200/80">
                 CENTRAL
@@ -270,7 +270,7 @@ export function AdminLayout() {
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h1 className="text-sm font-heading font-black text-slate-900 leading-none">VORA FMS</h1>
+                  <h1 className="text-sm font-heading font-black text-slate-900 leading-none">VORA</h1>
                   <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-blue-50 text-[#0062FF] border border-blue-200">CENTRAL</span>
                 </div>
                 <p className="text-[10px] text-slate-500 font-medium mt-0.5">Quản Trị Trung Tâm</p>
