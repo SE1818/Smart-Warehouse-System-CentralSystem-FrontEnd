@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icons } from './Icons';
-import { Building2, CreditCard, Database, Sliders } from 'lucide-react';
+import { Building2, CreditCard, Database, Sliders, Radio, UtensilsCrossed } from 'lucide-react';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useRobotStore } from '../stores/robotStore';
 
@@ -108,6 +108,8 @@ export function AdminLayout() {
   {
     label: 'Vận hành',
     items: [
+      { path: '/technical', label: 'Kỹ sư kỹ thuật (Fleet & AMR)', icon: <Radio className="w-5 h-5 text-blue-500" />, visible: true },
+      { path: '/staff', label: 'Nhân viên (KDS Touch)', icon: <UtensilsCrossed className="w-5 h-5 text-emerald-500" />, visible: true },
       { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/edge-setup', label: 'Cài đặt Edge Box & POS', icon: <Icons.Store className="w-5 h-5" />, visible: true },
       { path: '/admin/transfers', label: 'Chuyến vận chuyển', icon: <Icons.Truck className="w-5 h-5" />, visible: !isStoreManager },
@@ -165,29 +167,36 @@ export function AdminLayout() {
     {/* Sidebar for Desktop */}
     <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200/80 shrink-0 h-screen shadow-sm">
       {/* Brand Header */}
-      <div className="p-6 border-b border-slate-100 shrink-0 flex flex-col justify-center">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-500 text-white flex items-center justify-center shadow-md shadow-brand-500/20">
-            <Icons.Robot className="w-5 h-5" />
+      <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-slate-50/50 shrink-0 flex flex-col justify-center">
+        <Link to="/admin/dashboard" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group-hover:border-[#0062FF]/60 group-hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0">
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <h1 className="text-lg font-heading font-black text-slate-900 tracking-tight leading-none">
-              SmartWarehouse
-            </h1>
-            <p className="text-[9px] font-bold text-brand-600 uppercase tracking-widest mt-1">Hệ Thống Trung Tâm</p>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                status === 'connected' ? 'bg-emerald-500 animate-pulse' :
-                status === 'connecting' ? 'bg-amber-500 animate-pulse' :
-                'bg-rose-500'
-              }`} />
-              <span className="text-[10px] font-semibold text-slate-500">
-                {status === 'connected' ? 'Hệ thống trực tuyến' :
-                 status === 'connecting' ? 'Đang kết nối...' :
-                 'Mất kết nối'}
+          <div className="overflow-hidden">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-black tracking-tight text-[#0A192F] group-hover:text-[#0062FF] transition-colors font-heading">
+                VORA FMS
+              </span>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200/80">
+                CENTRAL
               </span>
             </div>
+            <p className="text-[11px] font-medium text-slate-500 truncate mt-0.5">
+              Quản Trị Điều Phối AMR
+            </p>
           </div>
+        </Link>
+        <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-200/60">
+          <span className={`w-2 h-2 rounded-full ${
+            status === 'connected' ? 'bg-emerald-500 shadow-[0_0_6px_#10B981]' :
+            status === 'connecting' ? 'bg-amber-500 animate-pulse' :
+            'bg-rose-500'
+          }`} />
+          <span className="text-[10px] font-bold text-slate-600 font-mono">
+            {status === 'connected' ? 'Live System Connected' :
+             status === 'connecting' ? 'Đang kết nối...' :
+             'Mất kết nối'}
+          </span>
         </div>
       </div>
 
@@ -254,14 +263,17 @@ export function AdminLayout() {
     {isMobileOpen && (
       <div className="fixed inset-0 z-50 flex md:hidden bg-slate-900/60 backdrop-blur-xs">
         <div className="w-64 bg-white p-5 flex flex-col h-full border-r border-slate-200 animate-slide-in shadow-2xl">
-          <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-5">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-brand-600 text-white flex items-center justify-center">
-                <Icons.Robot className="w-4 h-4" />
+          <div className="flex items-center justify-between pb-4 border-b border-slate-200/80 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 p-1 flex items-center justify-center shadow-xs shrink-0">
+                <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
               </div>
               <div>
-                <h1 className="text-base font-heading font-black text-slate-900 leading-none">SmartWarehouse</h1>
-                <p className="text-[9px] text-brand-600 font-bold uppercase tracking-wider mt-0.5">Hệ Thống Trung Tâm</p>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-sm font-heading font-black text-slate-900 leading-none">VORA FMS</h1>
+                  <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-blue-50 text-[#0062FF] border border-blue-200">CENTRAL</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Quản Trị Trung Tâm</p>
               </div>
             </div>
             <button

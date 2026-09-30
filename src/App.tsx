@@ -112,22 +112,27 @@ function App() {
 			<Suspense
 				fallback={
 					<div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-800">
-						<div className="relative mb-8">
-							<div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-500 flex items-center justify-center shadow-xl shadow-brand-500/25 animate-bounce-in">
-								<Icons.Robot className="w-10 h-10 text-white" />
+						<div className="relative mb-6">
+							<div className="w-20 h-20 rounded-2xl bg-white border border-slate-200/90 flex items-center justify-center shadow-xl shadow-[#0062FF]/20 animate-bounce-in p-2">
+								<img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
 							</div>
-							<div className="absolute -inset-4 rounded-3xl bg-brand-500/10 animate-ping-slow" />
+							<div className="absolute -inset-4 rounded-3xl bg-[#0062FF]/10 animate-ping-slow" />
 						</div>
-						<h1 className="text-2xl font-heading font-extrabold text-slate-900 tracking-tight animate-fade-up">
-							SmartWarehouse
-						</h1>
-						<p className="mt-2 text-sm text-slate-500 font-semibold animate-fade-up-delay">
-							Đang tải hệ thống...
+						<div className="flex items-center gap-2 animate-fade-up">
+							<h1 className="text-2xl font-heading font-black text-[#0A192F] tracking-tight">
+								VORA FMS
+							</h1>
+							<span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
+								CENTRAL OS
+							</span>
+						</div>
+						<p className="mt-2 text-xs text-slate-500 font-semibold animate-fade-up-delay uppercase tracking-widest font-mono">
+							Đang kết nối hệ thống điều phối AMR...
 						</p>
 						<div className="mt-6 flex gap-1.5">
-							<span className="w-2 h-2 rounded-full bg-brand-600 animate-dot-bounce" style={{ animationDelay: '0ms' }} />
-							<span className="w-2 h-2 rounded-full bg-brand-600 animate-dot-bounce" style={{ animationDelay: '150ms' }} />
-							<span className="w-2 h-2 rounded-full bg-brand-600 animate-dot-bounce" style={{ animationDelay: '300ms' }} />
+							<span className="w-2 h-2 rounded-full bg-[#0062FF] animate-dot-bounce" style={{ animationDelay: '0ms' }} />
+							<span className="w-2 h-2 rounded-full bg-[#00D2FF] animate-dot-bounce" style={{ animationDelay: '150ms' }} />
+							<span className="w-2 h-2 rounded-full bg-[#0052cc] animate-dot-bounce" style={{ animationDelay: '300ms' }} />
 						</div>
 					</div>
 				}

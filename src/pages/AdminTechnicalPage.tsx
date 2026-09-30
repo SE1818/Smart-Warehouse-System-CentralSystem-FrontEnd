@@ -326,12 +326,17 @@ export const AdminTechnicalPage: React.FC = () => {
         {/* Brand & Title */}
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
           <Link to="/" className="flex items-center gap-2.5 group shrink-0" title="Về trang chủ">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-[0_0_12px_rgba(0,98,255,0.4)]">
-              <Radio className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-white border border-slate-700/80 p-1 flex items-center justify-center shadow-[0_0_16px_rgba(0,98,255,0.35)] group-hover:border-[#00D2FF] group-hover:shadow-[0_0_20px_rgba(0,210,255,0.5)] transition-all">
+              <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
             </div>
-            <span className="font-extrabold text-base tracking-tight text-white font-display hidden sm:inline">
-              VORA
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-lg tracking-tight text-white font-heading group-hover:text-[#00D2FF] transition-colors">
+                VORA
+              </span>
+              <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/40">
+                TECH CENTER
+              </span>
+            </div>
           </Link>
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block shrink-0" />
@@ -348,6 +353,35 @@ export const AdminTechnicalPage: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+
+          {/* Quick Portal Switchers */}
+          <div className="hidden sm:flex items-center gap-2">
+            <Link
+              to="/staff"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all shadow-xs"
+              title="Chuyển sang màn hình Nhân viên KDS ra món"
+            >
+              <span>🍳 View Nhân Viên KDS</span>
+            </Link>
+            <Link
+              to="/admin/dashboard"
+              className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-xs font-bold text-blue-400 hover:text-blue-300 transition-all shadow-xs"
+              title="Chuyển sang Cổng Quản Trị Hệ Thống"
+            >
+              <span>⚙️ Admin Portal</span>
+            </Link>
+            <Link
+              to="/login"
+              onClick={() => {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-rose-950/60 hover:border-rose-600/60 text-xs font-bold text-slate-300 hover:text-rose-200 transition-all shadow-xs"
+              title="Đăng xuất để đổi tài khoản"
+            >
+              <span>Đổi TK</span>
+            </Link>
+          </div>
 
           {/* Simulation Toggle Button */}
           <button

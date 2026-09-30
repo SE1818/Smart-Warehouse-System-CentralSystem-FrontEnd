@@ -8,7 +8,6 @@ import {
   Layers,
   BatteryCharging,
   RotateCcw,
-  Radio,
   Store,
   Send,
 } from 'lucide-react';
@@ -289,15 +288,15 @@ export const StaffKdsPage: React.FC = () => {
       {/* Staff Touch Header */}
       <header className="h-16 px-4 sm:px-6 bg-white border-b border-slate-200 shadow-2xs flex items-center justify-between shrink-0 sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <Link to="/" className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold shadow-sm" title="Về trang chủ">
-            <Radio className="w-5 h-5 text-white" />
+          <Link to="/" className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group hover:border-[#0062FF]/60 hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0" title="Về trang chủ">
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
           </Link>
 
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-extrabold text-slate-900 tracking-tight">KDS & RA MÓN BÀN ĂN</span>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                Staff Touch View
+              <span className="text-base font-black text-[#0A192F] tracking-tight font-heading">VORA KDS</span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
+                STAFF TOUCH
               </span>
             </div>
             <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
@@ -317,6 +316,34 @@ export const StaffKdsPage: React.FC = () => {
             <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
               {tables.filter((t) => t.status === 'waiting').length} Bàn Chờ Ra Món
             </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              to="/technical"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-blue-600 transition-all shadow-2xs"
+              title="Chuyển sang giao diện Kỹ Sư Kỹ Thuật (AMR Fleet & Telemetry)"
+            >
+              <span>👷 View Kỹ Sư</span>
+            </Link>
+            <Link
+              to="/admin/dashboard"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all shadow-2xs"
+              title="Chuyển sang Cổng Quản Trị Hệ Thống"
+            >
+              <span>⚙️ Admin</span>
+            </Link>
+            <Link
+              to="/login"
+              onClick={() => {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
+              title="Đăng xuất để đổi tài khoản"
+            >
+              <span>Đổi TK</span>
+            </Link>
           </div>
         </div>
       </header>

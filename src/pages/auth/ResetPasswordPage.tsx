@@ -69,18 +69,21 @@ export function ResetPasswordPage() {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="glass-panel rounded-3xl border border-slate-200/80 shadow-2xl p-8 w-full max-w-md space-y-6 glow-blue relative z-10">
-        <div className="text-center space-y-2">
-          <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg ${
-            status === 'success' ? 'bg-green-500' : status === 'error' ? 'bg-red-500' : 'bg-brand-600'
-          } text-white`}>
-            {status === 'loading' || status === 'idle' ? <Icons.LockReset className="w-9 h-9" /> :
-             status === 'success' ? <Icons.Check className="w-9 h-9" /> :
-             <Icons.AlertWarning className="w-9 h-9" />}
+        <div className="text-center space-y-3">
+          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center p-1 bg-gradient-to-tr from-brand-600/10 to-brand-500/5 border border-brand-500/20 shadow-lg">
+            <img src="/brand/vora-icon.png" alt="VORA Logo" className="w-12 h-12 object-contain filter drop-shadow-md" />
           </div>
-          <h1 className="text-3xl font-heading font-black text-slate-900 tracking-tight">SmartWarehouse</h1>
-          <p className="text-slate-500 text-sm font-medium">
-            {status === 'success' ? 'Password Reset!' : 'Set New Password'}
-          </p>
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-50 border border-brand-200/60 text-[10px] font-bold text-brand-700 uppercase tracking-widest mb-1.5">
+              VORA FMS
+            </div>
+            <h1 className="text-2xl font-heading font-black text-slate-900 tracking-tight">
+              {status === 'success' ? 'Đặt lại thành công!' : 'Đặt lại mật khẩu'}
+            </h1>
+            <p className="text-slate-500 text-xs font-medium mt-1">
+              Hệ thống Điều phối Vận hành Tập trung
+            </p>
+          </div>
         </div>
 
         {message && (
