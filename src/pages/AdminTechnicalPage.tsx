@@ -1540,10 +1540,24 @@ export const AdminTechnicalPage: React.FC = () => {
                           <tr key={db.tenantId} className="hover:bg-slate-50">
                             <td className="py-2.5 px-2.5 font-mono text-slate-800 font-bold text-[11px] truncate max-w-[150px]">{db.dbName}</td>
                             <td className="py-2.5 px-2.5 text-slate-700 truncate max-w-[120px]">{db.tenantName}</td>
-                            <td className="py-2.5 px-2.5 font-mono text-slate-500 text-[10px]">{db.host}:{db.port}</td>
+                            <td className="py-2.5 px-2.5 font-mono text-slate-500 text-[10px]">
+                              {db.host && db.port && db.port > 0 ? `${db.host}:${db.port}` : (db.host || 'Local Storage')}
+                            </td>
                             <td className="py-2.5 px-2.5">
-                              <span className="px-2 py-0.5 rounded-full font-mono text-[9px] font-bold bg-emerald-100 text-emerald-800">
-                                {db.healthStatus}
+                              <span
+                                className={`px-2 py-0.5 rounded-full font-mono text-[9px] font-bold ${
+                                  (db.edgeStatus || '').toLowerCase() === 'online'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : (db.edgeStatus || '').toLowerCase().includes('pending') || !db.isConfigured
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-rose-100 text-rose-800'
+                                }`}
+                              >
+                                {(db.edgeStatus || '').toLowerCase() === 'online'
+                                  ? 'Online'
+                                  : (db.edgeStatus || '').toLowerCase().includes('pending') || !db.isConfigured
+                                  ? 'Chờ ghép nối'
+                                  : db.healthStatus}
                               </span>
                             </td>
                           </tr>

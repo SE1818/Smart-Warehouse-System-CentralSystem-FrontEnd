@@ -72,6 +72,15 @@ export interface TenantDatabaseInfo {
   sizeMB: number;
   activeConnections: number;
   lastMigratedAt: string;
+  edgeNodeCode?: string;
+  edgeStatus?: string;
+  isConfigured?: boolean;
+  pairingCode?: string;
+  subdomain?: string;
+  sqliteFileName?: string;
+  localFileSizeKB?: number;
+  vpsFileSizeKB?: number;
+  syncStatus?: string;
 }
 
 export interface TenantFeatureFlag {
