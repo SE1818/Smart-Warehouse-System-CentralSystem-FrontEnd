@@ -17,14 +17,10 @@ vi.mock('../pages/auth/RegisterPage', () => ({ RegisterPage: () => <div>Register
 vi.mock('../pages/auth/ForgotPasswordPage', () => ({ ForgotPasswordPage: () => <div>Forgot Password Page</div> }));
 vi.mock('../pages/auth/ResetPasswordPage', () => ({ ResetPasswordPage: () => <div>Reset Password Page</div> }));
 vi.mock('../pages/auth/StoreRegistrationPage', () => ({ StoreRegistrationPage: () => <div>Store Registration Page</div> }));
-vi.mock('../pages/admin/StoreRegistrationsPage', () => ({ StoreRegistrationsPage: () => <div>Store Registrations Page</div> }));
-
-// AdminLayout: the only component whose presence we reliably check across admin routes
-vi.mock('../components/AdminLayout', () => ({
-  AdminLayout: () => (
-    <div data-testid="admin-layout">Admin Layout</div>
-  ),
-}));
+vi.mock('../pages/AdminTechnicalPage', () => ({ AdminTechnicalPage: () => <div data-testid="technical-page">Technical Page</div> }));
+vi.mock('../pages/StaffKdsPage', () => ({ StaffKdsPage: () => <div data-testid="staff-page">Staff Page</div> }));
+vi.mock('../pages/technical/StoreEdgeSetupPage', () => ({ StoreEdgeSetupPage: () => <div data-testid="edge-setup-page">Store Edge Setup Page</div> }));
+vi.mock('../pages/technical/RobotMonitorPage', () => ({ RobotMonitorPage: () => <div data-testid="robot-monitor-page">Robot Monitor Page</div> }));
 
 // Icons mock (matches the keys used across pages)
 vi.mock('../components/Icons', () => {
@@ -100,110 +96,51 @@ describe('App routing and integration', () => {
     await waitFor(() => expect(screen.getByText('Store Registration Page')).toBeInTheDocument());
   });
 
-  /* ── Admin routes verified through AdminLayout (rather than leaf page text) ── */
+  /* ── Technical Engineer & Staff KDS routes ── */
 
-  const adminRoutes = [
-    '/admin/inventory',
-    '/admin/warehouses',
-    '/admin/stocklevels',
-    '/admin/stockmovements',
-    '/admin/stockadjustments',
-    '/admin/search',
-    '/admin/notifications',
-    '/admin/files',
-    '/admin/robots',
-    '/admin/wallet',
-    '/admin/profile',
-    '/admin/metrics',
-    '/admin/logs',
-    '/admin/scheduler',
-    '/admin/products',
-    '/admin/orders',
-    '/admin/users',
-    '/admin/storeregistrations',
-    '/admin/stores',
-    '/admin/complaints',
-    '/admin/reports',
-    '/admin/transfers',
-    '/admin/robot-monitor',
-  ];
-
-  it.each(adminRoutes)('renders AdminLayout for admin route %s', async (route: string) => {
-    storeAuth('Admin');
-    window.history.pushState(null, '', route);
+  it('renders AdminTechnicalPage on /technical', async () => {
+    window.history.pushState(null, '', '/technical');
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-layout')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
   });
 
-  it('renders AdminLayout on nested dashboard URL with Admin role', async () => {
-    storeAuth('Admin');
+  it('renders StaffKdsPage on /staff', async () => {
+    window.history.pushState(null, '', '/staff');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('staff-page')).toBeInTheDocument());
+  });
+
+  it('renders StoreEdgeSetupPage on /edge-setup', async () => {
+    window.history.pushState(null, '', '/edge-setup');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('edge-setup-page')).toBeInTheDocument());
+  });
+
+  it('renders RobotMonitorPage on /robot-monitor', async () => {
+    window.history.pushState(null, '', '/robot-monitor');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('robot-monitor-page')).toBeInTheDocument());
+  });
+
+  /* ── Admin route redirects to /technical ── */
+
+  it('redirects /admin to /technical', async () => {
+    window.history.pushState(null, '', '/admin');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
+  });
+
+  it('redirects /admin/dashboard to /technical', async () => {
     window.history.pushState(null, '', '/admin/dashboard');
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-layout')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
   });
 
-  /* ── Role-based access ── */
+  /* ── Fallback ── */
 
-  const allowedRoles = ['Admin', 'admin', 'Operator', 'store_manager'];
-
-  it.each(allowedRoles)('renders AdminLayout for allowed role %s', async (role: string) => {
-    storeAuth(role);
-    window.history.pushState(null, '', '/admin/dashboard');
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-layout')).toBeInTheDocument());
-  });
-
-  it('redirects to /unauthorized when role is GuestUser', async () => {
-    localStorage.setItem('authToken', 'token');
-    localStorage.setItem('user', JSON.stringify({ role: 'GuestUser' }));
-    render(<App />);
-    await waitFor(() => expect(screen.getByText('Không có quyền truy cập')).toBeInTheDocument());
-  });
-
-  it('redirects to /unauthorized for WarehouseManager role', async () => {
-    localStorage.setItem('authToken', 'valid-token');
-    localStorage.setItem('user', JSON.stringify({ role: 'WarehouseManager' }));
-    render(<App />);
-    await waitFor(() => expect(screen.getByText('Không có quyền truy cập')).toBeInTheDocument());
-  });
-
-  /* ── Edge routes ── */
-
-  it('navigates back from unauthorized via browser back button', async () => {
-    localStorage.setItem('authToken', 'token');
-    localStorage.setItem('user', JSON.stringify({ role: 'GuestUser' }));
-    render(<App />);
-    await waitFor(() => expect(screen.getByText('Không có quyền truy cập')).toBeInTheDocument());
-    const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
-    const btn = screen.getByRole('button', { name: /Quay lại/i });
-    btn.click();
-    expect(backSpy).toHaveBeenCalled();
-  });
-
-  it('renders unknown route redirect to home', async () => {
-    storeAuth('Admin');
+  it('redirects unknown route to home / login', async () => {
     window.history.pushState(null, '', '/unknown');
     render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-layout')).toBeInTheDocument());
-  });
-
-  it('handles auth bypass and logged-in states', async () => {
-    storeAuth('Admin');
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-layout')).toBeInTheDocument());
-  });
-
-  it('renders UnauthorizedPage for unknown role', async () => {
-    localStorage.setItem('authToken', 'valid-token');
-    localStorage.setItem('user', JSON.stringify({ role: 'OtherRole' }));
-    render(<App />);
-    await waitFor(() => expect(screen.getByText('Không có quyền truy cập')).toBeInTheDocument());
-  });
-
-  it('renders complete path /admin/notifications', async () => {
-    storeAuth('Admin');
-    window.history.pushState(null, '', '/admin/notifications');
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('admin-layout')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument());
   });
 });

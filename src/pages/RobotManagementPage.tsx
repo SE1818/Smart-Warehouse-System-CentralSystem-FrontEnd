@@ -5,6 +5,8 @@ import { Icons } from '@/components/Icons';
 import type { Order } from '../types/product';
 import { toast } from 'react-toastify';
 import { CustomSelect } from '@/components/CustomSelect';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 export function RobotManagementPage() {
   const [robots, setRobots] = useState<Robot[]>([]);
@@ -15,6 +17,16 @@ export function RobotManagementPage() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showFulfillmentModal, setShowFulfillmentModal] = useState(false);
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems: paginatedRobots,
+    setPage,
+    setPageSize,
+  } = usePagination(robots, 6);
 
   const [areas, setAreas] = useState<Area[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
@@ -575,7 +587,7 @@ export function RobotManagementPage() {
 
         {/* Robot Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {robots.map((robot) => (
+          {paginatedRobots.map((robot) => (
             <div
               key={robot.id}
               className="bg-white rounded-3xl border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between overflow-hidden group"
@@ -689,6 +701,16 @@ export function RobotManagementPage() {
             </div>
           )}
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[3, 6, 9, 18]}
+          itemLabel="robot"
+        />
       </div>
 
       {/* Modern MoveModal */}

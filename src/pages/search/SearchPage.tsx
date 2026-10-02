@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import type { ProductIndex, AskResponse, ChatMessageDto, ChatConversationDto } from '@/types/search';
 import { searchService } from '@/services/search';
 import { Icons } from '@/components/Icons';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 function renderTableHtml(rows: string[]): string {
   if (rows.length === 0) return '';
@@ -145,6 +147,16 @@ export function SearchPage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const {
+    currentPage: searchPage,
+    pageSize: searchPageSize,
+    totalPages: searchTotalPages,
+    totalItems: searchTotalItems,
+    paginatedItems: paginatedSearchResults,
+    setPage: setSearchPage,
+    setPageSize: setSearchPageSize,
+  } = usePagination(searchResults, 4);
 
   // Chat state
   const [question, setQuestion] = useState('');
@@ -303,7 +315,7 @@ export function SearchPage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>Tìm thấy {searchResults.length} sản phẩm
                 </p>
                 <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                  {searchResults.map(p => (
+                  {paginatedSearchResults.map(p => (
                     <div key={p.id} className="p-4 bg-slate-50/55 rounded-xl border border-slate-200 hover:border-brand-300 hover:bg-white transition-all duration-200 group shadow-xs">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <h3 className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">{p.name}</h3>
@@ -320,6 +332,16 @@ export function SearchPage() {
                     </div>
                   ))}
                 </div>
+                <Pagination
+                  currentPage={searchPage}
+                  totalPages={searchTotalPages}
+                  totalItems={searchTotalItems}
+                  pageSize={searchPageSize}
+                  onPageChange={setSearchPage}
+                  onPageSizeChange={setSearchPageSize}
+                  pageSizeOptions={[2, 4, 8, 16]}
+                  itemLabel="sản phẩm"
+                />
               </div>
             )}
           </div>

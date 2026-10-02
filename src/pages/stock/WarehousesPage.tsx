@@ -3,6 +3,8 @@ import type { Warehouse } from '@/types/stock';
 import { stockService } from '@/services/stock';
 import { Icons } from '@/components/Icons';
 import { CustomSelect } from '@/components/CustomSelect';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 export function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -116,6 +118,16 @@ export function WarehousesPage() {
     w.code.toLowerCase().includes(search.toLowerCase())
   );
 
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems: paginatedWarehouses,
+    setPage,
+    setPageSize,
+  } = usePagination(filtered, 8);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
       {/* Background Glow */}
@@ -193,7 +205,7 @@ export function WarehousesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-650 font-semibold">
-                {filtered.map((w) => (
+                {paginatedWarehouses.map((w) => (
                   <tr key={w.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 pl-6 font-bold text-brand-600 font-mono text-xs">
                       {w.code}
@@ -238,6 +250,16 @@ export function WarehousesPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[4, 8, 16, 32]}
+            itemLabel="kho hàng"
+          />
         </div>
       )}
 

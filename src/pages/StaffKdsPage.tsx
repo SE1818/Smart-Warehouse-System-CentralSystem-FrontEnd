@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
 import { fixMojibake } from '../utils/textUtils';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 interface TableNode {
   id: string;
@@ -194,6 +196,16 @@ export const StaffKdsPage: React.FC = () => {
     return t.zone === selectedZone;
   });
 
+  const {
+    currentPage: tablePage,
+    pageSize: tablePageSize,
+    totalPages: tableTotalPages,
+    totalItems: tableTotalItems,
+    paginatedItems: paginatedTables,
+    setPage: setTablePage,
+    setPageSize: setTablePageSize,
+  } = usePagination(filteredTables, 12);
+
   // Action: Load Pending Order items onto trays
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
     setActiveOrderId(order.id);
@@ -325,7 +337,6 @@ export const StaffKdsPage: React.FC = () => {
             >
               <span>👷 View Kỹ Sư</span>
             </Link>
-
             <Link
               to="/login"
               onClick={() => {
@@ -407,84 +418,98 @@ export const StaffKdsPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
-                {filteredTables.map((table) => {
-                  const isSelected = table.id === selectedTableId;
-                  const isWaiting = table.status === 'waiting';
-                  const isServing = table.status === 'serving';
-                  const isOccupied = table.status === 'occupied';
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
+                  {paginatedTables.map((table) => {
+                    const isSelected = table.id === selectedTableId;
+                    const isWaiting = table.status === 'waiting';
+                    const isServing = table.status === 'serving';
+                    const isOccupied = table.status === 'occupied';
 
-                  return (
-                    <button
-                      key={table.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTableId(table.id);
-                        showToast(`Đã chọn ${table.name}`, 'info');
-                      }}
-                      className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group active:scale-[0.98] h-[145px] cursor-pointer ${isSelected
-                          ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20'
-                          : isWaiting
-                            ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
-                            : isServing
-                              ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300'
-                              : isOccupied
-                                ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300'
-                                : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
-                        }`}
-                    >
-                      {/* Top Row: Name & Tag */}
-                      <div className="flex items-start justify-between">
-                        <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
-                          {table.name}
-                        </span>
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full shrink-0 ${isWaiting
-                              ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
+                    return (
+                      <button
+                        key={table.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTableId(table.id);
+                          showToast(`Đã chọn ${table.name}`, 'info');
+                        }}
+                        className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group active:scale-[0.98] h-[145px] cursor-pointer ${isSelected
+                            ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20'
+                            : isWaiting
+                              ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
                               : isServing
-                                ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
+                                ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300'
                                 : isOccupied
-                                  ? 'bg-emerald-500'
-                                  : 'bg-slate-300'
-                            }`}
-                        />
-                      </div>
-
-                      {/* Middle Info */}
-                      <div className="my-2.5 space-y-1">
-                        <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div>
-                        <div className="text-[10px] font-mono">
-                          {isServing ? (
-                            <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
-                              {table.assignedRobot} Đang Đến
-                            </span>
-                          ) : isWaiting ? (
-                            <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded">
-                              Cần Ra Món Ngay
-                            </span>
-                          ) : isOccupied ? (
-                            <span className="text-emerald-700 font-medium">
-                              {table.guestsCount} Khách
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">Bàn Trống</span>
-                          )}
+                                  ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300'
+                                  : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                          }`}
+                      >
+                        {/* Top Row: Name & Tag */}
+                        <div className="flex items-start justify-between">
+                          <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
+                            {table.name}
+                          </span>
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${isWaiting
+                                ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
+                                : isServing
+                                  ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
+                                  : isOccupied
+                                    ? 'bg-emerald-500'
+                                    : 'bg-slate-300'
+                              }`}
+                          />
                         </div>
-                      </div>
 
-                      {/* Footer selection pill */}
-                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-500 text-[10px]">
-                          {table.currentOrders ? `${table.currentOrders.length} Món` : 'Chưa gọi'}
-                        </span>
-                        <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
-                          {isSelected ? 'Đang chọn' : 'Chạm để chọn'}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                        {/* Middle Info */}
+                        <div className="my-2.5 space-y-1">
+                          <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div>
+                          <div className="text-[10px] font-mono">
+                            {isServing ? (
+                              <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
+                                {table.assignedRobot} Đang Đến
+                              </span>
+                            ) : isWaiting ? (
+                              <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded">
+                                Cần Ra Món Ngay
+                              </span>
+                            ) : isOccupied ? (
+                              <span className="text-emerald-700 font-medium">
+                                {table.guestsCount} Khách
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Bàn Trống</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Footer selection pill */}
+                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-500 text-[10px]">
+                            {table.currentOrders ? `${table.currentOrders.length} Món` : 'Chưa gọi'}
+                          </span>
+                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
+                            {isSelected ? 'Đang chọn' : 'Chạm để chọn'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100">
+                  <Pagination
+                    currentPage={tablePage}
+                    totalPages={tableTotalPages}
+                    totalItems={tableTotalItems}
+                    pageSize={tablePageSize}
+                    onPageChange={setTablePage}
+                    onPageSizeChange={setTablePageSize}
+                    pageSizeOptions={[8, 12, 16, 24]}
+                    itemLabel="bàn"
+                  />
+                </div>
+              </>
             )}
 
             {/* Quick Dispatch Log Notification if any */}

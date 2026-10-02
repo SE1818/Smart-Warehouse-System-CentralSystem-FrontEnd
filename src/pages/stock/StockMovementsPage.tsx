@@ -1,9 +1,11 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { StockMovement, Warehouse } from '@/types/stock';
 import { StockMovementType } from '@/types/stock';
 import { stockService } from '@/services/stock';
 import { Icons } from '@/components/Icons';
 import { CustomSelect } from '@/components/CustomSelect';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 export function StockMovementsPage() {
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -90,6 +92,16 @@ export function StockMovementsPage() {
   const sortedMovements = [...filteredMovements].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems: paginatedMovements,
+    setPage,
+    setPageSize,
+  } = usePagination(sortedMovements, 10);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-850 font-sans p-6 md:p-10 space-y-8 relative overflow-hidden tech-grid">
@@ -191,7 +203,7 @@ export function StockMovementsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-650 font-semibold">
-                    {sortedMovements.map((movement) => (
+                    {paginatedMovements.map((movement) => (
                       <tr key={movement.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-4 pl-6 text-slate-500 font-mono text-xs">
                           {new Date(movement.createdAt).toLocaleString('vi-VN')}
@@ -221,6 +233,16 @@ export function StockMovementsPage() {
                   </tbody>
                 </table>
               </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={[5, 10, 20, 50]}
+                itemLabel="bản ghi"
+              />
             </div>
           )}
         </>

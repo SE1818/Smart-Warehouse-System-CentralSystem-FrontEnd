@@ -80,72 +80,6 @@ export interface FleetAMR {
   lidarStatus: string;
 }
 
-export interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  adminEmail: string;
-  contactPhone: string;
-  status: 'Active' | 'Suspended' | 'Pending';
-  planId: string;
-  planName: string;
-  databaseName: string;
-  createdAt: string;
-  warehousesCount: number;
-  robotsCount: number;
-  monthlyOrdersCount: number;
-  storageUsedGB: number;
-}
-
-export interface Subscription {
-  id: string;
-  tenantId: string;
-  tenantName: string;
-  planId: string;
-  planName: string;
-  billingCycle: 'monthly' | 'annual';
-  amount: number;
-  startDate: string;
-  endDate: string;
-  status: 'Active' | 'GracePeriod' | 'Cancelled' | 'Expired';
-  autoRenew: boolean;
-}
-
-export interface Invoice {
-  id: string;
-  tenantId: string;
-  tenantName: string;
-  invoiceNumber?: string;
-  amount: number;
-  currency: string;
-  status: 'Paid' | 'Pending' | 'Overdue' | 'Failed';
-  issuedAt: string;
-  dueDate: string;
-  paymentMethod: string;
-}
-
-export interface TenantDatabaseInfo {
-  tenantId: string;
-  tenantName: string;
-  dbName: string;
-  host: string;
-  port: number;
-  healthStatus: 'Healthy' | 'Degraded' | 'Unreachable';
-  schemaVersion: string;
-  sizeMB: number;
-  activeConnections: number;
-  lastMigratedAt: string;
-  edgeNodeCode?: string;
-  edgeStatus?: string;
-  isConfigured?: boolean;
-  pairingCode?: string;
-  subdomain?: string;
-  sqliteFileName?: string;
-  localFileSizeKB?: number;
-  vpsFileSizeKB?: number;
-  syncStatus?: string;
-}
-
 export interface MissionItem {
   id: string;
   title: string;
@@ -397,56 +331,6 @@ export const alertService = {
     } catch {
       return true;
     }
-  },
-};
-
-export const tenantService = {
-  getTenants: async (): Promise<Tenant[]> => {
-    try {
-      const res = await portalClient.get('/admin/tenants');
-      if (res.data && Array.isArray(res.data)) {
-        return res.data;
-      }
-    } catch {
-      // Empty
-    }
-    return [];
-  },
-
-  getSubscriptions: async (): Promise<Subscription[]> => {
-    try {
-      const res = await portalClient.get('/admin/subscriptions');
-      if (res.data && Array.isArray(res.data)) {
-        return res.data;
-      }
-    } catch {
-      // Empty
-    }
-    return [];
-  },
-
-  getInvoices: async (): Promise<Invoice[]> => {
-    try {
-      const res = await portalClient.get('/admin/invoices');
-      if (res.data && Array.isArray(res.data)) {
-        return res.data;
-      }
-    } catch {
-      // Empty
-    }
-    return [];
-  },
-
-  getDatabases: async (): Promise<TenantDatabaseInfo[]> => {
-    try {
-      const res = await portalClient.get('/admin/databases');
-      if (res.data && Array.isArray(res.data)) {
-        return res.data;
-      }
-    } catch {
-      // Empty
-    }
-    return [];
   },
 };
 
