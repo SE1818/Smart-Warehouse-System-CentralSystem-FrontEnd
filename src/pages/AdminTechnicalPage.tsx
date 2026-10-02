@@ -302,7 +302,7 @@ export const AdminTechnicalPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className="h-screen overflow-y-auto bg-slate-100 text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast Notification Container */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none animate-in slide-in-from-top-2 duration-200">
