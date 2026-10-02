@@ -6,11 +6,23 @@ import { userService } from '@/services/userService';
 import type { AdminUserResponse } from '@/services/userService';
 import { Icons } from '@/components/Icons';
 import { CustomSelect } from '@/components/CustomSelect';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 export function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems: paginatedNotifications,
+    setPage,
+    setPageSize,
+  } = usePagination(notifications, 10);
 
   // Form states for sending new notification
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -348,7 +360,7 @@ export function NotificationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {notifications.map((notification) => (
+                {paginatedNotifications.map((notification) => (
                   <tr key={notification.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="py-4 px-6 align-top">
                       {notification.userId ? (
@@ -384,6 +396,16 @@ export function NotificationsPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[5, 10, 20, 50]}
+            itemLabel="thông báo"
+          />
         </div>
       )}
 

@@ -25,6 +25,8 @@ import {
   missionService,
   alertService,
 } from '../services/portalApi';
+import { usePagination } from '../hooks/usePagination';
+import { Pagination } from '../components/common/Pagination';
 
 interface AMRNode {
   id: string;
@@ -84,6 +86,9 @@ export const AdminTechnicalPage: React.FC = () => {
   const [amrNodes, setAmrNodes] = useState<AMRNode[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [missions, setMissions] = useState<MissionQueueItem[]>([]);
+
+  const amrPagination = usePagination(amrNodes, 6);
+  const missionPagination = usePagination(missions, 6);
 
   // Derived Battery levels from live AMR fleet
   const fleetBatteries = amrNodes.map((node) => ({
@@ -1191,7 +1196,7 @@ export const AdminTechnicalPage: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    amrNodes.map((robot) => (
+                    amrPagination.paginatedItems.map((robot) => (
                       <tr key={robot.id} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-3 font-mono font-bold text-blue-700">{robot.id} ({robot.name})</td>
                         <td className="py-3 px-3">
@@ -1237,6 +1242,17 @@ export const AdminTechnicalPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+
+            <Pagination
+              currentPage={amrPagination.currentPage}
+              totalPages={amrPagination.totalPages}
+              totalItems={amrPagination.totalItems}
+              pageSize={amrPagination.pageSize}
+              pageSizeOptions={[4, 6, 12, 24]}
+              onPageChange={amrPagination.setPage}
+              onPageSizeChange={amrPagination.setPageSize}
+              itemLabel="thiết bị AMR"
+            />
           </div>
         )}
 
@@ -1266,7 +1282,7 @@ export const AdminTechnicalPage: React.FC = () => {
                   Hiện tại chưa có nhiệm vụ nào trong hàng đợi điều phối. Bấm &quot;Tạo Nhiệm Vụ Mới&quot; để phát lệnh điều phối.
                 </div>
               ) : (
-                missions.map((m) => (
+                missionPagination.paginatedItems.map((m) => (
                   <div key={m.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -1301,6 +1317,17 @@ export const AdminTechnicalPage: React.FC = () => {
                 ))
               )}
             </div>
+
+            <Pagination
+              currentPage={missionPagination.currentPage}
+              totalPages={missionPagination.totalPages}
+              totalItems={missionPagination.totalItems}
+              pageSize={missionPagination.pageSize}
+              pageSizeOptions={[4, 6, 12, 24]}
+              onPageChange={missionPagination.setPage}
+              onPageSizeChange={missionPagination.setPageSize}
+              itemLabel="nhiệm vụ"
+            />
           </div>
         )}
 

@@ -11,6 +11,8 @@ import type {
 } from '@/services/transferService';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 type LogTabType = 'status_history' | 'commands' | 'responses' | 'transfer_log';
 
@@ -18,6 +20,16 @@ export function AuditLogsPage() {
   const [requests, setRequests] = useState<TransferRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<TransferRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<TransferRequest | null>(null);
+
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems: paginatedRequests,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredRequests, 8);
 
   // Detail data for selected request
   const [statusHistory, setStatusHistory] = useState<TransferStatus[]>([]);
@@ -373,54 +385,68 @@ export function AuditLogsPage() {
               <p className="text-xs font-semibold">Không tìm thấy yêu cầu vận chuyển nào.</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto">
-              {filteredRequests.map((req) => {
-                const isSelected = selectedRequest?.id === req.id;
-                return (
-                  <button
-                    key={req.id}
-                    onClick={() => setSelectedRequest(req)}
-                    className={`w-full text-left p-4 transition-all flex flex-col gap-2 cursor-pointer border-l-4 ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-brand-50 to-brand-100/10 border-l-brand-600 pl-3'
-                        : 'hover:bg-slate-50/30 border-l-transparent'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center w-full">
-                      <span className="font-mono text-[10px] font-black text-slate-400">
-                        {formatId(req.id)}
-                      </span>
-                      <span className={`px-2 py-0.5 border text-[9px] font-bold rounded-full ${getStatusBadge(req.status)}`}>
-                        {getStatusLabel(req.status)}
-                      </span>
-                    </div>
+            <>
+              <div className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto">
+                {paginatedRequests.map((req) => {
+                  const isSelected = selectedRequest?.id === req.id;
+                  return (
+                    <button
+                      key={req.id}
+                      onClick={() => setSelectedRequest(req)}
+                      className={`w-full text-left p-4 transition-all flex flex-col gap-2 cursor-pointer border-l-4 ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-brand-50 to-brand-100/10 border-l-brand-600 pl-3'
+                          : 'hover:bg-slate-50/30 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center w-full">
+                        <span className="font-mono text-[10px] font-black text-slate-400">
+                          {formatId(req.id)}
+                        </span>
+                        <span className={`px-2 py-0.5 border text-[9px] font-bold rounded-full ${getStatusBadge(req.status)}`}>
+                          {getStatusLabel(req.status)}
+                        </span>
+                      </div>
 
-                    {/* Routing display in card */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[10px] text-slate-450 block font-bold uppercase tracking-wider">Lộ trình</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200/60 truncate">
-                            {formatStationId(req.fromStationId)}
-                          </span>
-                          <span className="text-slate-400 text-[10px]">➔</span>
-                          <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200/60 truncate">
-                            {formatStationId(req.toStationId)}
-                          </span>
+                      {/* Routing display in card */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] text-slate-450 block font-bold uppercase tracking-wider">Lộ trình</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200/60 truncate">
+                              {formatStationId(req.fromStationId)}
+                            </span>
+                            <span className="text-slate-400 text-[10px]">➔</span>
+                            <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200/60 truncate">
+                              {formatStationId(req.toStationId)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex justify-between items-center text-[10px] text-slate-450 pt-2 border-t border-slate-50 w-full mt-1">
-                      <span>Độ ưu tiên: <strong className="text-slate-700 font-bold">{req.priority}</strong></span>
-                      <span className="font-medium text-slate-400">
-                        {new Date(req.createdAt).toLocaleDateString('vi-VN')} {new Date(req.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                      <div className="flex justify-between items-center text-[10px] text-slate-450 pt-2 border-t border-slate-50 w-full mt-1">
+                        <span>Độ ưu tiên: <strong className="text-slate-700 font-bold">{req.priority}</strong></span>
+                        <span className="font-medium text-slate-400">
+                          {new Date(req.createdAt).toLocaleDateString('vi-VN')} {new Date(req.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="border-t border-slate-100 p-2">
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  pageSizeOptions={[5, 8, 15, 30]}
+                  itemLabel="yêu cầu"
+                />
+              </div>
+            </>
           )}
         </div>
 

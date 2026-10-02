@@ -11,6 +11,8 @@ import type { Product } from '@/types';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
 import { CustomSelect } from '@/components/CustomSelect';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -303,6 +305,9 @@ export function PromotionsPage() {
   const filteredPromos = statusFilter ? promotions.filter(p => p.status === statusFilter) : promotions;
   const filteredFlash = statusFilter ? flashSales.filter(p => p.status === statusFilter) : flashSales;
 
+  const promoPagination = usePagination(filteredPromos, 8);
+  const flashPagination = usePagination(filteredFlash, 6);
+
   // Stats
   const activeFlash = flashSales.filter(p => p.status === 'active').length;
   const upcomingFlash = flashSales.filter(p => p.status === 'upcoming').length;
@@ -546,7 +551,7 @@ export function PromotionsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {filteredPromos.map(promo => (
+                        {promoPagination.paginatedItems.map(promo => (
                           <tr key={promo.id} className="hover:bg-slate-50/60 transition-colors">
                             <td className="px-6 py-4">
                               <code className="bg-slate-100 px-2.5 py-1 rounded-lg text-sm font-black text-slate-700">{promo.code}</code>
@@ -593,6 +598,16 @@ export function PromotionsPage() {
                       </tbody>
                     </table>
                   </div>
+                  <Pagination
+                    currentPage={promoPagination.currentPage}
+                    totalPages={promoPagination.totalPages}
+                    totalItems={promoPagination.totalItems}
+                    pageSize={promoPagination.pageSize}
+                    onPageChange={promoPagination.setPage}
+                    onPageSizeChange={promoPagination.setPageSize}
+                    pageSizeOptions={[4, 8, 16, 32]}
+                    itemLabel="khuyến mãi"
+                  />
                 </div>
               </div>
             )}
@@ -632,11 +647,23 @@ export function PromotionsPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {filteredFlash.map(fs => (
-                      <FlashSaleCard key={fs.id} promo={fs} products={availableProducts} onDelete={setDeletingId} onEdit={openEditFlash} />
-                    ))}
-                  </div>
+                  <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {flashPagination.paginatedItems.map(fs => (
+                        <FlashSaleCard key={fs.id} promo={fs} products={availableProducts} onDelete={setDeletingId} onEdit={openEditFlash} />
+                      ))}
+                    </div>
+                    <Pagination
+                      currentPage={flashPagination.currentPage}
+                      totalPages={flashPagination.totalPages}
+                      totalItems={flashPagination.totalItems}
+                      pageSize={flashPagination.pageSize}
+                      onPageChange={flashPagination.setPage}
+                      onPageSizeChange={flashPagination.setPageSize}
+                      pageSizeOptions={[3, 6, 12, 24]}
+                      itemLabel="Flash Sale"
+                    />
+                  </>
                 )}
               </div>
             )}

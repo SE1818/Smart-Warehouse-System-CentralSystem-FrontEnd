@@ -4,6 +4,8 @@ import type { Wallet, WalletTransaction } from '../types/wallet';
 import type { User } from '@/types/auth';
 import { Icons } from '@/components/Icons';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 export function WalletPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -13,6 +15,16 @@ export function WalletPage() {
   const [topUpAmount, setTopUpAmount] = useState('');
   const [topUpDesc, setTopUpDesc] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const {
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems: paginatedTransactions,
+    setPage,
+    setPageSize,
+  } = usePagination(transactions, 8);
 
   const connection = useNotificationStore((state) => state.connection);
 
@@ -233,7 +245,7 @@ export function WalletPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-650 font-medium">
-                  {transactions.map((tx) => (
+                  {paginatedTransactions.map((tx) => (
                     <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="p-4">
                         <span
@@ -257,6 +269,16 @@ export function WalletPage() {
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={[5, 8, 15, 30]}
+                itemLabel="giao dịch"
+              />
             </div>
           )}
         </div>
