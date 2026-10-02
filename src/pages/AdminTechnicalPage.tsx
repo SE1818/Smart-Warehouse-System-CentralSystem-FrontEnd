@@ -17,21 +17,13 @@ import {
   X,
   Plus,
   Power,
-  Building2,
-  FileText,
-  Database,
-  Users,
 } from 'lucide-react';
-import { ZaloSupportDesk } from '../components/admin/ZaloSupportDesk';
+import { RobotMonitorPage } from './admin/RobotMonitorPage';
+import { StoreEdgeSetupPage } from './admin/StoreEdgeSetupPage';
 import {
   fleetService,
   missionService,
   alertService,
-  tenantService,
-  type Tenant,
-  type Subscription,
-  type Invoice,
-  type TenantDatabaseInfo,
 } from '../services/portalApi';
 
 interface AMRNode {
@@ -69,7 +61,7 @@ interface MissionQueueItem {
 
 export const AdminTechnicalPage: React.FC = () => {
   // Navigation Sub-tabs
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'robots' | 'missions' | 'tenants' | 'analytics' | 'settings' | 'cskh'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'analytics' | 'settings'>('dashboard');
   const [selectedFloor, setSelectedFloor] = useState<'warehouse-main' | 'restaurant-hall' | 'kitchen-zone'>('warehouse-main');
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   const [selectedAmr, setSelectedAmr] = useState<AMRNode | null>(null);
@@ -92,10 +84,6 @@ export const AdminTechnicalPage: React.FC = () => {
   const [amrNodes, setAmrNodes] = useState<AMRNode[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [missions, setMissions] = useState<MissionQueueItem[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [databases, setDatabases] = useState<TenantDatabaseInfo[]>([]);
 
   // Derived Battery levels from live AMR fleet
   const fleetBatteries = amrNodes.map((node) => ({
@@ -113,14 +101,10 @@ export const AdminTechnicalPage: React.FC = () => {
   // Fetch real data from live services
   const loadData = async () => {
     try {
-      const [robotsData, missionsData, alertsData, liveTenants, liveSubs, liveInvs, liveDbs] = await Promise.all([
+      const [robotsData, missionsData, alertsData] = await Promise.all([
         fleetService.getAllRobots(),
         missionService.getMissions(),
         alertService.getAlerts(),
-        tenantService.getTenants(),
-        tenantService.getSubscriptions(),
-        tenantService.getInvoices(),
-        tenantService.getDatabases(),
       ]);
 
       const defaultPositions = [
@@ -182,10 +166,6 @@ export const AdminTechnicalPage: React.FC = () => {
       setAlerts(liveAlerts);
 
       setMissions(missionsData);
-      setTenants(liveTenants);
-      setSubscriptions(liveSubs);
-      setInvoices(liveInvs);
-      setDatabases(liveDbs);
     } catch (err) {
       console.warn('Lỗi khi tải dữ liệu Technical Ops:', err);
     } finally {
@@ -364,13 +344,6 @@ export const AdminTechnicalPage: React.FC = () => {
               <span>🍳 View Nhân Viên KDS</span>
             </Link>
             <Link
-              to="/admin/dashboard"
-              className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-xs font-bold text-blue-400 hover:text-blue-300 transition-all shadow-xs"
-              title="Chuyển sang Cổng Quản Trị Hệ Thống"
-            >
-              <span>⚙️ Admin Portal</span>
-            </Link>
-            <Link
               to="/login"
               onClick={() => {
                 localStorage.removeItem('authToken');
@@ -433,17 +406,17 @@ export const AdminTechnicalPage: React.FC = () => {
         </div>
       </header>
 
-      {/* SUB-NAVIGATION TABS (Matching Image 1: Dashboard | Robots | Missions | Analytics | Settings) */}
+      {/* SUB-NAVIGATION TABS (Dashboard | Robots | Missions | Monitor | Edge-Setup | Analytics | Settings) */}
       <div className="h-12 px-4 sm:px-6 bg-white border-b border-slate-200 flex items-center justify-between text-xs shadow-2xs overflow-x-auto">
         <div className="flex items-center gap-2">
           {[
             { id: 'dashboard', label: 'Dashboard', desc: 'Bản Đồ & Tổng Quan' },
             { id: 'robots', label: `Robots (${amrNodes.length})`, desc: 'Chi Tiết Đội Xe' },
             { id: 'missions', label: `Missions (${missions.length})`, desc: 'Hàng Đợi Lệnh' },
-            { id: 'tenants', label: `Tenants (${tenants.length})`, desc: 'Khách Hàng SaaS' },
+            { id: 'monitor', label: 'AMR Monitor & Logs', desc: 'Giám Sát Trực Tuyến' },
+            { id: 'edge-setup', label: 'Edge Box & POS', desc: 'Trạm IoT & POS' },
             { id: 'analytics', label: 'Analytics', desc: 'Báo Cáo Telemetry' },
             { id: 'settings', label: 'Settings', desc: 'Cấu Hình SLAM / ROS2' },
-            { id: 'cskh', label: 'CSKH Zalo OA & RAG', desc: 'Bàn Hỗ Trợ Đa Kênh' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1345,229 +1318,11 @@ export const AdminTechnicalPage: React.FC = () => {
         )}
 
         {/* ============================================================== */}
-        {/* SUBTAB: TENANTS & SAAS PLATFORM MANAGEMENT */}
+        {/* SUBTAB: AMR MONITOR & TELEMETRY LOGS */}
         {/* ============================================================== */}
-        {activeSubTab === 'tenants' && (
-          <div className="space-y-6">
-            {/* Header & KPI Summary */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                    <Building2 className="w-5 h-5 text-blue-600" />
-                    <span>Quản Lý Doanh Nghiệp SaaS & Cơ Sở Hạ Tầng Đa Người Dùng</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Giám sát phân quyền Multi-tenancy, hợp đồng đăng ký, hóa đơn đối soát PayOS và Sharded Database PostgreSQL.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    loadData();
-                    showToast('Đã làm mới dữ liệu toàn bộ khách hàng và cơ sở dữ liệu!', 'info');
-                  }}
-                  className="px-3.5 py-1.5 bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 flex items-center gap-1.5 hover:bg-blue-100 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Đồng Bộ Danh Mục Live</span>
-                </button>
-              </div>
-
-              {/* 4 Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Tổng Doanh Nghiệp (Tenants)</span>
-                  <div className="mt-1 text-2xl font-black font-mono text-slate-900">{tenants.length}</div>
-                  <span className="text-[10px] text-emerald-600 font-semibold">100% Phân Lập TenantId</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Hợp Đồng Kích Hoạt</span>
-                  <div className="mt-1 text-2xl font-black font-mono text-blue-600">
-                    {subscriptions.filter((s) => s.status === 'Active').length}
-                  </div>
-                  <span className="text-[10px] text-blue-600 font-semibold">B2B Monthly/Yearly</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Doanh Thu Thu Tiền</span>
-                  <div className="mt-1 text-lg font-black font-mono text-emerald-700 truncate">
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
-                      invoices.filter((i) => i.status === 'Paid').reduce((sum, i) => sum + i.amount, 0)
-                    )}
-                  </div>
-                  <span className="text-[10px] text-emerald-600 font-semibold">{invoices.filter((i) => i.status === 'Paid').length} Hóa đơn đã thanh toán</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Cụm DB PostgreSQL Shards</span>
-                  <div className="mt-1 text-2xl font-black font-mono text-indigo-700">{databases.length}</div>
-                  <span className="text-[10px] text-indigo-600 font-semibold">Isolation: Schema per Tenant</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Tenants Table */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                  <Users className="w-4 h-4 text-blue-600" />
-                  <span>Danh Sách Doanh Nghiệp (Tenants) Đang Hoạt Động</span>
-                </h4>
-                <span className="text-xs font-mono text-slate-500 font-bold">{tenants.length} Bản ghi</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
-                      <th className="py-2 px-3">Tên Nhà Hàng / Chuỗi</th>
-                      <th className="py-2 px-3">Subdomain Slug</th>
-                      <th className="py-2 px-3">Gói Dịch Vụ</th>
-                      <th className="py-2 px-3">Số AMR Cấp Phép</th>
-                      <th className="py-2 px-3">Trạng Thái</th>
-                      <th className="py-2 px-3">Thời Gian Tạo</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {tenants.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
-                          Chưa có khách hàng doanh nghiệp nào đăng ký.
-                        </td>
-                      </tr>
-                    ) : (
-                      tenants.map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-3 font-bold text-slate-900">{t.name}</td>
-                          <td className="py-3 px-3 font-mono font-bold text-blue-600">{t.slug}.vora.vn</td>
-                          <td className="py-3 px-3">
-                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                              {t.planName || 'Pro'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 font-mono text-slate-700">{t.robotsCount || 0} AMRs</td>
-                          <td className="py-3 px-3">
-                            <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              {t.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 font-mono text-slate-500">{t.createdAt ? new Date(t.createdAt).toLocaleDateString('vi-VN') : '—'}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Live Invoices & Databases Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Invoices */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-emerald-600" />
-                    <span>Hóa Đơn & Thanh Toán Đối Soát (Invoices)</span>
-                  </h4>
-                  <span className="text-xs font-mono text-slate-500 font-bold">{invoices.length} Bản ghi</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
-                        <th className="py-2 px-2.5">Số Hóa Đơn</th>
-                        <th className="py-2 px-2.5">Doanh Nghiệp</th>
-                        <th className="py-2 px-2.5">Số Tiền (VND)</th>
-                        <th className="py-2 px-2.5">Trạng Thái</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {invoices.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="py-6 text-center text-xs text-slate-400">
-                            Chưa có hóa đơn nào phát sinh.
-                          </td>
-                        </tr>
-                      ) : (
-                        invoices.map((inv) => (
-                          <tr key={inv.id} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-2.5 font-mono font-bold text-slate-800">{(inv as any).invoiceNumber || inv.id}</td>
-                            <td className="py-2.5 px-2.5 font-medium text-slate-700 truncate max-w-[140px]">{inv.tenantName}</td>
-                            <td className="py-2.5 px-2.5 font-mono font-bold text-emerald-700">
-                              {new Intl.NumberFormat('vi-VN').format(inv.amount)} đ
-                            </td>
-                            <td className="py-2.5 px-2.5">
-                              <span className={`px-2 py-0.5 rounded-full font-mono text-[9px] font-bold ${
-                                inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                              }`}>
-                                {inv.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Database Shards */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                    <Database className="w-4 h-4 text-indigo-600" />
-                    <span>Cụm Sharded PostgreSQL Database Nodes</span>
-                  </h4>
-                  <span className="text-xs font-mono text-slate-500 font-bold">{databases.length} Shards</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
-                        <th className="py-2 px-2.5">Database Name</th>
-                        <th className="py-2 px-2.5">Doanh Nghiệp</th>
-                        <th className="py-2 px-2.5">Host Cluster</th>
-                        <th className="py-2 px-2.5">Trạng Thái</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {databases.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="py-6 text-center text-xs text-slate-400">
-                            Chưa có cơ sở dữ liệu shard nào.
-                          </td>
-                        </tr>
-                      ) : (
-                        databases.map((db) => (
-                          <tr key={db.tenantId} className="hover:bg-slate-50">
-                            <td className="py-2.5 px-2.5 font-mono text-slate-800 font-bold text-[11px] truncate max-w-[150px]">{db.dbName}</td>
-                            <td className="py-2.5 px-2.5 text-slate-700 truncate max-w-[120px]">{db.tenantName}</td>
-                            <td className="py-2.5 px-2.5 font-mono text-slate-500 text-[10px]">
-                              {db.host && db.port && db.port > 0 ? `${db.host}:${db.port}` : (db.host || 'Local Storage')}
-                            </td>
-                            <td className="py-2.5 px-2.5">
-                              <span
-                                className={`px-2 py-0.5 rounded-full font-mono text-[9px] font-bold ${
-                                  (db.edgeStatus || '').toLowerCase() === 'online'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : (db.edgeStatus || '').toLowerCase().includes('pending') || !db.isConfigured
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-rose-100 text-rose-800'
-                                }`}
-                              >
-                                {(db.edgeStatus || '').toLowerCase() === 'online'
-                                  ? 'Online'
-                                  : (db.edgeStatus || '').toLowerCase().includes('pending') || !db.isConfigured
-                                  ? 'Chờ ghép nối'
-                                  : db.healthStatus}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+        {activeSubTab === 'monitor' && (
+          <div className="space-y-4">
+            <RobotMonitorPage />
           </div>
         )}
 
@@ -1627,11 +1382,11 @@ export const AdminTechnicalPage: React.FC = () => {
         )}
 
         {/* ============================================================== */}
-        {/* SUBTAB 6: CSKH ZALO OA & RAG AI (SaaS Admin Center) */}
+        {/* SUBTAB: EDGE BOX & POS INTEGRATION */}
         {/* ============================================================== */}
-        {activeSubTab === 'cskh' && (
+        {activeSubTab === 'edge-setup' && (
           <div className="space-y-4">
-            <ZaloSupportDesk />
+            <StoreEdgeSetupPage />
           </div>
         )}
       </main>

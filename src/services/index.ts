@@ -13,4 +13,3 @@ export { robotMonitorService } from './robotMonitorService';
 export { transferService } from './transferService';
 export { fileService } from './file';
 export { settlementService } from './settlementService';
-export { saasService } from './saasService';

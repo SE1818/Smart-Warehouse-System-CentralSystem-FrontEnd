@@ -1,14 +1,14 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icons } from './Icons';
-import { Building2, CreditCard, Database, Sliders, Radio, UtensilsCrossed } from 'lucide-react';
+import { Radio, UtensilsCrossed } from 'lucide-react';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useRobotStore } from '../stores/robotStore';
 
 // Route → module mapping for hover prefetch
 const ROUTE_MODULES: Record<string, string> = {
   '/admin/dashboard': 'src/pages/admin/DashboardPage',
-    '/admin/products': 'src/pages/admin/ProductsPage',
+  '/admin/products': 'src/pages/admin/ProductsPage',
   '/admin/orders': 'src/pages/admin/OrdersPage',
   '/admin/promotions': 'src/pages/PromotionsPage',
   '/admin/reports': 'src/pages/admin/ReportsPage',
@@ -28,10 +28,6 @@ const ROUTE_MODULES: Record<string, string> = {
   '/admin/files': 'src/pages/admin/FileManagementPage',
   '/admin/logs': 'src/pages/AuditLogsPage',
   '/admin/profile': 'src/pages/ProfilePage',
-  '/admin/tenants': 'src/pages/admin/TenantsPage',
-  '/admin/subscriptions': 'src/pages/admin/SubscriptionsPage',
-  '/admin/databases': 'src/pages/admin/DatabasesPage',
-  '/admin/feature-flags': 'src/pages/admin/FeatureFlagsPage',
 };
 
 export function AdminLayout() {
@@ -78,31 +74,40 @@ export function AdminLayout() {
   }, [userId, connect, disconnect]);
 
   const isStoreManager = user?.role === 'store_manager';
+  const roleLower = (user?.role || '').toLowerCase();
+  const isTechnicalEngineer = roleLower.includes('engineer') || roleLower.includes('technical') || roleLower.includes('tech');
+
+  // If a technical engineer lands on admin dashboard, route them to their primary command center
+  useEffect(() => {
+    if (isTechnicalEngineer && location.pathname === '/admin/dashboard') {
+      navigate('/technical', { replace: true });
+    }
+  }, [isTechnicalEngineer, location.pathname, navigate]);
 
   const rawNavGroups = [
   {
     label: 'Tổng quan',
     items: [
-      { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" />, visible: true },
-          ],
+      { path: '/admin/dashboard', label: 'Bảng điều khiển', icon: <Icons.Dashboard className="w-5 h-5" />, visible: !isTechnicalEngineer },
+    ],
   },
   {
     label: 'Kho hàng',
     items: [
-      { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" />, visible: true },
+      { path: '/admin/products', label: 'Quản lý sản phẩm', icon: <Icons.Product className="w-5 h-5" />, visible: !isTechnicalEngineer },
     ],
   },
   {
     label: 'Kinh doanh',
     items: [
-      { path: '/admin/cashier', label: 'Thu ngân & Tính tiền', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
-      { path: '/admin/tables', label: 'Sơ đồ Bàn & Mã QR', icon: <Icons.Store className="w-5 h-5" />, visible: true },
-      { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" />, visible: true },
-      { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
-      { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: true },
-      { path: '/admin/integrations', label: 'Tích hợp B2B & API Keys', icon: <Icons.Folder className="w-5 h-5" />, visible: true },
+      { path: '/admin/cashier', label: 'Thu ngân & Tính tiền', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isTechnicalEngineer },
+      { path: '/admin/tables', label: 'Sơ đồ Bàn & Mã QR', icon: <Icons.Store className="w-5 h-5" />, visible: !isTechnicalEngineer },
+      { path: '/admin/orders', label: 'Quản lý đơn hàng', icon: <Icons.CartOrder className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/promotions', label: 'Khuyến mãi', icon: <Icons.TagDiscount className="w-5 h-5" />, visible: !isTechnicalEngineer },
+      { path: '/admin/reports', label: 'Báo cáo doanh số', icon: <Icons.AnalyticsReport className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/wallet', label: 'Ví điện tử', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isTechnicalEngineer },
+      { path: '/admin/settlement', label: 'Đối soát & Payout', icon: <Icons.Wallet className="w-5 h-5" />, visible: !isTechnicalEngineer },
+      { path: '/admin/integrations', label: 'Tích hợp B2B & API Keys', icon: <Icons.Folder className="w-5 h-5" />, visible: !isTechnicalEngineer },
     ],
   },
   {
@@ -113,7 +118,7 @@ export function AdminLayout() {
       { path: '/admin/robots', label: 'Robot AMR', icon: <Icons.Robot className="w-5 h-5" />, visible: !isStoreManager },
       { path: '/admin/edge-setup', label: 'Cài đặt Edge Box & POS', icon: <Icons.Store className="w-5 h-5" />, visible: true },
       { path: '/admin/transfers', label: 'Chuyến vận chuyển', icon: <Icons.Truck className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/robot-monitor', label: 'AMR Monitor', icon: <Icons.Metrics className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/robot-monitor', label: 'AMR Monitor', icon: <Icons.Metrics className="w-5 h-5" />, visible: true },
       { path: '/admin/scheduler', label: 'Quản lý Scheduler', icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
@@ -126,23 +131,14 @@ export function AdminLayout() {
   {
     label: 'Hệ thống',
     items: [
-      { path: '/admin/users', label: 'Người dùng', icon: <Icons.UsersGroup className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/storeregistrations', label: 'Yêu cầu mở cửa hàng', icon: <Icons.Warehouse className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/stores', label: 'Cửa hàng', icon: <Icons.Store className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/complaints', label: 'Khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" />, visible: !isStoreManager },
+      { path: '/admin/users', label: 'Người dùng', icon: <Icons.UsersGroup className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/storeregistrations', label: 'Yêu cầu mở cửa hàng', icon: <Icons.Warehouse className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/stores', label: 'Cửa hàng', icon: <Icons.Store className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/notifications', label: 'Thông báo', icon: <Icons.Bell className="w-5 h-5" />, visible: true },
+      { path: '/admin/complaints', label: 'Khiếu nại', icon: <Icons.AlertWarning className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/files', label: 'Quản lý File', icon: <Icons.Folder className="w-5 h-5" />, visible: !isTechnicalEngineer && !isStoreManager },
+      { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: <Icons.HistoryLogs className="w-5 h-5" />, visible: true },
       { path: '/admin/profile', label: 'Hồ sơ cá nhân', icon: <Icons.Profile className="w-5 h-5" />, visible: true },
-    ],
-  },
-  {
-    label: 'Nền tảng SaaS',
-    items: [
-      { path: '/admin/tenants', label: 'Chuỗi Quán & Tenant', icon: <Building2 className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/subscriptions', label: 'Gói Cước & Doanh Thu', icon: <CreditCard className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/databases', label: 'Cụm Database Tenant', icon: <Database className="w-5 h-5" />, visible: !isStoreManager },
-      { path: '/admin/feature-flags', label: 'Feature Flags Động', icon: <Sliders className="w-5 h-5" />, visible: !isStoreManager },
     ],
   },
   ];
