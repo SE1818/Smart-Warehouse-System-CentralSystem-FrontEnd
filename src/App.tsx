@@ -1,10 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AdminLayout } from './components/AdminLayout';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { ToastContainer } from 'react-toastify';
-import { Icons } from './components/Icons';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 
@@ -24,50 +21,15 @@ const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const StoreRegistrationPage = lazy(() => import('./pages/auth/StoreRegistrationPage').then(m => ({ default: m.StoreRegistrationPage })));
-const StoreRegistrationsPage = lazy(() => import('./pages/admin/StoreRegistrationsPage').then(m => ({ default: m.StoreRegistrationsPage })));
-const StoresPage = lazy(() => import('./pages/admin/StoresPage').then(m => ({ default: m.StoresPage })));
-
 // Technical Engineer & Staff KDS pages
 const AdminTechnicalPage = lazy(() => import('./pages/AdminTechnicalPage').then(m => ({ default: m.AdminTechnicalPage })));
 const StaffKdsPage = lazy(() => import('./pages/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
-
-// Admin pages
-const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const AdminProducts = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
-const AdminOrders = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ default: m.OrdersPage })));
-const AdminUsers = lazy(() => import('./pages/admin/UsersPage').then(m => ({ default: m.UsersPage })));
-const AdminComplaints = lazy(() => import('./pages/admin/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })));
-const AdminReports = lazy(() => import('./pages/admin/ReportsPage').then(m => ({ default: m.ReportsPage })));
-const SettlementPage = lazy(() => import('./pages/admin/SettlementPage').then(m => ({ default: m.SettlementPage })));
-
-// Stock pages
-const WarehousesPage = lazy(() => import('./pages/stock/WarehousesPage').then(m => ({ default: m.WarehousesPage })));
-const StockLevelsPage = lazy(() => import('./pages/stock/StockLevelsPage').then(m => ({ default: m.StockLevelsPage })));
-const StockMovementsPage = lazy(() => import('./pages/stock/StockMovementsPage').then(m => ({ default: m.StockMovementsPage })));
-const StockAdjustmentsPage = lazy(() => import('./pages/stock/StockAdjustmentsPage').then(m => ({ default: m.StockAdjustmentsPage })));
+const StoreEdgeSetupPage = lazy(() => import('./pages/technical/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
+const RobotMonitorPage = lazy(() => import('./pages/technical/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
 
 // Customer & Integration pages
 const QrOrderPage = lazy(() => import('./pages/public/QrOrderPage').then(m => ({ default: m.QrOrderPage })));
 const PublicTrackingPage = lazy(() => import('./pages/public/PublicTrackingPage').then(m => ({ default: m.PublicTrackingPage })));
-const WhiteLabelSettingsPage = lazy(() => import('./pages/admin/WhiteLabelSettingsPage').then(m => ({ default: m.WhiteLabelSettingsPage })));
-const TablesPage = lazy(() => import('./pages/admin/TablesPage').then(m => ({ default: m.TablesPage })));
-const CashierPage = lazy(() => import('./pages/admin/CashierPage').then(m => ({ default: m.CashierPage })));
-const DeveloperIntegrationsPage = lazy(() => import('./pages/admin/DeveloperIntegrationsPage').then(m => ({ default: m.DeveloperIntegrationsPage })));
-
-// Other pages
-const SearchPage = lazy(() => import('./pages/search/SearchPage').then(m => ({ default: m.SearchPage })));
-const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
-const FileManagementPage = lazy(() => import('./pages/admin/FileManagementPage').then(m => ({ default: m.FileManagementPage })));
-const PromotionsPage = lazy(() => import('./pages/PromotionsPage').then(m => ({ default: m.PromotionsPage })));
-const RobotManagementPage = lazy(() => import('./pages/RobotManagementPage').then(m => ({ default: m.RobotManagementPage })));
-const WalletPage = lazy(() => import('./pages/WalletPage').then(m => ({ default: m.WalletPage })));
-const ProfilePage = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
-const MetricsPage = lazy(() => import('./pages/MetricsPage').then(m => ({ default: m.MetricsPage })));
-const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
-const SchedulerPage = lazy(() => import('./pages/admin/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
-const TransfersPage = lazy(() => import('./pages/admin/TransfersPage').then(m => ({ default: m.TransfersPage })));
-const RobotMonitorPage = lazy(() => import('./pages/admin/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
-const StoreEdgeSetupPage = lazy(() => import('./pages/admin/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
 
 
 
@@ -152,65 +114,13 @@ function App() {
 					<Route path="/technical" element={<AdminTechnicalPage />} />
 					<Route path="/staff" element={<StaffKdsPage />} />
 
-					{/* Admin routes */}
-					<Route
-						path="/admin"
-						element={
-							<ProtectedRoute allowedRoles={['Operator', 'Admin', 'admin', 'store_manager']}>
-								<AdminLayout />
-							</ProtectedRoute>
-						}
-					>
-						<Route index element={<Navigate to="/admin/dashboard" replace />} />
-						<Route
-							element={
-								<Suspense
-									fallback={
-										<div className="p-8 text-center text-slate-500 font-semibold flex flex-col items-center justify-center space-y-3 min-h-[50vh] animate-pulse">
-											<Icons.Spinner className="h-8 w-8 text-brand-600 animate-spin" />
-											<p className="text-sm">Đang tải nội dung...</p>
-										</div>
-									}
-								>
-									<Outlet />
-								</Suspense>
-							}
-						>
-							<Route path="dashboard" element={<AdminDashboard />} />
-							<Route path="warehouses" element={<WarehousesPage />} />
-							<Route path="stocklevels" element={<StockLevelsPage />} />
-							<Route path="stockmovements" element={<StockMovementsPage />} />
-							<Route path="stockadjustments" element={<StockAdjustmentsPage />} />
-							<Route path="search" element={<SearchPage />} />
-							<Route path="notifications" element={<NotificationsPage />} />
-							<Route path="files" element={<FileManagementPage />} />
-							<Route path="promotions" element={<PromotionsPage />} />
-							<Route path="robots" element={<RobotManagementPage />} />
-							<Route path="wallet" element={<WalletPage />} />
-							<Route path="profile" element={<ProfilePage />} />
-							<Route path="metrics" element={<MetricsPage />} />
-							<Route path="logs" element={<AuditLogsPage />} />
-							<Route path="scheduler" element={<SchedulerPage />} />
-							<Route path="products" element={<AdminProducts />} />
-							<Route path="orders" element={<AdminOrders />} />
-							<Route path="users" element={<AdminUsers />} />
-							<Route path="storeregistrations" element={<StoreRegistrationsPage />} />
-							<Route path="stores" element={<StoresPage />} />
-							<Route path="tables" element={<TablesPage />} />
-							<Route path="cashier" element={<CashierPage />} />
-							<Route path="integrations" element={<DeveloperIntegrationsPage />} />
-							<Route path="white-label" element={<WhiteLabelSettingsPage />} />
-							<Route path="complaints" element={<AdminComplaints />} />
-							<Route path="reports" element={<AdminReports />} />
-							<Route path="settlement" element={<SettlementPage />} />
-							<Route path="transfers" element={<TransfersPage />} />
-							<Route path="robot-monitor" element={<RobotMonitorPage />} />
-							<Route path="edge-setup" element={<StoreEdgeSetupPage />} />
-						</Route>
-					</Route>
-
-					{/* Direct setup route for Technicians at the store */}
+					{/* Direct technical & store edge routes */}
 					<Route path="/edge-setup" element={<StoreEdgeSetupPage />} />
+					<Route path="/robot-monitor" element={<RobotMonitorPage />} />
+
+					{/* Admin routes: Permanently migrated to SaaS Portal */}
+					<Route path="/admin/*" element={<Navigate to="/technical" replace />} />
+					<Route path="/admin" element={<Navigate to="/technical" replace />} />
 
 					{/* Fallback */}
 					<Route path="*" element={<Navigate to="/" replace />} />

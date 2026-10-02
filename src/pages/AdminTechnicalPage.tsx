@@ -18,8 +18,8 @@ import {
   Plus,
   Power,
 } from 'lucide-react';
-import { RobotMonitorPage } from './admin/RobotMonitorPage';
-import { StoreEdgeSetupPage } from './admin/StoreEdgeSetupPage';
+import { RobotMonitorPage } from './technical/RobotMonitorPage';
+import { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
 import {
   fleetService,
   missionService,

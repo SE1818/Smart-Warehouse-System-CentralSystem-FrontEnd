@@ -327,13 +327,6 @@ export const StaffKdsPage: React.FC = () => {
               <span>👷 View Kỹ Sư</span>
             </Link>
             <Link
-              to="/admin/dashboard"
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-700 transition-all shadow-2xs"
-              title="Chuyển sang Cổng Quản Trị Hệ Thống"
-            >
-              <span>⚙️ Admin</span>
-            </Link>
-            <Link
               to="/login"
               onClick={() => {
                 localStorage.removeItem('authToken');
