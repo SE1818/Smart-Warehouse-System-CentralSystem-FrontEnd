@@ -17,8 +17,8 @@ export const resolveBaseUrl = (): string => {
   let envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
   // 3. Automatically replace expired ngrok URL with active tunnel
-  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
-    envUrl = 'https://briar-snoring-submerge.ngrok-free.dev/api';
+  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+    envUrl = 'https://triage-scarcity-prancing.ngrok-free.dev/api';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');

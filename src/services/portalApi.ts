@@ -10,8 +10,8 @@ export const resolvePortalBaseUrl = (): string => {
   }
 
   let envUrl = (import.meta.env.VITE_API_GATEWAY_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
-    envUrl = 'https://briar-snoring-submerge.ngrok-free.dev/api/v1';
+  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+    envUrl = 'https://triage-scarcity-prancing.ngrok-free.dev/api/v1';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');
