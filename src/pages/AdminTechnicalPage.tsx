@@ -351,6 +351,7 @@ export const AdminTechnicalPage: React.FC = () => {
               to="/login"
               onClick={() => {
                 localStorage.removeItem('authToken');
+                localStorage.removeItem('refreshToken');
                 localStorage.removeItem('user');
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-rose-950/60 hover:border-rose-600/60 text-xs font-bold text-slate-300 hover:text-rose-200 transition-all shadow-xs"

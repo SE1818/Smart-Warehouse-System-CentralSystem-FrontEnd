@@ -34,6 +34,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setUser(null);
       localStorage.removeItem('user');
       localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
     } finally {
       setLoading(false);
     }
@@ -57,20 +58,23 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const login = useCallback(async (email: string, password: string) => {
     const response = await authService.login({ email, password });
     localStorage.setItem('authToken', response.accessToken);
+    localStorage.setItem('refreshToken', response.refreshToken);
     await refreshUser();
   }, [refreshUser]);
 
   const register = useCallback(async (username: string, email: string, password: string) => {
     const response = await authService.register({ username, email, password });
     localStorage.setItem('authToken', response.accessToken);
+    localStorage.setItem('refreshToken', response.refreshToken);
     await refreshUser();
   }, [refreshUser]);
 
   const logout = useCallback(async () => {
     try {
-      await authService.logout();
+      await authService.logout(localStorage.getItem('refreshToken') ?? undefined);
     } finally {
       localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       setUser(null);
     }

@@ -36,12 +36,13 @@ describe('authService', () => {
     mockPost.mockResolvedValue({ data: { accessToken: 'new', refreshToken: 'r2', accessTokenExpiresIn: '3600s', role: 'Customer' } });
     const res = await authService.refreshToken('rt');
     expect(res.accessToken).toBe('new');
+    expect(mockPost).toHaveBeenCalledWith('/auth/refresh-token', { refreshToken: 'rt' });
   });
 
   it('logout', async () => {
     mockPost.mockResolvedValue({ data: {} });
-    await authService.logout();
-    expect(mockPost).toHaveBeenCalledWith('/auth/logout');
+    await authService.logout('rt');
+    expect(mockPost).toHaveBeenCalledWith('/auth/logout', { refreshToken: 'rt' });
   });
 
   it('getProfile returns User', async () => {

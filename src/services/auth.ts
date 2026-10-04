@@ -15,11 +15,11 @@ export const authService = {
     return res.data;
   },
   async refreshToken(refreshToken: string): Promise<AuthResponse> {
-    const res = await apiClient.post('/auth/refresh', { refreshToken });
+    const res = await apiClient.post('/auth/refresh-token', { refreshToken });
     return res.data;
   },
-  async logout(): Promise<void> {
-    await apiClient.post('/auth/logout');
+  async logout(refreshToken?: string): Promise<void> {
+    await apiClient.post('/auth/logout', { refreshToken: refreshToken ?? '' });
   },
   async getProfile(): Promise<User> {
     const res = await apiClient.get('/auth/profile');

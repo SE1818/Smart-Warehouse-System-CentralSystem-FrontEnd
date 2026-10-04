@@ -1,5 +1,8 @@
 import axios from 'axios';
 import type { AxiosAdapter, AxiosResponse } from 'axios';
+import type { AuthResponse } from '@/types/auth';
+
+type AuthSession = AuthResponse;
 
 export const resolveBaseUrl = (): string => {
   // 1. Runtime override via localStorage for quick testing without redeploying
@@ -107,6 +110,41 @@ const apiClient = axios.create({
   adapter: dedupeAndRetryAdapter,
 });
 
+let inflightRefresh: Promise<AuthSession> | null = null;
+
+function clearAuthSession() {
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+}
+
+function redirectToLogin() {
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
+// Bare axios, not apiClient: routing this through apiClient would re-enter the
+// interceptor and recurse on its own failure.
+function refreshAccessToken(refreshToken: string): Promise<AuthSession> {
+  if (!inflightRefresh) {
+    inflightRefresh = axios
+      .post<AuthSession>(
+        `${API_BASE_URL}/auth/refresh-token`,
+        { refreshToken },
+        {
+          timeout: 15000,
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        }
+      )
+      .then((res) => res.data)
+      .finally(() => {
+        inflightRefresh = null;
+      });
+  }
+  return inflightRefresh;
+}
+
 // Attach JWT token on every request safely
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken');
@@ -121,22 +159,46 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 → redirect to login only for expired authenticated sessions, never for login requests themselves
+// Handle 401 → try one silent refresh, then redirect to login if that fails too.
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      const url = error.config?.url || '';
-      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/external-login');
-      if (!isAuthEndpoint) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-      }
+  async (error) => {
+    const config = error.config as (typeof error.config & { _retried?: boolean }) | undefined;
+    const status = error.response?.status;
+    const url = config?.url || '';
+    const isAuthEndpoint =
+      url.includes('/auth/login') ||
+      url.includes('/auth/external-login') ||
+      url.includes('/auth/refresh-token') ||
+      url.includes('/auth/logout');
+
+    if (status !== 401 || isAuthEndpoint) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken || config?._retried) {
+      clearAuthSession();
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
+    config._retried = true;
+    try {
+      // Single-flight: concurrent 401s await one refresh. The server rotates refresh
+      // tokens and treats a replayed one as reuse, which revokes every session for the user.
+      const session = await refreshAccessToken(refreshToken);
+      localStorage.setItem('authToken', session.accessToken);
+      localStorage.setItem('refreshToken', session.refreshToken);
+      if (config.headers) {
+        config.headers.Authorization = `Bearer ${session.accessToken}`;
+      }
+      return apiClient(config);
+    } catch {
+      clearAuthSession();
+      redirectToLogin();
+      return Promise.reject(error);
+    }
   }
 );
 
