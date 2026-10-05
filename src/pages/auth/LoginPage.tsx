@@ -134,7 +134,7 @@ export function LoginPage() {
       <div className="bg-slate-850/95 backdrop-blur-xl rounded-3xl border border-slate-700/80 shadow-2xl p-8 w-full max-w-md space-y-6 relative z-10 text-white">
         <div className="text-center space-y-3">
           <div className="w-16 h-16 rounded-2xl bg-white border border-slate-700/80 p-2 mx-auto flex items-center justify-center shadow-xl shadow-[#0062FF]/25">
-            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" width="48" height="48" loading="eager" className="w-full h-full object-contain" />
           </div>
           <div>
             <div className="flex items-center justify-center gap-2">

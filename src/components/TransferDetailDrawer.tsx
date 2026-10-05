@@ -4,6 +4,7 @@ import { transferService } from '@/services/transferService';
 import type { TransferAudit } from '@/services/transferService';
 import { Icons } from '@/components/Icons';
 import { toast } from 'react-toastify';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 
 interface TransferDetailDrawerProps {
   transferId: string;
@@ -30,10 +31,10 @@ export function TransferDetailDrawer({ transferId, onClose, onCancel }: Transfer
 
   useEffect(() => {
     void loadDetail();
-    // Refresh detail every 4s to track live robot position/commands
-    const interval = setInterval(() => void loadDetail(), 4000);
-    return () => clearInterval(interval);
   }, [loadDetail]);
+
+  // Refresh detail every 4s only when tab is actively visible to minimize tunnel bandwidth
+  useVisibilityPolling(loadDetail, 4000, true);
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, { bg: string; text: string; dot: string; label: string }> = {

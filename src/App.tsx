@@ -70,7 +70,7 @@ function App() {
 					<div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center text-slate-800">
 						<div className="relative mb-6">
 							<div className="w-20 h-20 rounded-2xl bg-white border border-slate-200/90 flex items-center justify-center shadow-xl shadow-[#0062FF]/20 animate-bounce-in p-2">
-								<img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
+								<img src="/brand/vora-icon.png" alt="VORA Emblem" width="64" height="64" loading="eager" className="w-full h-full object-contain" />
 							</div>
 							<div className="absolute -inset-4 rounded-3xl bg-[#0062FF]/10 animate-ping-slow" />
 						</div>

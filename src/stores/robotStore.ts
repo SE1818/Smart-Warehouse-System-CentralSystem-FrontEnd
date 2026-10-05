@@ -85,7 +85,7 @@ export const useRobotStore = create<RobotState>((set, get) => {
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {
           accessTokenFactory: () => token || '',
-          headers: import.meta.env.DEV ? { 'ngrok-skip-browser-warning': 'true' } : undefined,
+          headers: { 'ngrok-skip-browser-warning': 'true' },
         })
         .configureLogging(signalR.LogLevel.Information)
         .withAutomaticReconnect({
