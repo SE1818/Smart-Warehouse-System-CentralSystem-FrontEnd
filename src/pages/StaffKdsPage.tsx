@@ -10,11 +10,14 @@ import {
   RotateCcw,
   Store,
   Send,
+  Map as MapIcon,
+  LayoutGrid,
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
 import { fixMojibake } from '../utils/textUtils';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/common/Pagination';
+import { SlamFloorMapViewer } from '@/components/map/SlamFloorMapViewer';
 
 interface TableNode {
   id: string;
@@ -51,6 +54,7 @@ export const StaffKdsPage: React.FC = () => {
   // Active Filter Zone
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
 
   // Multi-tier Tray State (Khay 1 - 2 - 3)
   const [tray1, setTray1] = useState<TrayItem[]>([]);
@@ -385,32 +389,58 @@ export const StaffKdsPage: React.FC = () => {
             </span>
           </div>
 
-          {/* Interactive Table Grid */}
+          {/* Interactive Table Section */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
-                <span>SƠ ĐỒ BÀN ĂN THỜI GIAN THỰC</span>
+                <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
               </h2>
 
-              {/* Status Legend */}
-              <div className="flex items-center gap-3 text-[11px] text-slate-600">
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /> Chờ món
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Đang phục vụ
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Có khách
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-200" /> Bàn trống
-                </span>
+              {/* View Switcher: SLAM Map vs Cards Grid */}
+              <div className="flex items-center gap-2">
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('slam-map')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      viewMode === 'slam-map'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <MapIcon className="w-3.5 h-3.5" />
+                    <span>Bản Đồ SLAM (ROS 2)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('grid')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Dạng Thẻ Bàn</span>
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Table Cards Grid (Fixed proportions, never vertically distorted) */}
-            {filteredTables.length === 0 ? (
+            {/* View Mode 1: SLAM Map Viewer */}
+            {viewMode === 'slam-map' ? (
+              <SlamFloorMapViewer
+                tables={filteredTables}
+                selectedTableId={selectedTableId}
+                onSelectTable={(id) => {
+                  setSelectedTableId(id);
+                  const matched = tables.find((t) => t.id === id);
+                  showToast(`Đã chọn ${matched?.name || id} trên bản đồ SLAM`, 'info');
+                }}
+                robots={robots}
+                className="flex-1"
+              />
+            ) : filteredTables.length === 0 ? (
               <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">
                 <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-700">Chưa có danh mục bàn ăn nào</h4>
@@ -420,6 +450,22 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             ) : (
               <>
+                {/* Status Legend */}
+                <div className="flex items-center gap-3 text-[11px] text-slate-600 mb-3">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /> Chờ món
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Đang phục vụ
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Có khách
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-200" /> Bàn trống
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
                   {paginatedTables.map((table) => {
                     const isSelected = table.id === selectedTableId;
