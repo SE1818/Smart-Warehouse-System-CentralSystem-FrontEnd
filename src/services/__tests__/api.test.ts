@@ -144,4 +144,28 @@ describe('services/api.ts', () => {
     expect(localStorage.getItem('authToken')).toBe('preserved');
     expect(localStorage.getItem('user')).toBe('{"id":"42"}');
   });
+
+  // ── Edge vs Cloud dual routing ──────────────────────────────────────────
+
+  it('routes edge endpoints to EDGE_BASE_URL and cloud endpoints to API_BASE_URL', async () => {
+    const { isEdgeEndpoint, EDGE_BASE_URL, API_BASE_URL } = await import('@/services/api');
+    expect(isEdgeEndpoint('/v1/robots')).toBe(true);
+    expect(isEdgeEndpoint('/robots/123')).toBe(true);
+    expect(isEdgeEndpoint('/v1/commands/robot/456')).toBe(true);
+    expect(isEdgeEndpoint('/auth/login')).toBe(false);
+    expect(isEdgeEndpoint('/orders')).toBe(false);
+    expect(isEdgeEndpoint('/tenants')).toBe(false);
+
+    expect(capturedRequestHandler).not.toBeNull();
+
+    // 1. Robot endpoint -> EDGE_BASE_URL
+    const robotConfig: Record<string, unknown> = { url: '/v1/robots', headers: {} };
+    capturedRequestHandler!(robotConfig);
+    expect(robotConfig.baseURL).toBe(EDGE_BASE_URL);
+
+    // 2. Auth endpoint -> API_BASE_URL (Cloud)
+    const authConfig: Record<string, unknown> = { url: '/auth/login', headers: {} };
+    capturedRequestHandler!(authConfig);
+    expect(authConfig.baseURL).toBe(API_BASE_URL);
+  });
 });

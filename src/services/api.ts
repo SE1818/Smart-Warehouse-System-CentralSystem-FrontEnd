@@ -16,8 +16,9 @@ export const resolveBaseUrl = (): string => {
   // 2. Read environment variable
   let envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
-  // 3. Automatically replace expired ngrok URL with active tunnel
-  if (!envUrl || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+  // If envUrl is accidentally pointing to local robot service port 5000,
+  // do NOT use it as the main Cloud API base URL because auth/login will fail!
+  if (!envUrl || envUrl.includes(':5000') || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
     envUrl = 'https://triage-scarcity-prancing.ngrok-free.dev/api';
   }
 
@@ -38,6 +39,52 @@ export const resolveBaseUrl = (): string => {
 };
 
 export const API_BASE_URL = resolveBaseUrl();
+
+export const resolveEdgeBaseUrl = (): string => {
+  // 1. Runtime override via localStorage
+  if (typeof window !== 'undefined') {
+    const override = localStorage.getItem('EDGE_API_BASE_URL')?.trim();
+    if (override) {
+      return override.replace(/\/+$/, '');
+    }
+  }
+
+  // 2. Read environment variable
+  let edgeUrl = (import.meta.env.VITE_EDGE_API_URL || '').trim();
+  if (!edgeUrl) {
+    const hostname = typeof window !== 'undefined' ? window.location?.hostname : '';
+    if (hostname && typeof hostname === 'string' && hostname.endsWith('.local')) {
+      const parts = hostname.split('.');
+      edgeUrl = `http://${parts[0]}.local:5000/api`;
+    } else {
+      edgeUrl = 'http://localhost:5000/api';
+    }
+  }
+
+  const cleanUrl = edgeUrl.replace(/\/+$/, '');
+  if (!cleanUrl.endsWith('/api')) {
+    return `${cleanUrl}/api`;
+  }
+  return cleanUrl;
+};
+
+export const EDGE_BASE_URL = resolveEdgeBaseUrl();
+
+/**
+ * Determines whether a given request path belongs to the Local Edge node (Robot Service)
+ */
+export const isEdgeEndpoint = (url?: string): boolean => {
+  if (!url) return false;
+  const clean = url.toLowerCase();
+  return (
+    clean.startsWith('/v1/robots') ||
+    clean.startsWith('/robots') ||
+    clean.startsWith('/v1/robot') ||
+    clean.startsWith('/robot/') ||
+    clean.startsWith('/v1/commands/robot') ||
+    clean.startsWith('/v1/tasks')
+  );
+};
 
 const pendingRequests = new Map<string, Promise<any>>();
 const getAdapter = (config: any): AxiosAdapter => {
@@ -145,13 +192,24 @@ function refreshAccessToken(refreshToken: string): Promise<AuthSession> {
   return inflightRefresh;
 }
 
-// Attach JWT token on every request safely
+// Attach dynamic base URL (Edge vs Cloud) and JWT token on every request
 apiClient.interceptors.request.use((config) => {
+  const url = config.url || '';
+
+  // Dual routing: route robot/hardware endpoints to Local Edge, others to Cloud Server
+  if (isEdgeEndpoint(url)) {
+    config.baseURL = EDGE_BASE_URL;
+  } else {
+    config.baseURL = API_BASE_URL;
+  }
+
   const token = localStorage.getItem('authToken');
   if (token) {
-    // Ensure token is attached only to requests within local base API or relative paths
-    const url = config.url || '';
-    const isRelativeOrAppDomain = !url.startsWith('http://') && !url.startsWith('https://') || url.startsWith(API_BASE_URL);
+    // Ensure token is attached only to requests within local base API, edge API or relative paths
+    const isRelativeOrAppDomain =
+      (!url.startsWith('http://') && !url.startsWith('https://')) ||
+      url.startsWith(API_BASE_URL) ||
+      url.startsWith(EDGE_BASE_URL);
     if (isRelativeOrAppDomain) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -163,9 +221,19 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const config = error.config as (typeof error.config & { _retried?: boolean }) | undefined;
+    const config = error.config as (typeof error.config & { _retried?: boolean; _edgeFallbackRetried?: boolean }) | undefined;
     const status = error.response?.status;
     const url = config?.url || '';
+
+    // If local Edge Node (port 5000) is offline/unreachable, gracefully fallback to Cloud Gateway once
+    if (isEdgeEndpoint(url) && !error.response && !config?._edgeFallbackRetried) {
+      if (config) {
+        config._edgeFallbackRetried = true;
+        config.baseURL = API_BASE_URL;
+        return apiClient(config);
+      }
+    }
+
     const isAuthEndpoint =
       url.includes('/auth/login') ||
       url.includes('/auth/external-login') ||
