@@ -83,5 +83,51 @@ export const robotService = {
   async getStations(): Promise<Station[]> {
     const response = await apiClient.get<Station[]>('/v1/robots/stations');
     return response.data;
+  },
+
+  // Get active SLAM map metadata from Robot Service (real MQTT / ROS 2 data)
+  async getActiveSlamMap(): Promise<SlamMapResponse> {
+    const response = await apiClient.get<SlamMapResponse>('/v1/robots/map/active');
+    return response.data;
+  },
+
+  // Broadcast or update SLAM map via API
+  async updateSlamMap(map: Partial<SlamMapResponse>): Promise<SlamMapResponse> {
+    const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/update', map);
+    return response.data;
   }
 };
+
+export interface SlamMapTableDto {
+  id: string;
+  tableNo: string;
+  name: string;
+  worldX: number;
+  worldY: number;
+  zone: string;
+}
+
+export interface SlamMapStationDto {
+  id: string;
+  name: string;
+  stationType: string;
+  worldX: number;
+  worldY: number;
+}
+
+export interface SlamMapResponse {
+  mapId: string;
+  name: string;
+  resolution: number;
+  originX: number;
+  originY: number;
+  originZ: number;
+  width: number;
+  height: number;
+  mapUrl: string;
+  format: string;
+  tables: SlamMapTableDto[];
+  stations: SlamMapStationDto[];
+  lastUpdated: string;
+}
+

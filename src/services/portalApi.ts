@@ -118,6 +118,8 @@ export interface DiningTableDto {
   assignedRobotCode: string | null;
   currentOrders: string[];
   orderTime: string | null;
+  worldX?: number;
+  worldY?: number;
 }
 
 export interface ZaloConversation {
@@ -349,6 +351,8 @@ export const tableService = {
           assignedRobotCode: t.assignedRobotCode || null,
           currentOrders: t.currentOrders || [],
           orderTime: t.orderTime || null,
+          worldX: typeof t.worldX === 'number' ? t.worldX : (typeof t.xCoord === 'number' ? t.xCoord : (typeof t.x === 'number' ? t.x : undefined)),
+          worldY: typeof t.worldY === 'number' ? t.worldY : (typeof t.yCoord === 'number' ? t.yCoord : (typeof t.y === 'number' ? t.y : undefined)),
         }));
       }
     } catch (err) {

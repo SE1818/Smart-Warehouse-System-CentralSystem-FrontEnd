@@ -27,6 +27,8 @@ interface TableNode {
   currentOrders?: string[];
   guestsCount?: number;
   assignedRobot?: string | null;
+  worldX?: number;
+  worldY?: number;
 }
 
 interface TrayItem {
@@ -136,6 +138,8 @@ export const StaffKdsPage: React.FC = () => {
             guestsCount: t.capacity || 4,
             currentOrders: t.currentOrders || [],
             assignedRobot: t.assignedRobotCode || null,
+            worldX: t.worldX,
+            worldY: t.worldY,
           }));
           setTables(mappedTables);
           setSelectedTableId(mappedTables[0].id);
