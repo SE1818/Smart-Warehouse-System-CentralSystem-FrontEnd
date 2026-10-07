@@ -150,6 +150,7 @@ const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000, // 15 seconds request timeout
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
@@ -173,13 +174,14 @@ function redirectToLogin() {
 
 // Bare axios, not apiClient: routing this through apiClient would re-enter the
 // interceptor and recurse on its own failure.
-function refreshAccessToken(refreshToken: string): Promise<AuthSession> {
+function refreshAccessToken(refreshToken?: string): Promise<AuthSession> {
   if (!inflightRefresh) {
     inflightRefresh = axios
       .post<AuthSession>(
         `${API_BASE_URL}/auth/refresh-token`,
-        { refreshToken },
+        refreshToken ? { refreshToken } : {},
         {
+          withCredentials: true,
           timeout: 15000,
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         }
@@ -221,12 +223,12 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const config = error.config as (typeof error.config & { _retried?: boolean; _edgeFallbackRetried?: boolean }) | undefined;
-    const status = error.response?.status;
+    const config = error?.config as (typeof error.config & { _retried?: boolean; _edgeFallbackRetried?: boolean }) | undefined;
+    const status = error?.response?.status;
     const url = config?.url || '';
 
     // If local Edge Node (port 5000) is offline/unreachable, gracefully fallback to Cloud Gateway once
-    if (isEdgeEndpoint(url) && !error.response && !config?._edgeFallbackRetried) {
+    if (isEdgeEndpoint(url) && !error?.response && !config?._edgeFallbackRetried) {
       if (config) {
         config._edgeFallbackRetried = true;
         config.baseURL = API_BASE_URL;
@@ -251,17 +253,21 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    config._retried = true;
+    if (config) {
+      config._retried = true;
+    }
     try {
       // Single-flight: concurrent 401s await one refresh. The server rotates refresh
       // tokens and treats a replayed one as reuse, which revokes every session for the user.
       const session = await refreshAccessToken(refreshToken);
       localStorage.setItem('authToken', session.accessToken);
-      localStorage.setItem('refreshToken', session.refreshToken);
-      if (config.headers) {
+      if (session.refreshToken) {
+        localStorage.setItem('refreshToken', session.refreshToken);
+      }
+      if (config?.headers) {
         config.headers.Authorization = `Bearer ${session.accessToken}`;
       }
-      return apiClient(config);
+      return apiClient(config || {});
     } catch {
       clearAuthSession();
       redirectToLogin();
