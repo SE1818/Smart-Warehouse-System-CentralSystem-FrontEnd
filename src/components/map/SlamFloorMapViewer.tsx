@@ -9,6 +9,7 @@ import {
   EyeOff,
   Crosshair,
   RefreshCw,
+  MapPin,
 } from 'lucide-react';
 import {
   rosToCanvasPixel,
@@ -17,7 +18,12 @@ import {
   type SlamMapMetadata,
   type WorldPoint,
 } from '@/utils/rosCoordinates';
-import { robotService, type SlamMapResponse, type SlamMapStationDto } from '@/services/robot';
+import {
+  robotService,
+  type SlamMapResponse,
+  type SlamMapStationDto,
+  type SlamMapWaypointDto,
+} from '@/services/robot';
 
 export interface MapTableNode {
   id: string;
@@ -49,6 +55,7 @@ interface SlamFloorMapViewerProps {
   selectedTableId?: string;
   onSelectTable?: (tableId: string) => void;
   robots: MapRobotItem[];
+  waypoints?: SlamMapWaypointDto[];
   metadata?: SlamMapMetadata;
   mapImageUrl?: string;
   className?: string;
@@ -60,6 +67,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   selectedTableId,
   onSelectTable,
   robots,
+  waypoints,
   metadata = DEFAULT_SLAM_METADATA,
   mapImageUrl = '',
   className = '',
@@ -76,6 +84,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   const [showRawSlam, setShowRawSlam] = useState<boolean>(true);
   const [showCoordinateOverlay, setShowCoordinateOverlay] = useState<boolean>(true);
   const [showTrajectories, setShowTrajectories] = useState<boolean>(true);
+  const [showWaypoints, setShowWaypoints] = useState<boolean>(true);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState<number>(1);
@@ -91,10 +100,23 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     worldY: number;
   } | null>(null);
   const [hoveredTable, setHoveredTable] = useState<MapTableNode | null>(null);
+  const [hoveredWaypoint, setHoveredWaypoint] = useState<SlamMapWaypointDto | null>(null);
 
   // Map Image state
   const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
+
+  // Listen for realtime SLAM map and waypoint broadcasts from SignalR
+  useEffect(() => {
+    const handleSlamUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<SlamMapResponse>;
+      if (customEvent.detail) {
+        setActiveSlamMap(customEvent.detail);
+      }
+    };
+    window.addEventListener('vora:slam-map-updated', handleSlamUpdate);
+    return () => window.removeEventListener('vora:slam-map-updated', handleSlamUpdate);
+  }, []);
 
   // 1. Fetch real active SLAM map from Backend Robot Service API
   const fetchActiveMap = useCallback(async () => {
@@ -171,6 +193,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     return activeSlamMap?.stations || [];
   }, [activeSlamMap]);
 
+  // 4b. REAL WAYPOINTS (Lấy từ ROS 2 Nav2 / Robot Service qua activeSlamMap.waypoints)
+  const resolvedWaypoints: SlamMapWaypointDto[] = useMemo(() => {
+    if (waypoints && waypoints.length > 0) return waypoints;
+    return activeSlamMap?.waypoints || [];
+  }, [waypoints, activeSlamMap]);
+
   // 5. REAL ROBOTS: chỉ render robot có tọa độ thực từ Telemetry
   const resolvedRobots = useMemo(() => {
     return robots.filter((r) => typeof r.worldX === 'number' && typeof r.worldY === 'number');
@@ -233,6 +261,20 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       }
     }
     setHoveredTable(foundTable);
+
+    let foundWaypoint: SlamMapWaypointDto | null = null;
+    const wpRadiusPixel = 18;
+    for (const wp of resolvedWaypoints) {
+      if (typeof wp.worldX === 'number' && typeof wp.worldY === 'number') {
+        const wpPx = rosToCanvasPixel(wp.worldX, wp.worldY, effectiveMetadata);
+        const dist = Math.hypot(rawPx - wpPx.x, rawPy - wpPx.y);
+        if (dist <= wpRadiusPixel) {
+          foundWaypoint = wp;
+          break;
+        }
+      }
+    }
+    setHoveredWaypoint(foundWaypoint);
   };
 
   const handleMouseUp = () => {
@@ -416,6 +458,74 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     });
 
     // =========================================================================
+    // LAYER 2.4: WAYPOINTS LAYER (ĐỊNH TUYẾN NAV2 / ROBOT SERVICE)
+    // =========================================================================
+    if (showWaypoints) {
+      resolvedWaypoints.forEach((wp) => {
+        if (wp.worldX === undefined || wp.worldY === undefined) return;
+        const wpPx = rosToCanvasPixel(wp.worldX, wp.worldY, effectiveMetadata);
+        const isHovered = (hoveredWaypoint?.id && hoveredWaypoint.id === wp.id) || hoveredWaypoint?.name === wp.name;
+
+        let nodeColor = '#06b6d4'; // default cyan (transit/general)
+        let ringColor = 'rgba(6, 182, 212, 0.4)';
+        const typeLower = (wp.type || '').toLowerCase();
+        if (typeLower.includes('charging') || typeLower.includes('dock')) {
+          nodeColor = '#10b981'; // emerald
+          ringColor = 'rgba(16, 185, 129, 0.4)';
+        } else if (typeLower.includes('kitchen') || typeLower.includes('pickup')) {
+          nodeColor = '#0284c7'; // sky blue
+          ringColor = 'rgba(2, 132, 199, 0.4)';
+        } else if (typeLower.includes('table') || typeLower.includes('dining')) {
+          nodeColor = '#8b5cf6'; // purple
+          ringColor = 'rgba(139, 92, 246, 0.4)';
+        }
+
+        // Outer glow ring
+        ctx.beginPath();
+        ctx.arc(wpPx.x, wpPx.y, isHovered ? 14 : 10, 0, Math.PI * 2);
+        ctx.fillStyle = ringColor;
+        ctx.fill();
+
+        // Inner circle
+        ctx.beginPath();
+        ctx.arc(wpPx.x, wpPx.y, isHovered ? 7 : 5, 0, Math.PI * 2);
+        ctx.fillStyle = nodeColor;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Directional pointer arrow if orientation theta is set
+        if (typeof wp.theta === 'number' && wp.theta !== 0) {
+          ctx.save();
+          ctx.translate(wpPx.x, wpPx.y);
+          ctx.rotate(-wp.theta);
+          ctx.beginPath();
+          ctx.moveTo(7, 0);
+          ctx.lineTo(16, 0);
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(16, 0);
+          ctx.lineTo(12, -3);
+          ctx.lineTo(12, 3);
+          ctx.closePath();
+          ctx.fillStyle = '#facc15';
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Waypoint name label
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(wp.name, wpPx.x, wpPx.y + 12);
+      });
+    }
+
+    // =========================================================================
     // LAYER 3: DYNAMIC REALTIME LAYER (ROBOT THỰC TẾ TỪ TELEMETRY)
     // =========================================================================
 
@@ -484,10 +594,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     kitchenLocation,
     resolvedStations,
     resolvedTables,
+    resolvedWaypoints,
     resolvedRobots,
     selectedTableId,
     hoveredTable,
+    hoveredWaypoint,
     showTrajectories,
+    showWaypoints,
   ]);
 
   useEffect(() => {
@@ -567,6 +680,21 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           >
             <Navigation className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Đường Đi</span>
+          </button>
+
+          {/* Toggle Waypoints Layer */}
+          <button
+            type="button"
+            onClick={() => setShowWaypoints((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+              showWaypoints
+                ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
+            title="Bật/Tắt hiển thị Điểm Waypoint Nav2"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Waypoints ({resolvedWaypoints.length})</span>
           </button>
 
           {/* Toggle Coordinate HUD */}
@@ -658,6 +786,32 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           </div>
         )}
 
+        {/* Hover Waypoint Tooltip Overlay */}
+        {hoveredWaypoint && (
+          <div className="absolute top-4 right-4 bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 text-white rounded-xl p-3 shadow-2xl text-xs space-y-1.5 pointer-events-none z-20 max-w-xs animate-in fade-in">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-extrabold text-sm text-cyan-400 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" />
+                {hoveredWaypoint.name}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                {(hoveredWaypoint.type || 'waypoint').toUpperCase()}
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-300 font-mono">
+              Tọa độ ROS: X = {hoveredWaypoint.worldX.toFixed(2)}m | Y = {hoveredWaypoint.worldY.toFixed(2)}m
+            </div>
+            {typeof hoveredWaypoint.theta === 'number' && (
+              <div className="text-[10px] text-amber-300 font-mono">
+                Góc xoay Yaw (θ): {(hoveredWaypoint.theta * (180 / Math.PI)).toFixed(1)}° ({hoveredWaypoint.theta.toFixed(2)} rad)
+              </div>
+            )}
+            <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
+              📍 Tọa độ điều hướng tự động Nav2
+            </p>
+          </div>
+        )}
+
         {/* Realtime Coordinate Crosshair Display (Bottom Left) */}
         {showCoordinateOverlay && hoveredCoord && (
           <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur-sm border border-slate-800 rounded-lg px-3 py-1.5 text-[10px] font-mono text-slate-400 flex items-center gap-3 z-20">
@@ -693,10 +847,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           <span className="flex items-center gap-1.5 text-emerald-400">
             <span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Robot AMR
           </span>
+          <span className="flex items-center gap-1.5 text-cyan-400">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> Waypoints ({resolvedWaypoints.length})
+          </span>
         </div>
 
         <div className="text-[10px] text-slate-400 font-mono">
-          Trục Y: Nghịch đảo Canvas • Gốc: ({effectiveMetadata.originX}m, {effectiveMetadata.originY}m) • Trạm thực tế: {resolvedStations.length}
+          Trục Y: Nghịch đảo Canvas • Gốc: ({effectiveMetadata.originX}m, {effectiveMetadata.originY}m) • Trạm: {resolvedStations.length} • Waypoints: {resolvedWaypoints.length}
         </div>
       </div>
     </div>

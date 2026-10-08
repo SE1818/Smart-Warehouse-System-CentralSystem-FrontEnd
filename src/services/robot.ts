@@ -95,6 +95,18 @@ export const robotService = {
   async updateSlamMap(map: Partial<SlamMapResponse>): Promise<SlamMapResponse> {
     const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/update', map);
     return response.data;
+  },
+
+  // Get waypoints from active map
+  async getWaypoints(): Promise<SlamMapWaypointDto[]> {
+    const response = await apiClient.get<SlamMapWaypointDto[]>('/v1/robots/map/waypoints');
+    return response.data;
+  },
+
+  // Update waypoints list on active map
+  async updateWaypoints(waypoints: SlamMapWaypointDto[]): Promise<SlamMapResponse> {
+    const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/waypoints', waypoints);
+    return response.data;
   }
 };
 
@@ -115,6 +127,15 @@ export interface SlamMapStationDto {
   worldY: number;
 }
 
+export interface SlamMapWaypointDto {
+  id: string;
+  name: string;
+  worldX: number;
+  worldY: number;
+  theta?: number;
+  type?: string;
+}
+
 export interface SlamMapResponse {
   mapId: string;
   name: string;
@@ -128,6 +149,7 @@ export interface SlamMapResponse {
   format: string;
   tables: SlamMapTableDto[];
   stations: SlamMapStationDto[];
+  waypoints?: SlamMapWaypointDto[];
   lastUpdated: string;
 }
 

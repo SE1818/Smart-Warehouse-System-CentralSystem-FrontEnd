@@ -182,6 +182,11 @@ export const useRobotStore = create<RobotState>((set, get) => {
         get().addLog(`Robot [ID: ${data.robotId.substring(0, 8)}] thay đổi trạng thái sang "${data.status}"`, 'warning');
       });
 
+      connection.on('ReceiveSlamMapUpdate', (map: any) => {
+        window.dispatchEvent(new CustomEvent('vora:slam-map-updated', { detail: map }));
+        get().addLog(`Bản đồ SLAM cập nhật: ${map?.name || map?.mapId || 'ROS Map'} (${map?.waypoints?.length || 0} waypoints)`, 'info');
+      });
+
       connection.onreconnecting((error) => {
         set({ status: 'connecting' });
         get().addLog(`Mất kết nối Robot Hub. Đang thử kết nối lại... Chi tiết: ${error?.message}`, 'warning');
