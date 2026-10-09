@@ -204,9 +204,27 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     return robots.filter((r) => typeof r.worldX === 'number' && typeof r.worldY === 'number');
   }, [robots]);
 
+  // Auto-fit Scale: Nếu bản đồ có kích thước pixel nhỏ (như 144x72 của trongde.pgm),
+  // tự động tính hệ số phóng đại để bản đồ mở rộng lấp đầy không gian canvas (chuẩn ~860px x 460px)
+  const autoScale = useMemo(() => {
+    const targetW = 860;
+    const targetH = 460;
+    const w = effectiveMetadata.width || 800;
+    const h = effectiveMetadata.height || 600;
+    if (w < targetW || h < targetH) {
+      const sX = targetW / w;
+      const sY = targetH / h;
+      return Math.min(sX, sY);
+    }
+    return 1.0;
+  }, [effectiveMetadata.width, effectiveMetadata.height]);
+
+  const canvasDisplayWidth = Math.round((effectiveMetadata.width || 800) * autoScale);
+  const canvasDisplayHeight = Math.round((effectiveMetadata.height || 600) * autoScale);
+
   // Handle Zoom
-  const handleZoomIn = () => setZoom((prev) => Math.min(prev * 1.25, 3.0));
-  const handleZoomOut = () => setZoom((prev) => Math.max(prev / 1.25, 0.5));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev * 1.25, 5.0));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev / 1.25, 0.2));
   const handleResetView = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -218,6 +236,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    setZoom((prev) => Math.min(Math.max(prev * factor, 0.2), 5.0));
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -235,8 +259,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    const rawPx = (clientX - pan.x) / zoom;
-    const rawPy = (clientY - pan.y) / zoom;
+    const totalScale = zoom * autoScale;
+    const rawPx = (clientX - pan.x) / totalScale;
+    const rawPy = (clientY - pan.y) / totalScale;
 
     const world = canvasPixelToRos(rawPx, rawPy, effectiveMetadata);
 
@@ -289,8 +314,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    const rawPx = (clientX - pan.x) / zoom;
-    const rawPy = (clientY - pan.y) / zoom;
+    const totalScale = zoom * autoScale;
+    const rawPx = (clientX - pan.x) / totalScale;
+    const rawPy = (clientY - pan.y) / totalScale;
 
     const hitRadiusPixel = 25;
     for (const table of resolvedTables) {
@@ -321,7 +347,8 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
     ctx.save();
     ctx.translate(pan.x, pan.y);
-    ctx.scale(zoom, zoom);
+    ctx.scale(zoom * autoScale, zoom * autoScale);
+    ctx.imageSmoothingEnabled = false;
 
     // =========================================================================
     // LAYER 1: SLAM COSTMAP / RAW OCCUPANCY GRID
@@ -746,11 +773,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       <div className="relative flex-1 bg-slate-950 overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing min-h-[460px]">
         <canvas
           ref={canvasRef}
-          width={effectiveMetadata.width}
-          height={effectiveMetadata.height}
+          width={canvasDisplayWidth}
+          height={canvasDisplayHeight}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
+          onWheel={handleWheel}
           onClick={handleClick}
           className="border border-slate-800/80 rounded-xl shadow-2xl transition-transform"
         />
