@@ -51,14 +51,24 @@ export const resolveEdgeBaseUrl = (): string => {
 
   // 2. Read environment variable
   let edgeUrl = (import.meta.env.VITE_EDGE_API_URL || '').trim();
-  if (!edgeUrl) {
-    const hostname = typeof window !== 'undefined' ? window.location?.hostname : '';
-    if (hostname && typeof hostname === 'string' && hostname.endsWith('.local')) {
-      const parts = hostname.split('.');
-      edgeUrl = `http://${parts[0]}.local:5000/api`;
-    } else {
-      edgeUrl = 'http://localhost:5000/api';
-    }
+  if (edgeUrl) {
+    const cleanUrl = edgeUrl.replace(/\/+$/, '');
+    return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+  }
+
+  // 3. When accessed via HTTPS (e.g. Vercel deployment), modern browsers strictly block
+  // plain HTTP requests to localhost:5000 as Mixed Content, resulting in instant preflight (failed) with no response code.
+  // In cloud/remote environments without an explicit edge node, default robot traffic through Cloud API Gateway.
+  if (typeof window !== 'undefined' && window.location?.protocol === 'https:') {
+    return resolveBaseUrl();
+  }
+
+  const hostname = typeof window !== 'undefined' ? window.location?.hostname : '';
+  if (hostname && typeof hostname === 'string' && hostname.endsWith('.local')) {
+    const parts = hostname.split('.');
+    edgeUrl = `http://${parts[0]}.local:5000/api`;
+  } else {
+    edgeUrl = 'http://localhost:5000/api';
   }
 
   const cleanUrl = edgeUrl.replace(/\/+$/, '');
@@ -199,7 +209,10 @@ apiClient.interceptors.request.use((config) => {
   const url = config.url || '';
 
   // Dual routing: route robot/hardware endpoints to Local Edge, others to Cloud Server
-  if (isEdgeEndpoint(url)) {
+  // If fallback has already been triggered, retain API_BASE_URL!
+  if ((config as any)._edgeFallbackRetried) {
+    config.baseURL = API_BASE_URL;
+  } else if (isEdgeEndpoint(url)) {
     config.baseURL = EDGE_BASE_URL;
   } else {
     config.baseURL = API_BASE_URL;
