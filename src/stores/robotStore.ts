@@ -81,8 +81,10 @@ export const useRobotStore = create<RobotState>((set, get) => {
       get().addLog('Đang kết nối đến Robot Hub...', 'info');
 
       const token = localStorage.getItem('authToken');
-      const baseUrl = resolveBaseUrl();
-      const connectionUrl = `${baseUrl}/robots/tracking-hub`;
+      const cleanBase = resolveBaseUrl().replace(/\/+$/, '');
+      const connectionUrl = cleanBase.endsWith('/v1')
+        ? `${cleanBase}/robots/tracking-hub`
+        : `${cleanBase}/v1/robots/tracking-hub`;
 
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {
