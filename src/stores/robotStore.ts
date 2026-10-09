@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as signalR from '@microsoft/signalr';
 import { robotService } from '@/services/robot';
+import { resolveBaseUrl } from '@/services/api';
 import type { Robot } from '@/types/robot';
 
 interface LogEntry {
@@ -80,7 +81,8 @@ export const useRobotStore = create<RobotState>((set, get) => {
       get().addLog('Đang kết nối đến Robot Hub...', 'info');
 
       const token = localStorage.getItem('authToken');
-      const connectionUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/robots/tracking-hub`;
+      const baseUrl = resolveBaseUrl();
+      const connectionUrl = `${baseUrl}/robots/tracking-hub`;
 
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {
