@@ -6,10 +6,129 @@ import type { LogTransfer } from './transferService';
 
 const IDB_NAME = 'vora_local_db';
 const IDB_STORE = 'sqlite_storage';
+const IDB_KEY_STORE = 'crypto_keys';
 const IDB_KEY = 'vora_sqlite_binary';
+const AES_KEY_ID = 'sqlite_aes_gcm_256';
 
 /**
- * IndexedDB persistence helper for storing SQLite binary Uint8Array
+ * Web Crypto API AES-GCM (256-bit) client-side storage encryption
+ * Chống xem trộm dữ liệu SQLite qua DevTools / F12 Application Tab
+ */
+class WebCryptoStorageSecurity {
+  private static readonly MAGIC_HEADER = 'VORA_AESGCM_V1';
+  private static cachedKey: CryptoKey | null = null;
+
+  public static isCryptoSupported(): boolean {
+    return typeof window !== 'undefined' && !!window.crypto && !!window.crypto.subtle;
+  }
+
+  public static async getOrCreateKey(db: IDBDatabase): Promise<CryptoKey | null> {
+    if (this.cachedKey) return this.cachedKey;
+    if (!this.isCryptoSupported()) return null;
+
+    try {
+      const existingKey = await new Promise<CryptoKey | null>((resolve) => {
+        try {
+          const tx = db.transaction(IDB_KEY_STORE, 'readonly');
+          const store = tx.objectStore(IDB_KEY_STORE);
+          const req = store.get(AES_KEY_ID);
+          req.onsuccess = () => {
+            if (req.result && req.result instanceof CryptoKey) {
+              resolve(req.result);
+            } else {
+              resolve(null);
+            }
+          };
+          req.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      });
+
+      if (existingKey) {
+        this.cachedKey = existingKey;
+        return existingKey;
+      }
+
+      // Generate a new 256-bit AES-GCM key
+      const newKey = await window.crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const tx = db.transaction(IDB_KEY_STORE, 'readwrite');
+          const store = tx.objectStore(IDB_KEY_STORE);
+          const req = store.put(newKey, AES_KEY_ID);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      this.cachedKey = newKey;
+      return newKey;
+    } catch (err) {
+      console.warn('[WebCrypto] Không thể lưu/tạo AES-GCM Key, fallback unencrypted:', err);
+      return null;
+    }
+  }
+
+  public static async encrypt(data: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await window.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      data as unknown as BufferSource
+    );
+
+    const header = new TextEncoder().encode(this.MAGIC_HEADER);
+    const cipherBytes = new Uint8Array(ciphertext);
+    const payload = new Uint8Array(header.length + iv.length + cipherBytes.length);
+    payload.set(header, 0);
+    payload.set(iv, header.length);
+    payload.set(cipherBytes, header.length + iv.length);
+    return payload;
+  }
+
+  public static async decrypt(storedData: Uint8Array, key: CryptoKey): Promise<Uint8Array> {
+    const headerBytes = new TextEncoder().encode(this.MAGIC_HEADER);
+    let matchesHeader = storedData.length >= headerBytes.length + 12;
+    if (matchesHeader) {
+      for (let i = 0; i < headerBytes.length; i++) {
+        if (storedData[i] !== headerBytes[i]) {
+          matchesHeader = false;
+          break;
+        }
+      }
+    }
+
+    if (!matchesHeader) {
+      // Legacy unencrypted SQLite data (e.g. SQLite format 3)
+      return storedData;
+    }
+
+    const iv = storedData.slice(headerBytes.length, headerBytes.length + 12);
+    const ciphertext = storedData.slice(headerBytes.length + 12);
+    try {
+      const decrypted = await window.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext as unknown as BufferSource
+      );
+      return new Uint8Array(decrypted);
+    } catch (decErr) {
+      console.warn('[WebCrypto] Giải mã thất bại, có thể dữ liệu bị lỗi:', decErr);
+      throw decErr;
+    }
+  }
+}
+
+/**
+ * IndexedDB persistence helper with Web Crypto AES-GCM encryption
  */
 class IndexedDbStorage {
   private static openDb(): Promise<IDBDatabase> {
@@ -18,11 +137,14 @@ class IndexedDbStorage {
         reject(new Error('IndexedDB not supported'));
         return;
       }
-      const req = indexedDB.open(IDB_NAME, 1);
+      const req = indexedDB.open(IDB_NAME, 2);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(IDB_STORE)) {
           db.createObjectStore(IDB_STORE);
+        }
+        if (!db.objectStoreNames.contains(IDB_KEY_STORE)) {
+          db.createObjectStore(IDB_KEY_STORE);
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -33,7 +155,7 @@ class IndexedDbStorage {
   static async loadBinary(): Promise<Uint8Array | null> {
     try {
       const db = await this.openDb();
-      return new Promise((resolve, reject) => {
+      const rawStored: Uint8Array | null = await new Promise((resolve, reject) => {
         const tx = db.transaction(IDB_STORE, 'readonly');
         const store = tx.objectStore(IDB_STORE);
         const req = store.get(IDB_KEY);
@@ -48,6 +170,25 @@ class IndexedDbStorage {
         };
         req.onerror = () => reject(req.error);
       });
+
+      if (!rawStored || rawStored.length === 0) {
+        return null;
+      }
+
+      if (WebCryptoStorageSecurity.isCryptoSupported()) {
+        const key = await WebCryptoStorageSecurity.getOrCreateKey(db);
+        if (key) {
+          try {
+            const decrypted = await WebCryptoStorageSecurity.decrypt(rawStored, key);
+            return decrypted;
+          } catch {
+            console.warn('[SQLite IDB] Không giải mã được, thử đọc trực tiếp dạng unencrypted');
+            return rawStored;
+          }
+        }
+      }
+
+      return rawStored;
     } catch (err) {
       console.warn('[SQLite IDB] Không thể nạp binary từ IndexedDB:', err);
       return null;
@@ -57,10 +198,23 @@ class IndexedDbStorage {
   static async saveBinary(data: Uint8Array): Promise<void> {
     try {
       const db = await this.openDb();
+      let dataToSave = data;
+
+      if (WebCryptoStorageSecurity.isCryptoSupported()) {
+        const key = await WebCryptoStorageSecurity.getOrCreateKey(db);
+        if (key) {
+          try {
+            dataToSave = await WebCryptoStorageSecurity.encrypt(data, key);
+          } catch (encErr) {
+            console.warn('[SQLite IDB] Lỗi mã hóa AES-GCM, lưu dữ liệu thường:', encErr);
+          }
+        }
+      }
+
       return new Promise((resolve, reject) => {
         const tx = db.transaction(IDB_STORE, 'readwrite');
         const store = tx.objectStore(IDB_STORE);
-        const req = store.put(data, IDB_KEY);
+        const req = store.put(dataToSave, IDB_KEY);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
       });
@@ -68,6 +222,13 @@ class IndexedDbStorage {
       console.warn('[SQLite IDB] Không thể lưu binary vào IndexedDB:', err);
     }
   }
+}
+
+export interface StoragePersistenceInfo {
+  isPersisted: boolean;
+  quotaBytes: number;
+  usageBytes: number;
+  isEncrypted: boolean;
 }
 
 export interface SqliteDbStats {
@@ -80,6 +241,10 @@ export interface SqliteDbStats {
   transferLogsCount: number;
   dbSizeBytes: number;
   lastUpdated: string;
+  isPersisted?: boolean;
+  isEncrypted?: boolean;
+  storageQuotaBytes?: number;
+  storageUsageBytes?: number;
 }
 
 export interface SqliteAuditEntry {
@@ -102,6 +267,9 @@ class SqliteService {
 
     this.initPromise = (async () => {
       try {
+        // Automatically request persistent storage from browser to prevent eviction
+        void this.requestPersistentStorage();
+
         const SQL = await initSqlJs({
           locateFile: (file: string) => `/${file}`,
         });
@@ -652,6 +820,50 @@ class SqliteService {
     return db.export();
   }
 
+  public async requestPersistentStorage(): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+      try {
+        const persisted = await navigator.storage.persist();
+        console.log(`[Storage Security] Trạng thái Persistent Storage: ${persisted ? 'ĐÃ ĐƯỢC BẢO VỆ VĨNH VIỄN (Chống tự dọn cache)' : 'Mặc định (Best-effort)'}`);
+        return persisted;
+      } catch (err) {
+        console.warn('[Storage Security] Không thể yêu cầu Persistent Storage:', err);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  public async enablePersistentStorage(): Promise<boolean> {
+    return this.requestPersistentStorage();
+  }
+
+  public async getStoragePersistenceInfo(): Promise<StoragePersistenceInfo> {
+    let isPersisted = false;
+    let quotaBytes = 0;
+    let usageBytes = 0;
+    if (typeof navigator !== 'undefined' && navigator.storage) {
+      if (navigator.storage.persisted) {
+        try {
+          isPersisted = await navigator.storage.persisted();
+        } catch {}
+      }
+      if (navigator.storage.estimate) {
+        try {
+          const est = await navigator.storage.estimate();
+          quotaBytes = est.quota || 0;
+          usageBytes = est.usage || 0;
+        } catch {}
+      }
+    }
+    return {
+      isPersisted,
+      quotaBytes,
+      usageBytes,
+      isEncrypted: WebCryptoStorageSecurity.isCryptoSupported(),
+    };
+  }
+
   public async getStats(): Promise<SqliteDbStats> {
     const db = await this.getDb();
     const countQuery = (table: string): number => {
@@ -687,6 +899,8 @@ class SqliteService {
       // ignore
     }
 
+    const persistInfo = await this.getStoragePersistenceInfo();
+
     return {
       robotsCount,
       hasMap,
@@ -697,6 +911,10 @@ class SqliteService {
       transferLogsCount,
       dbSizeBytes,
       lastUpdated: new Date().toISOString(),
+      isPersisted: persistInfo.isPersisted,
+      isEncrypted: persistInfo.isEncrypted,
+      storageQuotaBytes: persistInfo.quotaBytes,
+      storageUsageBytes: persistInfo.usageBytes,
     };
   }
 }

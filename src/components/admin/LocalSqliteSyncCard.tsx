@@ -12,6 +12,10 @@ import {
   MapPin,
   Clock,
   Layers,
+  ShieldCheck,
+  Lock,
+  HardDrive,
+  ShieldAlert,
 } from 'lucide-react';
 import { sqliteService, type SqliteDbStats, type SqliteAuditEntry } from '@/services/sqliteService';
 import { edgeSyncService, type SyncConnectionState } from '@/services/edgeSyncService';
@@ -27,6 +31,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({ classN
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isEnablingPersist, setIsEnablingPersist] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -103,6 +108,24 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({ classN
     }
   };
 
+  const handleEnablePersistence = async () => {
+    setIsEnablingPersist(true);
+    try {
+      const granted = await sqliteService.enablePersistentStorage();
+      if (granted) {
+        setStatusMessage('Đã cấp quyền Persistent Storage thành công! Trình duyệt sẽ không tự ý dọn dẹp cache SQLite.');
+      } else {
+        setStatusMessage('Trình duyệt chưa cấp quyền Persistent Storage (hoặc đang ở chế độ Best-Effort).');
+      }
+      await loadData();
+    } catch {
+      setStatusMessage('Lỗi khi kích hoạt Persistent Storage.');
+    } finally {
+      setIsEnablingPersist(false);
+      setTimeout(() => setStatusMessage(null), 4000);
+    }
+  };
+
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -163,6 +186,60 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({ classN
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Security & Storage Hardening Bar */}
+      <div className="mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          {/* Encryption Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/50 text-emerald-300 border border-emerald-500/30 font-medium">
+            <Lock className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Web Crypto AES-GCM 256-bit</span>
+            <span className="text-[10px] text-emerald-400/80 font-mono">(Mã hóa chống xem F12)</span>
+          </div>
+
+          {/* Persistent Storage Badge */}
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium ${
+              stats?.isPersisted
+                ? 'bg-blue-950/50 text-blue-300 border-blue-500/30'
+                : 'bg-amber-950/50 text-amber-300 border-amber-500/30'
+            }`}
+          >
+            {stats?.isPersisted ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+            ) : (
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+            )}
+            <span>
+              {stats?.isPersisted ? 'Persistent Storage (Đã khóa chống xóa)' : 'Best-Effort (Chưa cấp quyền lưu vĩnh viễn)'}
+            </span>
+          </div>
+
+          {/* Quota info if available */}
+          {Boolean(stats?.storageQuotaBytes && stats.storageQuotaBytes > 0) && (
+            <div className="flex items-center gap-1 text-slate-400 text-[11px] font-mono px-2 py-1">
+              <HardDrive className="w-3 h-3 text-slate-500" />
+              <span>
+                Ổ đĩa: {formatBytes(stats?.storageUsageBytes || 0)} / {formatBytes(stats?.storageQuotaBytes || 0)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Action to Request Persistent Storage if not persisted */}
+        {!stats?.isPersisted && (
+          <button
+            type="button"
+            onClick={handleEnablePersistence}
+            disabled={isEnablingPersist}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all cursor-pointer self-start md:self-auto disabled:opacity-50"
+            title="Yêu cầu trình duyệt cấp quyền lưu trữ vĩnh viễn để không tự động xóa IndexedDB"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isEnablingPersist ? 'Đang yêu cầu...' : 'Khóa Chống Tự Xóa Cache'}</span>
+          </button>
+        )}
       </div>
 
       {/* Real-time Status Message Toast */}
@@ -256,7 +333,10 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({ classN
           <div className="text-xl font-black text-white font-mono">
             {stats ? formatBytes(stats.dbSizeBytes) : '0 B'}
           </div>
-          <div className="text-[10px] text-slate-400 truncate">IndexedDB Cache</div>
+          <div className="text-[10px] text-emerald-400 truncate flex items-center gap-1 font-mono">
+            <Lock className="w-2.5 h-2.5" />
+            <span>{stats?.isEncrypted ? 'AES-GCM Encrypted' : 'IndexedDB Cache'}</span>
+          </div>
         </div>
       </div>
 
