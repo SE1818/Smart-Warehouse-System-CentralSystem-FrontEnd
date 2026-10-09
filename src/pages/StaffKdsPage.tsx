@@ -449,7 +449,7 @@ export const StaffKdsPage: React.FC = () => {
                 <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-700">Chưa có danh mục bàn ăn nào</h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Dữ liệu bàn ăn sẽ tự động đồng bộ từ POS / Master Database khi nhà hàng thiết lập sơ đồ phục vụ.
+                  Danh sách bàn ăn được trích xuất từ Waypoint nhận qua MQTT (ROS 2 Nav2). Do chưa nhận được waypoint từ MQTT, hệ thống tuân thủ quy tắc không tự ý xếp bàn giả.
                 </p>
               </div>
             ) : (

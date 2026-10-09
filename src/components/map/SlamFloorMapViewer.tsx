@@ -24,6 +24,7 @@ import {
   type SlamMapStationDto,
   type SlamMapWaypointDto,
 } from '@/services/robot';
+import { sqliteService } from '@/services/sqliteService';
 
 export interface MapTableNode {
   id: string;
@@ -76,9 +77,20 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Active SLAM map fetched from Robot Service API
+  // Active SLAM map fetched from Robot Service API / SQLite
   const [activeSlamMap, setActiveSlamMap] = useState<SlamMapResponse | null>(null);
   const [isLoadingMap, setIsLoadingMap] = useState<boolean>(false);
+  const [sqliteWaypoints, setSqliteWaypoints] = useState<SlamMapWaypointDto[]>([]);
+
+  // Function to load waypoints saved in local SQLite
+  const loadSqliteWaypoints = useCallback(async () => {
+    try {
+      const wps = await sqliteService.getWaypoints();
+      setSqliteWaypoints(wps);
+    } catch (e) {
+      console.warn('Lỗi tải waypoints từ SQLite:', e);
+    }
+  }, []);
 
   // Layer toggles
   const [showRawSlam, setShowRawSlam] = useState<boolean>(true);
@@ -112,30 +124,39 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       const customEvent = e as CustomEvent<SlamMapResponse>;
       if (customEvent.detail) {
         setActiveSlamMap(customEvent.detail);
+        void loadSqliteWaypoints();
       }
     };
     window.addEventListener('vora:slam-map-updated', handleSlamUpdate);
     return () => window.removeEventListener('vora:slam-map-updated', handleSlamUpdate);
-  }, []);
+  }, [loadSqliteWaypoints]);
 
-  // 1. Fetch real active SLAM map from Backend Robot Service API
+  // 1. Fetch real active SLAM map from Backend Robot Service API / SQLite
   const fetchActiveMap = useCallback(async () => {
     setIsLoadingMap(true);
     try {
+      // Try local SQLite first
+      const localMap = await sqliteService.getSlamMap();
+      if (localMap) {
+        setActiveSlamMap(localMap);
+      }
+
       const data = await robotService.getActiveSlamMap();
       if (data) {
         setActiveSlamMap(data);
       }
+      await loadSqliteWaypoints();
     } catch (err) {
       console.warn('Không thể tải metadata SLAM Map từ RobotService:', err);
     } finally {
       setIsLoadingMap(false);
     }
-  }, []);
+  }, [loadSqliteWaypoints]);
 
   useEffect(() => {
     void fetchActiveMap();
-  }, [fetchActiveMap]);
+    void loadSqliteWaypoints();
+  }, [fetchActiveMap, loadSqliteWaypoints]);
 
   // Dynamic Metadata derived from real Robot Service response or passed prop
   const effectiveMetadata: SlamMapMetadata = useMemo(() => {
@@ -193,11 +214,14 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     return activeSlamMap?.stations || [];
   }, [activeSlamMap]);
 
-  // 4b. REAL WAYPOINTS (Lấy từ ROS 2 Nav2 / Robot Service qua activeSlamMap.waypoints)
+  // 4b. REAL WAYPOINTS (Chỉ hiển thị khi nhận từ MQTT ROS 2 / SQLite, KHÔNG tự ý xếp waypoint giả)
   const resolvedWaypoints: SlamMapWaypointDto[] = useMemo(() => {
     if (waypoints && waypoints.length > 0) return waypoints;
-    return activeSlamMap?.waypoints || [];
-  }, [waypoints, activeSlamMap]);
+    if (activeSlamMap?.waypoints && activeSlamMap.waypoints.length > 0) return activeSlamMap.waypoints;
+    if (sqliteWaypoints && sqliteWaypoints.length > 0) return sqliteWaypoints;
+    // Nếu không nhận từ MQTT thì trả về mảng rỗng [], trên map không hiển thị waypoint nào
+    return [];
+  }, [waypoints, activeSlamMap, sqliteWaypoints]);
 
   // 5. REAL ROBOTS: chỉ render robot có tọa độ thực từ Telemetry
   const resolvedRobots = useMemo(() => {
@@ -659,6 +683,16 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
                 {effectiveMetadata.resolution}m/px
               </span>
+              {resolvedWaypoints.length > 0 ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono flex items-center gap-1 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  MQTT Waypoints ({resolvedWaypoints.length})
+                </span>
+              ) : (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono flex items-center gap-1 font-semibold">
+                  <span>⚠️</span> Không có Waypoint từ MQTT
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-450 font-medium">
               Dữ liệu thực tế từ Robot Service & MQTT • Nhấp chuột vào bàn để chọn lệnh
@@ -721,7 +755,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             title="Bật/Tắt hiển thị Điểm Waypoint Nav2"
           >
             <MapPin className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Waypoints ({resolvedWaypoints.length})</span>
+            <span className="hidden sm:inline">
+              Waypoints ({resolvedWaypoints.length > 0 ? resolvedWaypoints.length : '0'})
+            </span>
           </button>
 
           {/* Toggle Coordinate HUD */}
@@ -771,6 +807,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
       {/* Main Interactive Canvas Area */}
       <div className="relative flex-1 bg-slate-950 overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing min-h-[460px]">
+        {/* Banner when no waypoints received from MQTT */}
+        {resolvedWaypoints.length === 0 && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-amber-950/80 backdrop-blur-md border border-amber-500/40 text-amber-200 px-3.5 py-1.5 rounded-full text-xs flex items-center gap-2 z-20 shadow-lg pointer-events-none">
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <span>Chưa nhận được waypoint nào từ MQTT / ROS 2. Trên bản đồ không hiển thị waypoint nào.</span>
+          </div>
+        )}
         <canvas
           ref={canvasRef}
           width={canvasDisplayWidth}

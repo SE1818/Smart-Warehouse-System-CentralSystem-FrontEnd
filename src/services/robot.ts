@@ -1,6 +1,7 @@
 import apiClient from './api';
 import type { Robot, Area, Station } from '@/types/robot';
 import type { Order } from '@/types/product';
+import { sqliteService } from './sqliteService';
 
 interface RobotRaw {
   id: string;
@@ -18,20 +19,41 @@ interface RobotRaw {
 }
 
 export const robotService = {
-  // Get all robots
+  // Get all robots (Loaded from local SQLite; synchronized with BE / Supabase)
   async listRobots(): Promise<Robot[]> {
-    const response = await apiClient.get<RobotRaw[]>('/v1/robots');
-    return response.data.map((r: RobotRaw) => ({
-      id: r.id,
-      name: r.name,
-      x: r.currentX ?? r.x ?? 0,
-      y: r.currentY ?? r.y ?? 0,
-      battery: r.batteryLevel ?? r.battery ?? 0,
-      status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) as Robot['status'] : 'Idle',
-      currentAreaId: r.currentAreaId,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt
-    }));
+    // 1. Try to read from local SQLite first
+    let localRobots: Robot[] = [];
+    try {
+      localRobots = await sqliteService.getRobots();
+    } catch (e) {
+      console.warn('[robotService] Lỗi đọc robots từ SQLite:', e);
+    }
+
+    // 2. Fetch fresh list from BE (which pulls from Supabase), update SQLite
+    try {
+      const response = await apiClient.get<RobotRaw[]>('/v1/robots');
+      const mapped: Robot[] = response.data.map((r: RobotRaw) => ({
+        id: r.id,
+        name: r.name,
+        x: r.currentX ?? r.x ?? 0,
+        y: r.currentY ?? r.y ?? 0,
+        battery: r.batteryLevel ?? r.battery ?? 0,
+        status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) as Robot['status'] : 'Idle',
+        currentAreaId: r.currentAreaId,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
+      }));
+
+      // Save into SQLite
+      await sqliteService.saveRobots(mapped);
+      return await sqliteService.getRobots();
+    } catch (err) {
+      console.warn('[robotService] Không thể kết nối BE lấy robots, sử dụng dữ liệu offline từ SQLite:', err);
+      if (localRobots.length > 0) {
+        return localRobots;
+      }
+      return [];
+    }
   },
 
   // Move robot to coordinates via PUT
@@ -85,26 +107,55 @@ export const robotService = {
     return response.data;
   },
 
-  // Get active SLAM map metadata from Robot Service (real MQTT / ROS 2 data)
+  // Get active SLAM map metadata (Loaded from local SQLite; received from MQTT / API)
   async getActiveSlamMap(): Promise<SlamMapResponse> {
-    const response = await apiClient.get<SlamMapResponse>('/v1/robots/map/active');
-    return response.data;
+    try {
+      const localMap = await sqliteService.getSlamMap();
+      if (localMap && localMap.mapId) {
+        return localMap;
+      }
+    } catch (e) {
+      console.warn('[robotService] Lỗi đọc SLAM Map từ SQLite:', e);
+    }
+
+    try {
+      const response = await apiClient.get<SlamMapResponse>('/v1/robots/map/active');
+      if (response.data) {
+        await sqliteService.saveSlamMap(response.data);
+      }
+      return response.data;
+    } catch (err) {
+      console.warn('[robotService] Không thể kết nối BE để lấy active SLAM map:', err);
+      const fallback = await sqliteService.getSlamMap();
+      if (fallback) return fallback;
+      throw err;
+    }
   },
 
-  // Broadcast or update SLAM map via API
+  // Broadcast or update SLAM map via API and persist to SQLite
   async updateSlamMap(map: Partial<SlamMapResponse>): Promise<SlamMapResponse> {
     const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/update', map);
+    if (response.data) {
+      await sqliteService.saveSlamMap(response.data);
+    }
     return response.data;
   },
 
-  // Get waypoints from active map
+  // Get waypoints strictly from local SQLite (received from MQTT / ROS 2)
+  // If not received from MQTT, returns empty array [] (no fake waypoints!)
   async getWaypoints(): Promise<SlamMapWaypointDto[]> {
-    const response = await apiClient.get<SlamMapWaypointDto[]>('/v1/robots/map/waypoints');
-    return response.data;
+    try {
+      const localWaypoints = await sqliteService.getWaypoints();
+      return localWaypoints;
+    } catch (e) {
+      console.warn('[robotService] Lỗi đọc waypoints từ SQLite:', e);
+      return [];
+    }
   },
 
-  // Update waypoints list on active map
+  // Update waypoints list on active map and save to SQLite
   async updateWaypoints(waypoints: SlamMapWaypointDto[]): Promise<SlamMapResponse> {
+    await sqliteService.saveWaypointsFromMqtt(waypoints);
     const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/waypoints', waypoints);
     return response.data;
   }

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import * as signalR from '@microsoft/signalr';
 import { robotService } from '@/services/robot';
 import { resolveBaseUrl } from '@/services/api';
+import { sqliteService } from '@/services/sqliteService';
+import { edgeSyncService } from '@/services/edgeSyncService';
 import type { Robot } from '@/types/robot';
 
 interface LogEntry {
@@ -48,6 +50,15 @@ export const useRobotStore = create<RobotState>((set, get) => {
       set((state) => ({
         logs: [...state.logs.slice(-99), newLog], // Keep last 100 logs
       }));
+
+      // Silently persist activity / transfer log to local SQLite
+      void sqliteService.saveTransferLog({
+        errorNotes: message,
+        statusResult: type,
+        robotId: 'AMR',
+        transferRequestId: 'LOG-EVENT',
+        createdAt: new Date().toISOString(),
+      });
     },
 
     clearLogs: () => set({ logs: [] }),
@@ -126,6 +137,17 @@ export const useRobotStore = create<RobotState>((set, get) => {
           return { robots: newRobots };
         });
 
+        // Persist telemetry to local SQLite
+        void sqliteService.updateRobotTelemetry({
+          id: updatedRobot.id,
+          name: updatedRobot.name,
+          x: updatedRobot.x,
+          y: updatedRobot.y,
+          battery: updatedRobot.battery,
+          status: updatedRobot.status,
+          destination: updatedRobot.destination,
+        });
+
         get().addLog(
           `Robot [${updatedRobot.name || updatedRobot.id.substring(0, 8)}] cập nhật vị trí: (${updatedRobot.x}, ${updatedRobot.y}) | Pin: ${updatedRobot.battery?.toFixed(0)}%`,
           'info'
@@ -157,6 +179,16 @@ export const useRobotStore = create<RobotState>((set, get) => {
               }
               return {};
             });
+
+            // Persist latest telemetry point to SQLite
+            void sqliteService.updateRobotTelemetry({
+              id: data.robotId,
+              name: data.robotName,
+              x: latest.x,
+              y: latest.y,
+              battery: latest.battery,
+              status: latest.status,
+            });
           }
 
           get().addLog(
@@ -183,10 +215,23 @@ export const useRobotStore = create<RobotState>((set, get) => {
           return {};
         });
 
+        // Persist status change to SQLite
+        void sqliteService.updateRobotTelemetry({
+          id: data.robotId,
+          status: data.status,
+          battery: data.batteryLevel,
+          x: 0,
+          y: 0,
+        });
+
         get().addLog(`Robot [ID: ${data.robotId.substring(0, 8)}] thay đổi trạng thái sang "${data.status}"`, 'warning');
       });
 
       connection.on('ReceiveSlamMapUpdate', (map: any) => {
+        // Persist SLAM map and real MQTT waypoints directly into local SQLite
+        if (map) {
+          void sqliteService.saveSlamMap(map);
+        }
         window.dispatchEvent(new CustomEvent('vora:slam-map-updated', { detail: map }));
         get().addLog(`Bản đồ SLAM cập nhật: ${map?.name || map?.mapId || 'ROS Map'} (${map?.waypoints?.length || 0} waypoints)`, 'info');
       });
@@ -201,6 +246,7 @@ export const useRobotStore = create<RobotState>((set, get) => {
         get().addLog(`Đã kết nối lại Robot Hub thành công. Connection ID: ${connectionId}`, 'success');
         // Re-sync initial data after reconnecting
         get().fetchRobots();
+        void edgeSyncService.announceEdgeNode();
       });
 
       const startConnection = () => {
@@ -209,6 +255,7 @@ export const useRobotStore = create<RobotState>((set, get) => {
           .then(() => {
             set({ status: 'connected', connection });
             get().addLog('Kết nối SignalR Hub thành công.', 'success');
+            void edgeSyncService.startEdgeSync();
           })
           .catch((err) => {
             set({ status: 'disconnected' });

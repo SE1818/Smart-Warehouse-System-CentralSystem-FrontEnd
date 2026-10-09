@@ -1,4 +1,5 @@
 import apiClient from './api';
+import { sqliteService } from './sqliteService';
 
 export interface TransferRequest {
   id: string;
@@ -110,10 +111,43 @@ export const transferService = {
     return response.data;
   },
 
-  // Get audit history of a transfer
+  // Get audit history of a transfer and persist transferLog to SQLite
   async getTransferHistory(id: string): Promise<TransferAudit> {
-    const response = await apiClient.get<TransferAudit>(`/v1/tasks/${id}/history`);
-    return response.data;
+    try {
+      const response = await apiClient.get<TransferAudit>(`/v1/tasks/${id}/history`);
+      if (response.data && response.data.transferLog) {
+        await sqliteService.saveTransferLog(response.data.transferLog);
+      }
+      return response.data;
+    } catch (err) {
+      console.warn('[transferService] Không thể nạp audit từ API, thử nạp từ SQLite:', err);
+      const localLogs = await sqliteService.getTransferLogs();
+      const matched = localLogs.find((l) => l.transferRequestId === id);
+      return {
+        transferRequestId: id,
+        request: {
+          id,
+          fromStationId: 'st-01',
+          toStationId: 'st-02',
+          priority: 1,
+          status: matched?.statusResult || 'unknown',
+          createdAt: matched?.createdAt || new Date().toISOString(),
+        },
+        statusHistory: [],
+        commands: [],
+        responses: [],
+        transferLog: matched || null,
+      };
+    }
+  },
+
+  // Get transfer activity logs directly from local SQLite
+  async getLocalTransferLogs(limit = 100): Promise<LogTransfer[]> {
+    try {
+      return await sqliteService.getTransferLogs(limit);
+    } catch {
+      return [];
+    }
   },
 
   // Get commands of a transfer

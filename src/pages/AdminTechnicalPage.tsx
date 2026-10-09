@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { RobotMonitorPage } from './technical/RobotMonitorPage';
 import { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
+import { LocalSqliteSyncCard } from '@/components/admin/LocalSqliteSyncCard';
 import {
   fleetService,
   missionService,
@@ -63,7 +64,7 @@ interface MissionQueueItem {
 
 export const AdminTechnicalPage: React.FC = () => {
   // Navigation Sub-tabs
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'analytics' | 'settings'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
   const [selectedFloor, setSelectedFloor] = useState<'warehouse-main' | 'restaurant-hall' | 'kitchen-zone'>('warehouse-main');
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   const [selectedAmr, setSelectedAmr] = useState<AMRNode | null>(null);
@@ -414,6 +415,7 @@ export const AdminTechnicalPage: React.FC = () => {
         <div className="flex items-center gap-2">
           {[
             { id: 'dashboard', label: 'Dashboard', desc: 'Bản Đồ & Tổng Quan' },
+            { id: 'sqlite-sync', label: 'SQLite & VPS Sync', desc: 'CSDL Cục Bộ & Kênh Ngầm' },
             { id: 'robots', label: `Robots (${amrNodes.length})`, desc: 'Chi Tiết Đội Xe' },
             { id: 'missions', label: `Missions (${missions.length})`, desc: 'Hàng Đợi Lệnh' },
             { id: 'monitor', label: 'AMR Monitor & Logs', desc: 'Giám Sát Trực Tuyến' },
@@ -471,6 +473,9 @@ export const AdminTechnicalPage: React.FC = () => {
         {/* ============================================================== */}
         {activeSubTab === 'dashboard' && (
           <div className="space-y-4 sm:space-y-5">
+            {/* Local SQLite Storage & VPS Sync Status Card */}
+            <LocalSqliteSyncCard />
+
             {/* TOP ROW: 2D LiDAR Map & Recent Alerts / Mission Queue */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
               {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
@@ -1402,6 +1407,15 @@ export const AdminTechnicalPage: React.FC = () => {
         {activeSubTab === 'edge-setup' && (
           <div className="space-y-4">
             <StoreEdgeSetupPage />
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUBTAB: SQLITE LOCAL DATABASE & VPS SUPERADMIN SYNC */}
+        {/* ============================================================== */}
+        {activeSubTab === 'sqlite-sync' && (
+          <div className="space-y-4">
+            <LocalSqliteSyncCard />
           </div>
         )}
       </main>

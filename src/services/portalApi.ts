@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { sqliteService } from './sqliteService';
 
 export const resolvePortalBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
@@ -338,26 +339,46 @@ export const alertService = {
 };
 
 export const tableService = {
+  // Danh sách bàn tải từ Waypoints nhận qua MQTT và lưu trong SQLite
+  // Nếu chưa nhận được waypoint nào từ MQTT thì báo không có và trả về [] (không tự ý xếp bàn giả)
   getTables: async (storeIdOrSlug?: string): Promise<DiningTableDto[]> => {
     try {
-      const res = await portalClient.get(`/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ''}`);
-      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        return res.data.map((t: any) => ({
-          id: t.id?.toString() || t.tableNo || 'Table',
-          tableNo: t.tableNo || t.name || 'Bàn',
-          zone: t.zone || 'Khu Trong Nhà',
-          capacity: t.capacity || 4,
-          status: t.status || 'empty',
-          assignedRobotCode: t.assignedRobotCode || null,
-          currentOrders: t.currentOrders || [],
-          orderTime: t.orderTime || null,
-          worldX: typeof t.worldX === 'number' ? t.worldX : (typeof t.xCoord === 'number' ? t.xCoord : (typeof t.x === 'number' ? t.x : undefined)),
-          worldY: typeof t.worldY === 'number' ? t.worldY : (typeof t.yCoord === 'number' ? t.yCoord : (typeof t.y === 'number' ? t.y : undefined)),
-        }));
+      // 1. Ưu tiên tải danh sách bàn ăn dẫn xuất từ Waypoints MQTT thực tế trong SQLite
+      const sqliteTables = await sqliteService.getDiningTables();
+      if (sqliteTables && sqliteTables.length > 0) {
+        return sqliteTables;
       }
     } catch (err) {
-      console.warn('Lỗi tải danh sách bàn:', err);
+      console.warn('Lỗi tải danh sách bàn từ SQLite:', err);
     }
+
+    try {
+      // 2. Thử truy vấn API backend nếu có cấu hình bàn từ hệ thống
+      const res = await portalClient.get(`/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ''}`);
+      if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+        // Chỉ chấp nhận bàn có tọa độ thực từ bản đồ / waypoint
+        const valid = res.data
+          .filter((t: any) => typeof t.worldX === 'number' || typeof t.xCoord === 'number')
+          .map((t: any) => ({
+            id: t.id?.toString() || t.tableNo || 'Table',
+            tableNo: t.tableNo || t.name || 'Bàn',
+            zone: t.zone || 'Khu Trong Nhà',
+            capacity: t.capacity || 4,
+            status: t.status || 'empty',
+            assignedRobotCode: t.assignedRobotCode || null,
+            currentOrders: t.currentOrders || [],
+            orderTime: t.orderTime || null,
+            worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
+            worldY: typeof t.worldY === 'number' ? t.worldY : t.yCoord,
+          }));
+        if (valid.length > 0) {
+          return valid;
+        }
+      }
+    } catch {
+      // Không tự ý sinh tọa độ bàn nếu không có MQTT waypoints
+    }
+
     return [];
   },
 
