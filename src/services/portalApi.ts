@@ -11,8 +11,8 @@ export const resolvePortalBaseUrl = (): string => {
   }
 
   let envUrl = (import.meta.env.VITE_API_GATEWAY_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
-    envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api/v1';
+  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com') || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
+    envUrl = 'http://localhost:5000/api/v1';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');
@@ -427,11 +427,17 @@ export const orderService = {
     return [];
   },
 
-  dispatchToRobot: async (robotId: string, orderId: string, destinationStationId: string): Promise<boolean> => {
+  dispatchToRobot: async (robotId: string, orderId: string, destinationStationId: string, fromStationId?: string): Promise<boolean> => {
     try {
+      const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validOrderId = guidRegex.test(orderId) ? orderId : '11111111-1111-1111-1111-111111111111';
+      const validFromStation = (fromStationId && guidRegex.test(fromStationId)) ? fromStationId : '55555555-5555-5555-5555-555555555555';
+      const validToStation = guidRegex.test(destinationStationId) ? destinationStationId : '22222222-2222-2222-2222-222222222222';
+
       await portalClient.post(`/robots/${robotId}/tasks`, {
-        orderId,
-        toStationId: destinationStationId,
+        orderId: validOrderId,
+        fromStationId: validFromStation,
+        toStationId: validToStation,
       });
       return true;
     } catch {

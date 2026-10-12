@@ -16,10 +16,9 @@ export const resolveBaseUrl = (): string => {
   // 2. Read environment variable
   let envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
-  // If envUrl is accidentally pointing to local robot service port 5000,
-  // do NOT use it as the main Cloud API base URL because auth/login will fail!
-  if (!envUrl || envUrl.includes(':5000') || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
-    envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api';
+  // If envUrl is empty or points to expired tunnels, default to local API gateway
+  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com') || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
+    envUrl = 'http://localhost:5000/api';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');
