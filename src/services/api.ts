@@ -18,8 +18,8 @@ export const resolveBaseUrl = (): string => {
 
   // If envUrl is accidentally pointing to local robot service port 5000,
   // do NOT use it as the main Cloud API base URL because auth/login will fail!
-  if (!envUrl || envUrl.includes(':5000') || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
-    envUrl = 'https://triage-scarcity-prancing.ngrok-free.dev/api';
+  if (!envUrl || envUrl.includes(':5000') || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+    envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');
