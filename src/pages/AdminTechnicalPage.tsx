@@ -16,6 +16,8 @@ import {
   X,
   Plus,
   Power,
+  LogOut,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { RobotMonitorPage } from './technical/RobotMonitorPage';
 import { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
@@ -487,13 +489,14 @@ export const AdminTechnicalPage: React.FC = () => {
           </button>
 
           {/* Quick Portal Switchers */}
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Link
               to="/staff"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all shadow-xs"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all shadow-xs"
               title="Chuyển sang màn hình Nhân viên KDS ra món"
             >
-              <span>🍳 View Nhân Viên KDS</span>
+              <UtensilsCrossed className="w-3.5 h-3.5 text-emerald-400" />
+              <span>View Nhân Viên KDS</span>
             </Link>
             <Link
               to="/login"
@@ -503,9 +506,10 @@ export const AdminTechnicalPage: React.FC = () => {
                 localStorage.removeItem('user');
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-rose-950/60 hover:border-rose-600/60 text-xs font-bold text-slate-300 hover:text-rose-200 transition-all shadow-xs"
-              title="Đăng xuất để đổi tài khoản"
+              title="Đăng xuất khỏi hệ thống"
             >
-              <span>Đổi TK</span>
+              <LogOut className="w-3.5 h-3.5 text-rose-400" />
+              <span>Đăng Xuất</span>
             </Link>
           </div>
 

@@ -12,6 +12,8 @@ import {
   Send,
   Map as MapIcon,
   LayoutGrid,
+  LogOut,
+  Wrench,
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
 import { fixMojibake } from '../utils/textUtils';
@@ -335,7 +337,8 @@ export const StaffKdsPage: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-blue-600 transition-all shadow-2xs"
               title="Chuyển sang giao diện Kỹ Sư Kỹ Thuật (AMR Fleet & Telemetry)"
             >
-              <span>👷 View Kỹ Sư</span>
+              <Wrench className="w-3.5 h-3.5 text-blue-600" />
+              <span>View Kỹ Sư</span>
             </Link>
             <Link
               to="/login"
@@ -345,9 +348,10 @@ export const StaffKdsPage: React.FC = () => {
                 localStorage.removeItem('user');
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
-              title="Đăng xuất để đổi tài khoản"
+              title="Đăng xuất khỏi hệ thống"
             >
-              <span>Đổi TK</span>
+              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              <span>Đăng Xuất</span>
             </Link>
           </div>
         </div>
