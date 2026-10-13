@@ -24,12 +24,14 @@ import { LocalSqliteSyncCard } from '@/components/admin/LocalSqliteSyncCard';
 import { useRobotStore } from '@/stores/robotStore';
 import {
   fleetService,
+  tenantService,
   missionService,
   alertService,
   tableService,
   type DiningTableDto,
   type FleetAMR,
   type MissionStatsDto,
+  type TenantSummaryDto,
 } from '../services/portalApi';
 import {
   SlamFloorMapViewer,
@@ -101,20 +103,43 @@ export const AdminTechnicalPage: React.FC = () => {
     }
   }, []);
 
-  const tenantSlug = useMemo(() => {
+  const isSuperAdmin = useMemo(() => {
+    const role = (currentUser?.role || '').toLowerCase();
+    const email = (currentUser?.email || '').toLowerCase();
     return (
-      currentUser?.subdomain ||
+      role === 'superadmin' ||
+      role === 'super_admin' ||
+      role === 'admin' ||
+      email.includes('superadmin') ||
+      email === 'admin@vora.vn'
+    );
+  }, [currentUser]);
+
+  // For SuperAdmin: allow switching between "Tất cả" or a specific tenant filter
+  const [selectedSuperAdminTenant, setSelectedSuperAdminTenant] = useState<string>('');
+  const [availableTenants, setAvailableTenants] = useState<TenantSummaryDto[]>([]);
+
+  useEffect(() => {
+    if (isSuperAdmin) {
+      tenantService.getTenantsList().then((list) => {
+        if (Array.isArray(list)) {
+          setAvailableTenants(list);
+        }
+      });
+    }
+  }, [isSuperAdmin]);
+
+  const tenantSlug = useMemo(() => {
+    if (isSuperAdmin) {
+      return selectedSuperAdminTenant;
+    }
+    return (
       currentUser?.tenantSlug ||
-      currentUser?.tenantId ||
+      currentUser?.subdomain ||
       localStorage.getItem('TENANT_SUBDOMAIN') ||
       ''
     ).trim();
-  }, [currentUser]);
-
-  const isSuperAdmin = useMemo(() => {
-    const role = (currentUser?.role || '').toLowerCase();
-    return role === 'superadmin';
-  }, [currentUser]);
+  }, [currentUser, isSuperAdmin, selectedSuperAdminTenant]);
 
   // Real-time SignalR Hub Telemetry Connection
   const {
@@ -253,9 +278,15 @@ export const AdminTechnicalPage: React.FC = () => {
     try {
       setLoading(true);
 
+      const resolvedTenantId = !isSuperAdmin
+        ? currentUser?.tenantId
+        : (availableTenants.find((t) => t.slug === selectedSuperAdminTenant)?.id || undefined);
+
       const robotsPromise = (tenantSlug && !isSuperAdmin)
-        ? fleetService.getRobotsByTenant(tenantSlug)
-        : fleetService.getAllRobots();
+        ? fleetService.getRobotsByTenant(tenantSlug, resolvedTenantId)
+        : (selectedSuperAdminTenant
+            ? fleetService.getRobotsByTenant(selectedSuperAdminTenant, resolvedTenantId)
+            : fleetService.getAllRobots());
 
       const [robotsData, missionsData, alertsData, tablesData, statsData] = await Promise.all([
         robotsPromise,
@@ -269,24 +300,22 @@ export const AdminTechnicalPage: React.FC = () => {
         setMissionStats(statsData);
       }
 
-      // Multi-tenant isolation: strictly filter down by tenant if not superadmin
+      // Multi-tenant isolation: strictly filter down by tenant if not superadmin (or if superadmin selected a specific tenant)
       let scopedRobots = robotsData;
-      if (tenantSlug && !isSuperAdmin) {
-        const filtered = robotsData.filter((r) => {
+      if (tenantSlug) {
+        const tSlug = tenantSlug.toLowerCase();
+        scopedRobots = robotsData.filter((r) => {
           const rSlug = (r.ownerTenantSlug || '').toLowerCase();
           const rId = (r.ownerTenantId || '').toLowerCase();
-          const tSlug = tenantSlug.toLowerCase();
           return rSlug === tSlug || rId === tSlug || (r.tenantName && r.tenantName.toLowerCase().includes(tSlug));
         });
-        if (filtered.length > 0) {
-          scopedRobots = filtered;
-        }
       }
 
       setRawRobots(scopedRobots);
       setTables(tablesData);
 
       const scopedRobotIds = new Set(scopedRobots.map((r) => r.code || r.name || r.id));
+      const scopedRobotNames = new Set(scopedRobots.map((r) => r.name));
 
       const mappedNodes: AMRNode[] = scopedRobots.map((r, idx) => {
         const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert'> = {
@@ -320,9 +349,12 @@ export const AdminTechnicalPage: React.FC = () => {
         setNewMissionDest(`Bàn ${tablesData[0].tableNo || tablesData[0].id}`);
       }
 
-      // Live alerts: filtered for tenant robots only
+      // Live alerts: strictly filtered for tenant robots only
       const liveAlerts: AlertItem[] = alertsData
-        .filter((a) => !tenantSlug || isSuperAdmin || scopedRobotIds.has(a.robot) || a.robot === 'AMR')
+        .filter((a) => {
+          if (isSuperAdmin && !tenantSlug) return true;
+          return scopedRobotIds.has(a.robot) || scopedRobotNames.has(a.robot);
+        })
         .map((a) => ({
           id: a.id,
           robot: a.robot,
@@ -344,9 +376,9 @@ export const AdminTechnicalPage: React.FC = () => {
       });
       setAlerts(liveAlerts);
 
-      // Filter missions for tenant robots only
-      const scopedMissions = (tenantSlug && !isSuperAdmin)
-        ? missionsData.filter((m) => scopedRobotIds.has(m.assignedTo) || m.assignedTo === 'Chưa gán')
+      // Filter missions strictly for tenant robots only
+      const scopedMissions = (!isSuperAdmin || tenantSlug)
+        ? missionsData.filter((m) => scopedRobotIds.has(m.assignedTo) || scopedRobotNames.has(m.assignedTo))
         : missionsData;
       setMissions(scopedMissions);
     } catch (err) {
@@ -549,11 +581,30 @@ export const AdminTechnicalPage: React.FC = () => {
               <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/40">
                 TECH CENTER
               </span>
-              {tenantSlug && (
+              {isSuperAdmin ? (
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-300 border border-purple-400/40">
+                    SUPERADMIN
+                  </span>
+                  <select
+                    value={selectedSuperAdminTenant}
+                    onChange={(e) => setSelectedSuperAdminTenant(e.target.value)}
+                    className="bg-slate-800 text-cyan-300 border border-slate-600 rounded px-2 py-0.5 text-xs font-mono font-bold focus:outline-none focus:border-cyan-400 cursor-pointer"
+                    title="Chọn phạm vi hiển thị Tenant"
+                  >
+                    <option value="">Toàn bộ Hệ Thống (All Tenants)</option>
+                    {availableTenants.map((t) => (
+                      <option key={t.id || t.slug} value={t.slug}>
+                        {t.name || t.slug} (@{t.slug})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : tenantSlug ? (
                 <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
-                  Tenant: {tenantSlug.toUpperCase()}
+                  Tenant: {currentUser?.tenantName || tenantSlug.toUpperCase()}
                 </span>
-              )}
+              ) : null}
             </div>
           </Link>
 

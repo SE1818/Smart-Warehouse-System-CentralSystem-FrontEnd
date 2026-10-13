@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { authService } from '@/services';
+import { authService, tenantService } from '@/services';
 import { Icons } from '@/components/Icons';
 
 export function LoginPage() {
@@ -76,6 +76,23 @@ export function LoginPage() {
         console.error('Failed to parse JWT token:', e);
       }
 
+      // Dynamic Tenant Resolution via Backend API
+      const tenantInfo = await tenantService.resolveUserTenant(email);
+      if (tenantInfo) {
+        if (!tenantId && tenantInfo.tenantId) {
+          tenantId = tenantInfo.tenantId;
+        }
+        if (!subdomain && tenantInfo.tenantSlug) {
+          subdomain = tenantInfo.tenantSlug;
+        }
+      }
+
+      if (subdomain) {
+        localStorage.setItem('TENANT_SUBDOMAIN', subdomain);
+      } else {
+        localStorage.removeItem('TENANT_SUBDOMAIN');
+      }
+
       localStorage.setItem(
         'user',
         JSON.stringify({
@@ -85,6 +102,9 @@ export function LoginPage() {
           email: email,
           tenantId: tenantId,
           subdomain: subdomain,
+          tenantSlug: subdomain,
+          tenantName: tenantInfo?.tenantName || '',
+          isSuperAdmin: tenantInfo?.isSuperAdmin || false,
         })
       );
 
