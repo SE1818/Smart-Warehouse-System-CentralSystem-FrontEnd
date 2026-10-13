@@ -53,8 +53,6 @@ export const StaffKdsPage: React.FC = () => {
   const [_subdomain, setSubdomain] = useState<string>('launuong-saigon');
   const [_isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Active Filter Zone
-  const [selectedZone, setSelectedZone] = useState<string>('all');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
 
@@ -133,7 +131,7 @@ export const StaffKdsPage: React.FC = () => {
           const mappedTables: TableNode[] = tableList.map((t) => ({
             id: t.tableNo || t.id,
             name: `Bàn ${t.tableNo || t.id}`,
-            zone: t.zone || 'Khu Trong Nhà',
+            zone: t.zone || '',
             status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty',
             guestsCount: t.capacity || 4,
             currentOrders: t.currentOrders || [],
@@ -178,7 +176,7 @@ export const StaffKdsPage: React.FC = () => {
   const currentSelectedTable: TableNode = tables.find((t) => t.id === selectedTableId) || tables[0] || {
     id: 'Chưa có',
     name: 'Chưa chọn bàn',
-    zone: 'Toàn quán',
+    zone: '',
     status: 'empty'
   };
 
@@ -198,12 +196,6 @@ export const StaffKdsPage: React.FC = () => {
     ? autoSelectedRobot
     : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot;
 
-  // Filtered tables based on zone filter
-  const filteredTables = tables.filter((t) => {
-    if (selectedZone === 'all') return true;
-    return t.zone === selectedZone;
-  });
-
   const {
     currentPage: tablePage,
     pageSize: tablePageSize,
@@ -212,7 +204,7 @@ export const StaffKdsPage: React.FC = () => {
     paginatedItems: paginatedTables,
     setPage: setTablePage,
     setPageSize: setTablePageSize,
-  } = usePagination(filteredTables, 12);
+  } = usePagination(tables, 12);
 
   // Action: Load Pending Order items onto trays
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
@@ -365,39 +357,14 @@ export const StaffKdsPage: React.FC = () => {
       <main className="flex-1 p-3 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
         {/* LEFT / CENTER COLUMN: TABLE FLOOR MAP (7 COLS) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Floor Zone Filter Tabs */}
-          <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2 overflow-x-auto">
-            <div className="flex items-center gap-1.5">
-              {[
-                { id: 'all', label: 'Tất Cả Khu Vực' },
-                { id: 'Khu Trong Nhà', label: 'Khu Trong Nhà (A)' },
-                { id: 'Khu Sân Vườn VIP', label: 'Khu Sân Vườn (B)' },
-                { id: 'Tầng 1 Lẩu Nướng', label: 'Tầng 1 Lẩu Nướng (C)' },
-              ].map((zone) => (
-                <button
-                  key={zone.id}
-                  type="button"
-                  onClick={() => setSelectedZone(zone.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${selectedZone === zone.id
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                >
-                  {zone.label}
-                </button>
-              ))}
-            </div>
-
-            <span className="text-[11px] font-mono text-slate-600 pr-2 hidden sm:inline">
-              {filteredTables.length} Bàn
-            </span>
-          </div>
-
           {/* Interactive Table Section */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
                 <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
+                <span className="text-[11px] font-mono font-normal text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  {tables.length} Bàn
+                </span>
               </h2>
 
               {/* View Switcher: SLAM Map vs Cards Grid */}
@@ -434,7 +401,7 @@ export const StaffKdsPage: React.FC = () => {
             {/* View Mode 1: SLAM Map Viewer */}
             {viewMode === 'slam-map' ? (
               <SlamFloorMapViewer
-                tables={filteredTables}
+                tables={tables}
                 selectedTableId={selectedTableId}
                 onSelectTable={(id) => {
                   setSelectedTableId(id);
@@ -444,7 +411,7 @@ export const StaffKdsPage: React.FC = () => {
                 robots={robots}
                 className="flex-1"
               />
-            ) : filteredTables.length === 0 ? (
+            ) : tables.length === 0 ? (
               <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">
                 <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-700">Chưa có danh mục bàn ăn nào</h4>
@@ -515,7 +482,7 @@ export const StaffKdsPage: React.FC = () => {
 
                         {/* Middle Info */}
                         <div className="my-2.5 space-y-1">
-                          <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div>
+                          {table.zone ? <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div> : null}
                           <div className="text-[10px] font-mono">
                             {isServing ? (
                               <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
@@ -592,9 +559,11 @@ export const StaffKdsPage: React.FC = () => {
               <div>
                 <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
                   <span>{currentSelectedTable.name}</span>
-                  <span className="text-[10px] font-mono font-normal text-slate-500">
-                    ({currentSelectedTable.zone})
-                  </span>
+                  {currentSelectedTable.zone && currentSelectedTable.zone !== 'Toàn quán' && (
+                    <span className="text-[10px] font-mono font-normal text-slate-500">
+                      ({currentSelectedTable.zone})
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-500">
                   Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : 'Đang đón khách'}</strong>
