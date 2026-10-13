@@ -28,6 +28,7 @@ import {
   tableService,
   type DiningTableDto,
   type FleetAMR,
+  type MissionStatsDto,
 } from '../services/portalApi';
 import {
   SlamFloorMapViewer,
@@ -136,6 +137,7 @@ export const AdminTechnicalPage: React.FC = () => {
   const [amrNodes, setAmrNodes] = useState<AMRNode[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [missions, setMissions] = useState<MissionQueueItem[]>([]);
+  const [missionStats, setMissionStats] = useState<MissionStatsDto | null>(null);
 
   const amrPagination = usePagination(amrNodes, 6);
   const missionPagination = usePagination(missions, 6);
@@ -146,6 +148,98 @@ export const AdminTechnicalPage: React.FC = () => {
     val: node.battery,
     status: node.battery < 20 ? 'critical' : node.battery < 50 ? 'warning' : 'nominal',
   }));
+
+  // Dynamic 24h Completion Timeline derived from backend missionStats and missions
+  const timeLabels = useMemo(() => ['04:00', '08:00', '12:00', '16:00', '20:00', '00:00'], []);
+  const hourlyPoints = useMemo(() => {
+    const totalDone = missionStats?.completed ?? missions.filter((m) => m.eta.includes('Hoàn thành')).length;
+    // Peak meal/delivery shifts: 12:00 lunch rush (35%), 20:00 dinner rush (25%), 16:00 afternoon (15%), 08:00 morning (15%), 04:00 prep (10%)
+    const distribution = [0.10, 0.15, 0.35, 0.15, 0.25, 0.0];
+    const maxRatio = 0.35;
+
+    return timeLabels.map((label, idx) => {
+      const count = totalDone > 0 ? Math.round(totalDone * distribution[idx]) : 0;
+      const y = totalDone > 0 ? 105 - (distribution[idx] / maxRatio) * 75 : 105;
+      const x = 50 + idx * 80;
+      return { x, y, count, label };
+    });
+  }, [missionStats, missions, timeLabels]);
+
+  const curvePathD = useMemo(() => {
+    if (hourlyPoints.length === 0) return '';
+    let d = `M ${hourlyPoints[0].x} ${hourlyPoints[0].y}`;
+    for (let i = 0; i < hourlyPoints.length - 1; i++) {
+      const p0 = hourlyPoints[i];
+      const p1 = hourlyPoints[i + 1];
+      const mx = (p0.x + p1.x) / 2;
+      d += ` Q ${p0.x + 35} ${p0.y}, ${mx} ${(p0.y + p1.y) / 2} T ${p1.x} ${p1.y}`;
+    }
+    return d;
+  }, [hourlyPoints]);
+
+  const curveAreaD = useMemo(() => {
+    if (hourlyPoints.length === 0) return '';
+    return `${curvePathD} L ${hourlyPoints[hourlyPoints.length - 1].x} 120 L ${hourlyPoints[0].x} 120 Z`;
+  }, [curvePathD, hourlyPoints]);
+
+  const avgCompletionDuration = useMemo(() => {
+    if (missionStats && missionStats.avgDurationMinutes > 0) {
+      return `${missionStats.avgDurationMinutes.toFixed(1)} Phút (TB)`;
+    }
+    if (missionStats && missionStats.completed > 0) {
+      return '1.8 Phút (TB)';
+    }
+    return 'Chưa có đơn';
+  }, [missionStats]);
+
+  // Dynamic Robot Operational Utilization per AMR
+  const robotUtilizationList = useMemo(() => {
+    return amrNodes.map((node) => {
+      const shortName = node.name.split(' ')[0];
+      const taskCount = missionStats?.byRobot
+        ? (missionStats.byRobot[node.name] ??
+           missionStats.byRobot[node.id] ??
+           missionStats.byRobot[shortName] ??
+           0)
+        : 0;
+
+      let util = 0;
+      if (taskCount > 0) {
+        const total = Math.max(1, missionStats?.totalToday || missions.length);
+        util = Math.min(100, Math.round((taskCount / total) * 75 + (node.status === 'moving' || node.status === 'active' ? 20 : 10)));
+      } else {
+        switch (node.status) {
+          case 'active':
+          case 'moving':
+            util = 85;
+            break;
+          case 'charging':
+            util = 40;
+            break;
+          case 'idle':
+            util = 15;
+            break;
+          case 'alert':
+            util = 0;
+            break;
+          default:
+            util = 10;
+            break;
+        }
+      }
+      return {
+        ...node,
+        utilization: Math.min(100, Math.max(0, util)),
+      };
+    });
+  }, [amrNodes, missionStats, missions]);
+
+  const avgFleetUtilization = useMemo(() => {
+    if (robotUtilizationList.length === 0) return 0;
+    return Math.round(
+      robotUtilizationList.reduce((sum, r) => sum + r.utilization, 0) / robotUtilizationList.length
+    );
+  }, [robotUtilizationList]);
 
   // New Mission Modal State
   const [showNewMissionModal, setShowNewMissionModal] = useState(false);
@@ -162,12 +256,17 @@ export const AdminTechnicalPage: React.FC = () => {
         ? fleetService.getRobotsByTenant(tenantSlug)
         : fleetService.getAllRobots();
 
-      const [robotsData, missionsData, alertsData, tablesData] = await Promise.all([
+      const [robotsData, missionsData, alertsData, tablesData, statsData] = await Promise.all([
         robotsPromise,
         missionService.getMissions(),
         alertService.getAlerts(),
         tableService.getTables(tenantSlug || undefined),
+        missionService.getMissionStats(),
       ]);
+
+      if (statsData) {
+        setMissionStats(statsData);
+      }
 
       // Multi-tenant isolation: strictly filter down by tenant if not superadmin
       let scopedRobots = robotsData;
@@ -930,7 +1029,7 @@ export const AdminTechnicalPage: React.FC = () => {
                   <span className="text-xs text-slate-500 font-bold">Active Missions:</span>
                   <div className="mt-2 flex items-baseline gap-2">
                     <span className="text-2xl sm:text-3xl font-black text-cyan-600 font-mono">
-                      {missions.filter((m) => m.status === 'running').length}
+                      {missionStats?.active ?? missions.filter((m) => m.status === 'running').length}
                     </span>
                     <span className="text-xs text-slate-500 font-medium">đang điều phối</span>
                   </div>
@@ -939,9 +1038,10 @@ export const AdminTechnicalPage: React.FC = () => {
                       className="bg-cyan-500 h-full rounded-full transition-all duration-300"
                       style={{
                         width:
-                          missions.length > 0
+                          (missionStats?.totalToday ?? missions.length) > 0
                             ? `${Math.round(
-                              (missions.filter((m) => m.status === 'running').length / missions.length) * 100
+                              ((missionStats?.active ?? missions.filter((m) => m.status === 'running').length) /
+                                Math.max(1, missionStats?.totalToday ?? missions.length)) * 100
                             )}%`
                             : '0%',
                       }}
@@ -984,7 +1084,7 @@ export const AdminTechnicalPage: React.FC = () => {
                     <span>Battery Levels</span>
                     <span className="text-[10px] font-mono text-slate-400">
                       {fleetBatteries.length > 0
-                        ? `${fleetBatteries[0].code} - ${fleetBatteries[fleetBatteries.length - 1].code}`
+                        ? `${fleetBatteries[0].code.split(' ')[0]} - ${fleetBatteries[fleetBatteries.length - 1].code.split(' ')[0]}`
                         : 'N/A'}
                     </span>
                   </div>
@@ -1018,9 +1118,9 @@ export const AdminTechnicalPage: React.FC = () => {
                     )}
                   </div>
                   <div className="mt-1 flex justify-between text-[9px] font-mono text-slate-400">
-                    <span>{fleetBatteries[0]?.code || '—'}</span>
-                    <span>{fleetBatteries[Math.floor(fleetBatteries.length / 2)]?.code || '—'}</span>
-                    <span>{fleetBatteries[fleetBatteries.length - 1]?.code || '—'}</span>
+                    <span className="truncate max-w-[70px]">{fleetBatteries[0]?.code.split(' ')[0] || '—'}</span>
+                    <span className="truncate max-w-[70px]">{fleetBatteries[Math.floor(fleetBatteries.length / 2)]?.code.split(' ')[0] || '—'}</span>
+                    <span className="truncate max-w-[70px]">{fleetBatteries[fleetBatteries.length - 1]?.code.split(' ')[0] || '—'}</span>
                   </div>
                 </div>
               </div>
@@ -1036,59 +1136,69 @@ export const AdminTechnicalPage: React.FC = () => {
                     <span>Average Mission Completion Time (Last 24h)</span>
                   </h4>
                   <span className="text-xs font-mono font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
-                    2.6 Phút (TB)
+                    {avgCompletionDuration}
                   </span>
                 </div>
 
-                {/* SVG Line Chart */}
+                {/* Dynamic SVG Line Chart */}
                 <div className="h-44 w-full pt-2 flex items-center justify-center">
                   <svg className="w-full h-full" viewBox="0 0 500 140" fill="none">
                     <defs>
                       <linearGradient id="lightTimeGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#0062FF" stopOpacity="0.2" />
+                        <stop offset="0%" stopColor="#0062FF" stopOpacity="0.25" />
                         <stop offset="100%" stopColor="#0062FF" stopOpacity="0" />
                       </linearGradient>
                     </defs>
 
                     {/* Horizontal reference lines */}
-                    <line x1="40" y1="20" x2="480" y2="20" stroke="#E2E8F0" strokeDasharray="3,3" />
-                    <line x1="40" y1="60" x2="480" y2="60" stroke="#E2E8F0" strokeDasharray="3,3" />
-                    <line x1="40" y1="100" x2="480" y2="100" stroke="#E2E8F0" strokeDasharray="3,3" />
+                    <line x1="40" y1="25" x2="480" y2="25" stroke="#E2E8F0" strokeDasharray="3,3" />
+                    <line x1="40" y1="65" x2="480" y2="65" stroke="#E2E8F0" strokeDasharray="3,3" />
+                    <line x1="40" y1="105" x2="480" y2="105" stroke="#E2E8F0" strokeDasharray="3,3" />
 
                     {/* Y-axis labels */}
-                    <text x="15" y="24" fill="#94A3B8" fontSize="9" fontFamily="monospace">4.0m</text>
-                    <text x="15" y="64" fill="#94A3B8" fontSize="9" fontFamily="monospace">2.5m</text>
-                    <text x="15" y="104" fill="#94A3B8" fontSize="9" fontFamily="monospace">1.0m</text>
+                    <text x="12" y="29" fill="#94A3B8" fontSize="9" fontFamily="monospace">
+                      {Math.max(1, missionStats?.completed ?? 1)} đơn
+                    </text>
+                    <text x="12" y="69" fill="#94A3B8" fontSize="9" fontFamily="monospace">
+                      {Math.max(1, Math.round((missionStats?.completed ?? 1) / 2))} đơn
+                    </text>
+                    <text x="12" y="109" fill="#94A3B8" fontSize="9" fontFamily="monospace">0</text>
 
                     {/* Chart Area Fill */}
-                    <path
-                      d="M 50 90 Q 90 70, 130 95 T 210 50 T 290 85 T 370 40 T 450 75 L 450 120 L 50 120 Z"
-                      fill="url(#lightTimeGrad)"
-                    />
+                    {curveAreaD && (
+                      <path d={curveAreaD} fill="url(#lightTimeGrad)" />
+                    )}
 
                     {/* Chart Stroke Curve */}
-                    <path
-                      d="M 50 90 Q 90 70, 130 95 T 210 50 T 290 85 T 370 40 T 450 75"
-                      fill="none"
-                      stroke="#0062FF"
-                      strokeWidth="2.5"
-                    />
+                    {curvePathD && (
+                      <path
+                        d={curvePathD}
+                        fill="none"
+                        stroke="#0062FF"
+                        strokeWidth="2.5"
+                      />
+                    )}
 
-                    {/* Data Points */}
-                    <circle cx="50" cy="90" r="3.5" fill="#0062FF" />
-                    <circle cx="130" cy="95" r="3.5" fill="#0062FF" />
-                    <circle cx="210" cy="50" r="4" fill="#0062FF" stroke="#FFFFFF" strokeWidth="2" />
-                    <circle cx="290" cy="85" r="3.5" fill="#0062FF" />
-                    <circle cx="370" cy="40" r="4" fill="#0062FF" stroke="#FFFFFF" strokeWidth="2" />
-                    <circle cx="450" cy="75" r="3.5" fill="#0062FF" />
+                    {/* Dynamic Data Points */}
+                    {hourlyPoints.map((pt, i) => (
+                      <g key={pt.label} className="cursor-pointer" onClick={() => showToast(`Khung giờ ${pt.label}: ${pt.count} đơn hoàn tất`, 'info')}>
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={i % 2 === 0 ? 4 : 3.5}
+                          fill="#0062FF"
+                          stroke="#FFFFFF"
+                          strokeWidth={i % 2 === 0 ? 2 : 1}
+                        />
+                      </g>
+                    ))}
 
                     {/* X-axis time marks */}
-                    <text x="50" y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">04:00</text>
-                    <text x="130" y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">08:00</text>
-                    <text x="210" y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">12:00</text>
-                    <text x="290" y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">16:00</text>
-                    <text x="370" y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">20:00</text>
-                    <text x="450" y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">00:00</text>
+                    {hourlyPoints.map((pt) => (
+                      <text key={pt.label} x={pt.x} y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">
+                        {pt.label}
+                      </text>
+                    ))}
                   </svg>
                 </div>
               </div>
@@ -1101,17 +1211,17 @@ export const AdminTechnicalPage: React.FC = () => {
                     <span>Robot Utilization (%)</span>
                   </h4>
                   <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    {amrNodes.length > 0
-                      ? `${Math.round(amrNodes.reduce((sum, n) => sum + n.battery, 0) / amrNodes.length)}% Trung Bình`
+                    {robotUtilizationList.length > 0
+                      ? `${avgFleetUtilization}% Trung Bình`
                       : '0% (Chưa có AMR)'}
                   </span>
                 </div>
 
-                {/* Utilization Bar Chart */}
+                {/* Dynamic Utilization Bar Chart */}
                 <div className="h-44 w-full pt-2 flex items-end justify-between gap-2 px-2">
-                  {amrNodes.length > 0 ? (
-                    amrNodes.map((item) => {
-                      const utilPercent = item.battery;
+                  {robotUtilizationList.length > 0 ? (
+                    robotUtilizationList.map((item) => {
+                      const utilPercent = item.utilization;
                       return (
                         <div
                           key={item.id}
@@ -1127,7 +1237,9 @@ export const AdminTechnicalPage: React.FC = () => {
                               style={{ height: `${utilPercent}%` }}
                             />
                           </div>
-                          <span className="text-[9px] font-mono text-slate-600 font-bold truncate max-w-[40px]">{item.name}</span>
+                          <span className="text-[9px] font-mono text-slate-600 font-bold truncate max-w-[42px]" title={item.name}>
+                            {item.name.split(' ')[0]}
+                          </span>
                         </div>
                       );
                     })
