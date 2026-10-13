@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   LogOut,
   Wrench,
+  AlertTriangle,
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
 import { fixMojibake } from '../utils/textUtils';
@@ -309,7 +310,7 @@ export const StaffKdsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="text-base font-black text-[#0A192F] tracking-tight font-heading">VORA KDS</span>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
-                STAFF TOUCH
+                STAFF WEB
               </span>
             </div>
             <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
@@ -512,8 +513,8 @@ export const StaffKdsPage: React.FC = () => {
                           <span className="text-slate-500 text-[10px]">
                             {table.currentOrders ? `${table.currentOrders.length} Món` : 'Chưa gọi'}
                           </span>
-                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
-                            {isSelected ? 'Đang chọn' : 'Chạm để chọn'}
+                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400 group-hover:text-blue-600 transition-colors'}`}>
+                            {isSelected ? 'Đang chọn' : 'Click để chọn'}
                           </span>
                         </div>
                       </button>
@@ -582,14 +583,14 @@ export const StaffKdsPage: React.FC = () => {
           </div>
 
           {/* Pending Orders Selector Bar */}
-          {pendingOrders.length > 0 && (
+          {pendingOrders.length > 0 ? (
             <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/90 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-amber-900">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-600" />
                   <span>Đơn Món Chờ Ra Bếp ({pendingOrders.length})</span>
                 </span>
-                <span className="text-[10px] font-mono text-amber-700">Chạm để nạp khay</span>
+                <span className="text-[10px] font-mono text-amber-700">Click đơn để nạp khay</span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {pendingOrders.map((ord) => (
@@ -597,7 +598,7 @@ export const StaffKdsPage: React.FC = () => {
                     key={ord.id}
                     type="button"
                     onClick={() => handleSelectPendingOrder(ord)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border ${activeOrderId === ord.id
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border cursor-pointer ${activeOrderId === ord.id
                         ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                         : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
                       }`}
@@ -606,6 +607,14 @@ export const StaffKdsPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Chưa có đơn món chờ ra từ POS/QR</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Tự động đồng bộ</span>
             </div>
           )}
 
@@ -805,20 +814,32 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             )}
 
-            {/* ONE-TOUCH DISPATCH BUTTON */}
+            {/* DISPATCH ACTION BUTTON */}
             <button
               type="button"
-              disabled={isDispatching || !effectiveRobot}
+              disabled={isDispatching || !effectiveRobot || !currentSelectedTable.id}
               onClick={handleDispatchOrder}
-              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold text-white flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98] ${isDispatching
-                  ? 'bg-blue-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 shadow-blue-500/25 cursor-pointer'
+              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isDispatching
+                  ? 'bg-blue-400 text-white cursor-not-allowed'
+                  : !effectiveRobot || !currentSelectedTable.id
+                    ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
+                    : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
                 }`}
             >
               {isDispatching ? (
                 <>
                   <RotateCcw className="w-4 h-4 animate-spin text-white" />
                   <span>ĐANG PHÁT LỆNH ĐIỀU PHỐI...</span>
+                </>
+              ) : !effectiveRobot ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-slate-400" />
+                  <span>CHƯA CÓ AMR SẴN SÀNG</span>
+                </>
+              ) : !currentSelectedTable.id ? (
+                <>
+                  <Send className="w-4 h-4 text-slate-400" />
+                  <span>VUI LÒNG CHỌN BÀN ĐỂ GIAO MÓN</span>
                 </>
               ) : (
                 <>

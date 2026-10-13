@@ -808,8 +808,8 @@ export const AdminTechnicalPage: React.FC = () => {
                 </div>
 
                 {/* Mission Queue (Matching Reference Image 1) */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex-1 flex flex-col shadow-xs">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex-1 flex flex-col shadow-xs min-h-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3 shrink-0">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-blue-600" />
                       <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">Mission Queue</h3>
@@ -829,7 +829,7 @@ export const AdminTechnicalPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2 overflow-y-auto max-h-[195px] pr-1">
+                  <div className="space-y-2 overflow-y-auto flex-1 min-h-0 pr-1">
                     {missions.length === 0 ? (
                       <div className="text-xs text-slate-400 text-center py-8">
                         Chưa có lệnh điều phối trong hàng đợi. Bấm &quot;Tạo Lệnh&quot; để phát lệnh mới.

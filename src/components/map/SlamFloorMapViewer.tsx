@@ -852,7 +852,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
-                Chạm vào bàn trên sơ đồ để chọn điểm giao món ăn cho AMR
+                Click vào bàn trên sơ đồ để chọn điểm giao món ăn cho AMR
               </p>
             </div>
           </div>
@@ -1157,7 +1157,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             </span>
           </div>
           <span className="text-[10px] text-slate-500 font-mono">
-            Chạm bàn trên sơ đồ để chọn lệnh • Tự động khớp lệnh KDS
+            Click bàn trên sơ đồ để chọn lệnh • Tự động khớp lệnh KDS
           </span>
         </div>
       ) : (
