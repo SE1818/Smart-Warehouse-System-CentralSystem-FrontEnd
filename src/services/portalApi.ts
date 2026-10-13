@@ -370,32 +370,10 @@ export const tableService = {
         }
       }
     } catch {
-      // Backend /tables chưa có, thử lấy từ active map của robot service
+      // Backend /tables chưa có hoặc offline
     }
 
-    // 2. Thử lấy danh sách bàn từ Active SLAM Map của RobotService trên BE
-    try {
-      const mapRes = await portalClient.get('/robots/map/active');
-      if (mapRes.data && Array.isArray(mapRes.data.tables) && mapRes.data.tables.length > 0) {
-        const mappedTables: DiningTableDto[] = mapRes.data.tables.map((t: any) => ({
-          id: t.id || t.tableNo,
-          tableNo: t.tableNo || t.name,
-          zone: t.zone || 'Khu Trong Nhà',
-          capacity: 4,
-          status: 'empty',
-          assignedRobotCode: null,
-          currentOrders: [],
-          orderTime: null,
-          worldX: t.worldX,
-          worldY: t.worldY,
-        }));
-        return mappedTables;
-      }
-    } catch {
-      // ignore
-    }
-
-    // 3. Fallback đọc từ local SQLite cache nếu không kết nối được BE
+    // 2. Fallback đọc từ local SQLite cache nếu không kết nối được BE
     try {
       const sqliteTables = await sqliteService.getDiningTables();
       if (sqliteTables && sqliteTables.length > 0) {

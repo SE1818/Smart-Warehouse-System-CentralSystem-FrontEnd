@@ -62,11 +62,15 @@ export function LoginPage() {
       localStorage.setItem('authToken', res.accessToken);
 
       let userId = '';
+      let tenantId = '';
+      let subdomain = '';
       try {
         const tokenParts = res.accessToken.split('.');
         if (tokenParts.length > 1) {
           const payload = JSON.parse(atob(tokenParts[1]));
           userId = payload.sub || payload.nameid || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || '';
+          tenantId = payload.tenant_id || payload.tenantId || payload.TenantId || '';
+          subdomain = payload.subdomain || payload.tenant_slug || payload.tenantSlug || '';
         }
       } catch (e) {
         console.error('Failed to parse JWT token:', e);
@@ -79,6 +83,8 @@ export function LoginPage() {
           role: res.role,
           name: email.split('@')[0] || 'Người dùng',
           email: email,
+          tenantId: tenantId,
+          subdomain: subdomain,
         })
       );
 

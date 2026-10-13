@@ -19,7 +19,6 @@ import {
   type WorldPoint,
 } from '@/utils/rosCoordinates';
 import {
-  robotService,
   type SlamMapResponse,
   type SlamMapStationDto,
   type SlamMapWaypointDto,
@@ -137,7 +136,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     return () => window.removeEventListener('vora:slam-map-updated', handleSlamUpdate);
   }, [loadSqliteWaypoints]);
 
-  // 1. Fetch real active SLAM map from Backend Robot Service API / SQLite
+  // 1. Fetch SLAM map metadata from local SQLite cache
   const fetchActiveMap = useCallback(async () => {
     setIsLoadingMap(true);
     try {
@@ -146,14 +145,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       if (localMap) {
         setActiveSlamMap(localMap);
       }
-
-      const data = await robotService.getActiveSlamMap();
-      if (data) {
-        setActiveSlamMap(data);
-      }
       await loadSqliteWaypoints();
     } catch (err) {
-      console.warn('Không thể tải metadata SLAM Map từ RobotService:', err);
+      console.warn('Lỗi tải metadata SLAM Map từ SQLite:', err);
     } finally {
       setIsLoadingMap(false);
     }

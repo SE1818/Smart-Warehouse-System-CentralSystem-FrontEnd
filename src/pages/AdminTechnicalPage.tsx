@@ -20,6 +20,7 @@ import {
 import { RobotMonitorPage } from './technical/RobotMonitorPage';
 import { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
 import { LocalSqliteSyncCard } from '@/components/admin/LocalSqliteSyncCard';
+import { useRobotStore } from '@/stores/robotStore';
 import {
   fleetService,
   missionService,
@@ -88,6 +89,46 @@ export const AdminTechnicalPage: React.FC = () => {
     }, 3500);
   };
 
+  // Technician / Current User Context for Multi-tenant Isolation
+  const currentUser = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const tenantSlug = useMemo(() => {
+    return (
+      currentUser?.subdomain ||
+      currentUser?.tenantSlug ||
+      currentUser?.tenantId ||
+      localStorage.getItem('TENANT_SUBDOMAIN') ||
+      ''
+    ).trim();
+  }, [currentUser]);
+
+  const isSuperAdmin = useMemo(() => {
+    const role = (currentUser?.role || '').toLowerCase();
+    return role === 'superadmin';
+  }, [currentUser]);
+
+  // Real-time SignalR Hub Telemetry Connection
+  const {
+    robots: storeRobots,
+    status: signalRStatus,
+    connect: connectRobotHub,
+    disconnect: disconnectRobotHub,
+  } = useRobotStore();
+
+  useEffect(() => {
+    connectRobotHub();
+    return () => {
+      disconnectRobotHub();
+    };
+  }, [connectRobotHub, disconnectRobotHub]);
+
   // Live Data States - Initialized with live [] empty states
   const [rawRobots, setRawRobots] = useState<FleetAMR[]>([]);
   const [tables, setTables] = useState<DiningTableDto[]>([]);
@@ -112,20 +153,42 @@ export const AdminTechnicalPage: React.FC = () => {
   const [newMissionDest, setNewMissionDest] = useState('');
   const [newMissionRobot, setNewMissionRobot] = useState('');
 
-  // Fetch real data from live services
+  // Fetch real data from live services (Filtered by tenant for Technician)
   const loadData = async () => {
     try {
+      setLoading(true);
+
+      const robotsPromise = (tenantSlug && !isSuperAdmin)
+        ? fleetService.getRobotsByTenant(tenantSlug)
+        : fleetService.getAllRobots();
+
       const [robotsData, missionsData, alertsData, tablesData] = await Promise.all([
-        fleetService.getAllRobots(),
+        robotsPromise,
         missionService.getMissions(),
         alertService.getAlerts(),
-        tableService.getTables(),
+        tableService.getTables(tenantSlug || undefined),
       ]);
 
-      setRawRobots(robotsData);
+      // Multi-tenant isolation: strictly filter down by tenant if not superadmin
+      let scopedRobots = robotsData;
+      if (tenantSlug && !isSuperAdmin) {
+        const filtered = robotsData.filter((r) => {
+          const rSlug = (r.ownerTenantSlug || '').toLowerCase();
+          const rId = (r.ownerTenantId || '').toLowerCase();
+          const tSlug = tenantSlug.toLowerCase();
+          return rSlug === tSlug || rId === tSlug || (r.tenantName && r.tenantName.toLowerCase().includes(tSlug));
+        });
+        if (filtered.length > 0) {
+          scopedRobots = filtered;
+        }
+      }
+
+      setRawRobots(scopedRobots);
       setTables(tablesData);
 
-      const mappedNodes: AMRNode[] = robotsData.map((r, idx) => {
+      const scopedRobotIds = new Set(scopedRobots.map((r) => r.code || r.name || r.id));
+
+      const mappedNodes: AMRNode[] = scopedRobots.map((r, idx) => {
         const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert'> = {
           delivering: 'moving',
           charging: 'charging',
@@ -157,15 +220,18 @@ export const AdminTechnicalPage: React.FC = () => {
         setNewMissionDest(`Bàn ${tablesData[0].tableNo || tablesData[0].id}`);
       }
 
-      // Live alerts: notifications + battery alerts
-      const liveAlerts: AlertItem[] = alertsData.map((a) => ({
-        id: a.id,
-        robot: a.robot,
-        type: a.type,
-        message: a.message,
-        time: a.time,
-      }));
-      robotsData.forEach((r) => {
+      // Live alerts: filtered for tenant robots only
+      const liveAlerts: AlertItem[] = alertsData
+        .filter((a) => !tenantSlug || isSuperAdmin || scopedRobotIds.has(a.robot) || a.robot === 'AMR')
+        .map((a) => ({
+          id: a.id,
+          robot: a.robot,
+          type: a.type,
+          message: a.message,
+          time: a.time,
+        }));
+
+      scopedRobots.forEach((r) => {
         if (r.battery < 20) {
           liveAlerts.push({
             id: `alt-bat-${r.id}`,
@@ -178,7 +244,11 @@ export const AdminTechnicalPage: React.FC = () => {
       });
       setAlerts(liveAlerts);
 
-      setMissions(missionsData);
+      // Filter missions for tenant robots only
+      const scopedMissions = (tenantSlug && !isSuperAdmin)
+        ? missionsData.filter((m) => scopedRobotIds.has(m.assignedTo) || m.assignedTo === 'Chưa gán')
+        : missionsData;
+      setMissions(scopedMissions);
     } catch (err) {
       console.warn('Lỗi khi tải dữ liệu Technical Ops:', err);
     } finally {
@@ -186,19 +256,54 @@ export const AdminTechnicalPage: React.FC = () => {
     }
   };
 
+  // Initial load once on component mount (No setInterval polling!)
   useEffect(() => {
     loadData();
-  }, []);
+  }, [tenantSlug]);
 
-  // Periodic poll to keep live telemetry and AMR states in sync without fake jitter
+  // Sync real-time SignalR robot updates directly into telemetry state without HTTP polling
   useEffect(() => {
-    if (!isSimulationRunning || emergencyStop) return;
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000);
+    if (storeRobots.length === 0) return;
 
-    return () => clearInterval(interval);
-  }, [isSimulationRunning, emergencyStop]);
+    setRawRobots((prev) => {
+      const updated = [...prev];
+      storeRobots.forEach((sr) => {
+        const idx = updated.findIndex((r) => r.id === sr.id || r.code === sr.name || r.name === sr.name);
+        if (idx > -1) {
+          updated[idx] = {
+            ...updated[idx],
+            worldX: sr.currentX,
+            worldY: sr.currentY,
+            battery: sr.batteryLevel,
+            status: (sr.status.toLowerCase() === 'moving' ? 'delivering' : sr.status.toLowerCase() === 'charging' ? 'charging' : 'idle') as any,
+          };
+        }
+      });
+      return updated;
+    });
+
+    setAmrNodes((prevNodes) => {
+      return prevNodes.map((node) => {
+        const match = storeRobots.find((sr) => sr.id === node.id || sr.name === node.name);
+        if (!match) return node;
+        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert'> = {
+          moving: 'moving',
+          delivering: 'moving',
+          charging: 'charging',
+          idle: 'idle',
+        };
+        const st = statusMap[match.status?.toLowerCase()] || node.status;
+        return {
+          ...node,
+          x: match.currentX,
+          y: match.currentY,
+          battery: match.batteryLevel ?? node.battery,
+          status: st,
+          speed: st === 'moving' ? (node.speed === '0.0 m/s' ? '1.0 m/s' : node.speed) : '0.0 m/s',
+        };
+      });
+    });
+  }, [storeRobots]);
 
   // Map Data Memoization for SlamFloorMapViewer
   const mapTables: MapTableNode[] = useMemo(() => {
@@ -344,6 +449,11 @@ export const AdminTechnicalPage: React.FC = () => {
               <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/40">
                 TECH CENTER
               </span>
+              {tenantSlug && (
+                <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
+                  Tenant: {tenantSlug.toUpperCase()}
+                </span>
+              )}
             </div>
           </Link>
 
@@ -361,6 +471,20 @@ export const AdminTechnicalPage: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+
+          {/* Manual Refresh Button */}
+          <button
+            type="button"
+            onClick={() => {
+              loadData();
+              showToast('Đang làm mới dữ liệu từ máy chủ...', 'info');
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 hover:text-white transition-all shadow-xs cursor-pointer"
+            title="Làm mới toàn bộ dữ liệu"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden md:inline">Làm Mới</span>
+          </button>
 
           {/* Quick Portal Switchers */}
           <div className="hidden sm:flex items-center gap-2">
@@ -462,12 +586,22 @@ export const AdminTechnicalPage: React.FC = () => {
 
         <div className="hidden md:flex items-center gap-4 text-[11px] text-slate-500 font-mono">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981]" />
-            <span>FMS Core: Online (14ms)</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                signalRStatus === 'connected'
+                  ? 'bg-emerald-500 shadow-[0_0_6px_#10B981]'
+                  : signalRStatus === 'connecting'
+                  ? 'bg-amber-400 animate-pulse'
+                  : 'bg-slate-400'
+              }`}
+            />
+            <span>
+              SignalR Hub: {signalRStatus === 'connected' ? 'Trực Tuyến (Live)' : signalRStatus === 'connecting' ? 'Đang kết nối...' : 'Ngoại tuyến'}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-blue-600" />
-            <span>ROS 2 Humble / Nav2 Sync</span>
+            <span>FMS Core / ROS 2 Live</span>
           </div>
         </div>
       </div>
