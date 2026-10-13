@@ -11,13 +11,18 @@ export const resolveBaseUrl = (): string => {
     if (override) {
       return override.replace(/\/+$/, '');
     }
+
+    // When served from Docker port 3200, use relative /api to utilize Nginx reverse proxy and eliminate CORS
+    if (window.location.port === '3200') {
+      return '/api';
+    }
   }
 
   // 2. Read environment variable
   let envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
-  // If envUrl is empty or points to expired tunnels, default to stereo-gravity-humbly ngrok tunnel
-  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+  // If envUrl is empty, points to unresolvable docker host, or points to expired tunnels, default to stereo-gravity-humbly ngrok tunnel
+  if (!envUrl || envUrl.includes('api-gateway') || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
     envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api';
   }
 
