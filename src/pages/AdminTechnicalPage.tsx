@@ -17,7 +17,6 @@ import {
   Plus,
   Power,
   LogOut,
-  UtensilsCrossed,
 } from 'lucide-react';
 import { RobotMonitorPage } from './technical/RobotMonitorPage';
 import { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
@@ -488,16 +487,8 @@ export const AdminTechnicalPage: React.FC = () => {
             <span className="hidden md:inline">Làm Mới</span>
           </button>
 
-          {/* Quick Portal Switchers */}
+          {/* User Actions */}
           <div className="flex items-center gap-2">
-            <Link
-              to="/staff"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-750 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-all shadow-xs"
-              title="Chuyển sang màn hình Nhân viên KDS ra món"
-            >
-              <UtensilsCrossed className="w-3.5 h-3.5 text-emerald-400" />
-              <span>View Nhân Viên KDS</span>
-            </Link>
             <Link
               to="/login"
               onClick={() => {

@@ -13,7 +13,6 @@ import {
   Map as MapIcon,
   LayoutGrid,
   LogOut,
-  Wrench,
   AlertTriangle,
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
@@ -333,14 +332,6 @@ export const StaffKdsPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              to="/technical"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-blue-600 transition-all shadow-2xs"
-              title="Chuyển sang giao diện Kỹ Sư Kỹ Thuật (AMR Fleet & Telemetry)"
-            >
-              <Wrench className="w-3.5 h-3.5 text-blue-600" />
-              <span>View Kỹ Sư</span>
-            </Link>
             <Link
               to="/login"
               onClick={() => {
