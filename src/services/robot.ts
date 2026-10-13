@@ -107,8 +107,18 @@ export const robotService = {
     return response.data;
   },
 
-  // Get active SLAM map metadata (Loaded from local SQLite; received from MQTT / API)
+  // Get active SLAM map metadata (Primary: BE API from Server/Edge; Fallback: SQLite cache)
   async getActiveSlamMap(): Promise<SlamMapResponse> {
+    try {
+      const response = await apiClient.get<SlamMapResponse>('/v1/robots/map/active');
+      if (response.data && response.data.mapId) {
+        try { await sqliteService.saveSlamMap(response.data); } catch { }
+        return response.data;
+      }
+    } catch (err) {
+      console.warn('[robotService] Không thể kết nối BE để lấy active SLAM map, thử đọc từ SQLite cache:', err);
+    }
+
     try {
       const localMap = await sqliteService.getSlamMap();
       if (localMap && localMap.mapId) {
@@ -118,32 +128,30 @@ export const robotService = {
       console.warn('[robotService] Lỗi đọc SLAM Map từ SQLite:', e);
     }
 
-    try {
-      const response = await apiClient.get<SlamMapResponse>('/v1/robots/map/active');
-      if (response.data) {
-        await sqliteService.saveSlamMap(response.data);
-      }
-      return response.data;
-    } catch (err) {
-      console.warn('[robotService] Không thể kết nối BE để lấy active SLAM map:', err);
-      const fallback = await sqliteService.getSlamMap();
-      if (fallback) return fallback;
-      throw err;
-    }
+    throw new Error('Chưa có dữ liệu bản đồ từ Server hoặc SQLite.');
   },
 
   // Broadcast or update SLAM map via API and persist to SQLite
   async updateSlamMap(map: Partial<SlamMapResponse>): Promise<SlamMapResponse> {
     const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/update', map);
     if (response.data) {
-      await sqliteService.saveSlamMap(response.data);
+      try { await sqliteService.saveSlamMap(response.data); } catch { }
     }
     return response.data;
   },
 
-  // Get waypoints strictly from local SQLite (received from MQTT / ROS 2)
-  // If not received from MQTT, returns empty array [] (no fake waypoints!)
+  // Get waypoints (Primary: BE API; Fallback: SQLite cache)
   async getWaypoints(): Promise<SlamMapWaypointDto[]> {
+    try {
+      const response = await apiClient.get<SlamMapWaypointDto[]>('/v1/robots/map/waypoints');
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        try { await sqliteService.saveWaypointsFromMqtt(response.data); } catch { }
+        return response.data;
+      }
+    } catch (e) {
+      console.warn('[robotService] Không thể lấy waypoints từ BE API, thử đọc từ SQLite cache:', e);
+    }
+
     try {
       const localWaypoints = await sqliteService.getWaypoints();
       return localWaypoints;

@@ -141,8 +141,15 @@ export const transferService = {
     }
   },
 
-  // Get transfer activity logs directly from local SQLite
+  // Get transfer activity logs (BE API first, fallback SQLite cache)
   async getLocalTransferLogs(limit = 100): Promise<LogTransfer[]> {
+    try {
+      const response = await apiClient.get<LogTransfer[]>('/v1/tasks/active');
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        return response.data;
+      }
+    } catch { }
+
     try {
       return await sqliteService.getTransferLogs(limit);
     } catch {

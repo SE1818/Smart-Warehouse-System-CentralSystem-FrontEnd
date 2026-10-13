@@ -16,9 +16,9 @@ export const resolveBaseUrl = (): string => {
   // 2. Read environment variable
   let envUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
-  // If envUrl is empty or points to expired tunnels, default to local API gateway
-  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com') || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
-    envUrl = 'http://localhost:5000/api';
+  // If envUrl is empty or points to expired tunnels, default to stereo-gravity-humbly ngrok tunnel
+  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+    envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');

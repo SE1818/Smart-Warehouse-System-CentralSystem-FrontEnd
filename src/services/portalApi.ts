@@ -11,8 +11,8 @@ export const resolvePortalBaseUrl = (): string => {
   }
 
   let envUrl = (import.meta.env.VITE_API_GATEWAY_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com') || envUrl.includes('stereo-gravity-humbly.ngrok-free.dev')) {
-    envUrl = 'http://localhost:5000/api/v1';
+  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+    envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api/v1';
   }
 
   const cleanUrl = envUrl.replace(/\/+$/, '');
@@ -339,24 +339,12 @@ export const alertService = {
 };
 
 export const tableService = {
-  // Danh sách bàn tải từ Waypoints nhận qua MQTT và lưu trong SQLite
-  // Nếu chưa nhận được waypoint nào từ MQTT thì báo không có và trả về [] (không tự ý xếp bàn giả)
+  // Danh sách bàn tải từ BE (API / Active SLAM Map), có SQLite cache cho chế độ offline
   getTables: async (storeIdOrSlug?: string): Promise<DiningTableDto[]> => {
+    // 1. Thử truy vấn API backend cấu hình bàn ăn
     try {
-      // 1. Ưu tiên tải danh sách bàn ăn dẫn xuất từ Waypoints MQTT thực tế trong SQLite
-      const sqliteTables = await sqliteService.getDiningTables();
-      if (sqliteTables && sqliteTables.length > 0) {
-        return sqliteTables;
-      }
-    } catch (err) {
-      console.warn('Lỗi tải danh sách bàn từ SQLite:', err);
-    }
-
-    try {
-      // 2. Thử truy vấn API backend nếu có cấu hình bàn từ hệ thống
       const res = await portalClient.get(`/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ''}`);
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        // Chỉ chấp nhận bàn có tọa độ thực từ bản đồ / waypoint
         const valid = res.data
           .filter((t: any) => typeof t.worldX === 'number' || typeof t.xCoord === 'number')
           .map((t: any) => ({
@@ -376,7 +364,39 @@ export const tableService = {
         }
       }
     } catch {
-      // Không tự ý sinh tọa độ bàn nếu không có MQTT waypoints
+      // Backend /tables chưa có, thử lấy từ active map của robot service
+    }
+
+    // 2. Thử lấy danh sách bàn từ Active SLAM Map của RobotService trên BE
+    try {
+      const mapRes = await portalClient.get('/robots/map/active');
+      if (mapRes.data && Array.isArray(mapRes.data.tables) && mapRes.data.tables.length > 0) {
+        const mappedTables: DiningTableDto[] = mapRes.data.tables.map((t: any) => ({
+          id: t.id || t.tableNo,
+          tableNo: t.tableNo || t.name,
+          zone: t.zone || 'Khu Trong Nhà',
+          capacity: 4,
+          status: 'empty',
+          assignedRobotCode: null,
+          currentOrders: [],
+          orderTime: null,
+          worldX: t.worldX,
+          worldY: t.worldY,
+        }));
+        return mappedTables;
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Fallback đọc từ local SQLite cache nếu không kết nối được BE
+    try {
+      const sqliteTables = await sqliteService.getDiningTables();
+      if (sqliteTables && sqliteTables.length > 0) {
+        return sqliteTables;
+      }
+    } catch (err) {
+      console.warn('Lỗi tải danh sách bàn từ SQLite:', err);
     }
 
     return [];
