@@ -398,7 +398,7 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* View Mode 1: SLAM Map Viewer */}
+            {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
             {viewMode === 'slam-map' ? (
               <SlamFloorMapViewer
                 tables={tables}
@@ -406,10 +406,11 @@ export const StaffKdsPage: React.FC = () => {
                 onSelectTable={(id) => {
                   setSelectedTableId(id);
                   const matched = tables.find((t) => t.id === id);
-                  showToast(`Đã chọn ${matched?.name || id} trên bản đồ SLAM`, 'info');
+                  showToast(`Đã chọn ${matched?.name || id} trên sơ đồ`, 'info');
                 }}
                 robots={robots}
-                className="flex-1"
+                mode="simplified"
+                className="flex-1 min-h-[440px]"
               />
             ) : tables.length === 0 ? (
               <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">

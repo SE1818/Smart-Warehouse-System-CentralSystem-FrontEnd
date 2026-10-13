@@ -80,6 +80,9 @@ export interface FleetAMR {
   payloadKg: number;
   maxPayloadKg: number;
   lidarStatus: string;
+  worldX?: number;
+  worldY?: number;
+  yaw?: number;
 }
 
 export interface MissionItem {
@@ -181,6 +184,9 @@ function mapRobotDtoToFleetAMR(dto: any, tenantSlug?: string, tenantName?: strin
     payloadKg: dto.payloadKg || 0,
     maxPayloadKg: dto.maxPayloadKg || 40,
     lidarStatus: dto.lidarStatus || 'LiDAR 2D SLAM 20Hz OK',
+    worldX: typeof dto.worldX === 'number' ? dto.worldX : typeof dto.x === 'number' ? dto.x : undefined,
+    worldY: typeof dto.worldY === 'number' ? dto.worldY : typeof dto.y === 'number' ? dto.y : undefined,
+    yaw: typeof dto.yaw === 'number' ? dto.yaw : typeof dto.theta === 'number' ? dto.theta : undefined,
   };
 }
 

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Radio,
   Activity,
   AlertTriangle,
   BatteryCharging,
@@ -25,7 +24,15 @@ import {
   fleetService,
   missionService,
   alertService,
+  tableService,
+  type DiningTableDto,
+  type FleetAMR,
 } from '../services/portalApi';
+import {
+  SlamFloorMapViewer,
+  type MapTableNode,
+  type MapRobotItem,
+} from '@/components/map/SlamFloorMapViewer';
 import { usePagination } from '../hooks/usePagination';
 import { Pagination } from '../components/common/Pagination';
 
@@ -65,10 +72,8 @@ interface MissionQueueItem {
 export const AdminTechnicalPage: React.FC = () => {
   // Navigation Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
-  const [selectedFloor, setSelectedFloor] = useState<'warehouse-main' | 'restaurant-hall' | 'kitchen-zone'>('warehouse-main');
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   const [selectedAmr, setSelectedAmr] = useState<AMRNode | null>(null);
-  const [showLidarLayer, setShowLidarLayer] = useState(true);
   const [emergencyStop, setEmergencyStop] = useState(false);
   const [_loading, setLoading] = useState(true);
 
@@ -84,6 +89,9 @@ export const AdminTechnicalPage: React.FC = () => {
   };
 
   // Live Data States - Initialized with live [] empty states
+  const [rawRobots, setRawRobots] = useState<FleetAMR[]>([]);
+  const [tables, setTables] = useState<DiningTableDto[]>([]);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [amrNodes, setAmrNodes] = useState<AMRNode[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [missions, setMissions] = useState<MissionQueueItem[]>([]);
@@ -101,29 +109,23 @@ export const AdminTechnicalPage: React.FC = () => {
   // New Mission Modal State
   const [showNewMissionModal, setShowNewMissionModal] = useState(false);
   const [newMissionTitle, setNewMissionTitle] = useState('');
-  const [newMissionDest, setNewMissionDest] = useState('Bàn A-01');
+  const [newMissionDest, setNewMissionDest] = useState('');
   const [newMissionRobot, setNewMissionRobot] = useState('');
 
   // Fetch real data from live services
   const loadData = async () => {
     try {
-      const [robotsData, missionsData, alertsData] = await Promise.all([
+      const [robotsData, missionsData, alertsData, tablesData] = await Promise.all([
         fleetService.getAllRobots(),
         missionService.getMissions(),
         alertService.getAlerts(),
+        tableService.getTables(),
       ]);
 
-      const defaultPositions = [
-        { x: 220, y: 140, targetX: 420, targetY: 140 },
-        { x: 610, y: 160, targetX: 610, targetY: 260 },
-        { x: 480, y: 170 },
-        { x: 140, y: 310 },
-        { x: 270, y: 270, targetX: 440, targetY: 270 },
-        { x: 420, y: 310, targetX: 610, targetY: 310 },
-      ];
+      setRawRobots(robotsData);
+      setTables(tablesData);
 
       const mappedNodes: AMRNode[] = robotsData.map((r, idx) => {
-        const pos = defaultPositions[idx % defaultPositions.length];
         const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert'> = {
           delivering: 'moving',
           charging: 'charging',
@@ -131,23 +133,28 @@ export const AdminTechnicalPage: React.FC = () => {
           idle: 'idle',
         };
         const st = statusMap[r.status] || 'idle';
+        const posX = typeof r.worldX === 'number' ? r.worldX : 0;
+        const posY = typeof r.worldY === 'number' ? r.worldY : 0;
+
         return {
           id: r.code || r.id,
           name: r.name || r.code || `AMR-${idx + 1}`,
           status: st,
           battery: r.battery,
-          x: pos.x,
-          y: pos.y,
-          targetX: pos.targetX,
-          targetY: pos.targetY,
+          x: posX,
+          y: posY,
           mission: (r as any).currentTask || r.targetTable || (st === 'charging' ? 'Đang sạc tại Docking Bay' : 'Chờ lệnh điều phối'),
           speed: r.speed || (st === 'moving' ? '1.0 m/s' : '0.0 m/s'),
           payload: `${r.payloadKg || 0} kg`,
         };
       });
       setAmrNodes(mappedNodes);
+
       if (mappedNodes.length > 0 && !newMissionRobot) {
         setNewMissionRobot(mappedNodes[0].id);
+      }
+      if (tablesData.length > 0 && !newMissionDest) {
+        setNewMissionDest(`Bàn ${tablesData[0].tableNo || tablesData[0].id}`);
       }
 
       // Live alerts: notifications + battery alerts
@@ -183,29 +190,45 @@ export const AdminTechnicalPage: React.FC = () => {
     loadData();
   }, []);
 
-  // Simulation coordinates update (only when active nodes exist)
+  // Periodic poll to keep live telemetry and AMR states in sync without fake jitter
   useEffect(() => {
-    if (!isSimulationRunning || emergencyStop || amrNodes.length === 0) return;
-
+    if (!isSimulationRunning || emergencyStop) return;
     const interval = setInterval(() => {
-      setAmrNodes((prev) =>
-        prev.map((node) => {
-          if (node.status === 'moving' || node.status === 'active') {
-            const dx = (Math.random() - 0.5) * 6;
-            const dy = (Math.random() - 0.5) * 4;
-            return {
-              ...node,
-              x: Math.min(Math.max(node.x + dx, 160), 680),
-              y: Math.min(Math.max(node.y + dy, 90), 340),
-            };
-          }
-          return node;
-        })
-      );
-    }, 1500);
+      loadData();
+    }, 10000);
 
     return () => clearInterval(interval);
-  }, [isSimulationRunning, emergencyStop, amrNodes.length]);
+  }, [isSimulationRunning, emergencyStop]);
+
+  // Map Data Memoization for SlamFloorMapViewer
+  const mapTables: MapTableNode[] = useMemo(() => {
+    return tables.map((t) => ({
+      id: t.tableNo || t.id,
+      name: t.tableNo ? `Bàn ${t.tableNo}` : t.id,
+      zone: t.zone || '',
+      status: t.status,
+      guestsCount: t.capacity,
+      currentOrders: t.currentOrders,
+      assignedRobot: t.assignedRobotCode,
+      worldX: t.worldX,
+      worldY: t.worldY,
+    }));
+  }, [tables]);
+
+  const mapRobots: MapRobotItem[] = useMemo(() => {
+    return rawRobots.map((r) => ({
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      status: r.status === 'delivering' || r.status === 'returning' ? 'delivering' : r.status === 'charging' ? 'charging' : 'idle',
+      battery: r.battery,
+      currentZone: r.currentLocation,
+      worldX: r.worldX,
+      worldY: r.worldY,
+      yaw: r.yaw,
+      targetTable: r.targetTable,
+    }));
+  }, [rawRobots]);
 
   // Action: Resolve Alert
   const handleResolveAlert = async (id: string, robot: string) => {
@@ -479,247 +502,75 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* TOP ROW: 2D LiDAR Map & Recent Alerts / Mission Queue */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
               {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
-              <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs">
-                {/* Map Toolbar Header */}
-                <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shadow-[0_0_8px_#0062ff] animate-pulse" />
-                    <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">
-                      Real-Time AMR Locations
-                    </h2>
-                    <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
-                      (2D SLAM LiDAR Grid)
-                    </span>
-                  </div>
-
-                  {/* Controls */}
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedFloor}
-                      onChange={(e) => {
-                        setSelectedFloor(e.target.value as any);
-                        showToast(`Đã chuyển sang góc nhìn ${e.target.value}`, 'info');
-                      }}
-                      className="bg-white border border-slate-300 text-slate-700 text-xs rounded-xl px-2.5 py-1.5 font-medium focus:outline-none focus:border-blue-500 cursor-pointer shadow-2xs"
-                    >
-                      <option value="warehouse-main">Warehouse • Floor 1</option>
-                      <option value="restaurant-hall">Dining Hall • Sảnh Nhà Hàng</option>
-                      <option value="kitchen-zone">Kitchen & Docking Zone</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowLidarLayer((prev) => !prev);
-                        showToast(showLidarLayer ? 'Đã ẩn lớp điểm quét LiDAR.' : 'Đã hiện lớp điểm quét LiDAR.', 'info');
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-2xs ${showLidarLayer
-                          ? 'bg-blue-50 border-blue-300 text-blue-700'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                    >
-                      {showLidarLayer ? 'LiDAR Point Cloud: Bật' : 'LiDAR Point Cloud: Tắt'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* SVG 2D Floorplan Canvas (Matching Reference Image 1 Layout) */}
-                <div className="relative flex-1 min-h-[340px] sm:min-h-[420px] bg-[#F8FAFC] border-y border-slate-200 overflow-hidden select-none p-2 flex items-center justify-center">
-                  <svg className="w-full h-full max-h-[460px]" viewBox="0 0 800 440" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    {/* Background Grid Pattern */}
-                    <defs>
-                      <pattern id="lightGrid" width="30" height="30" patternUnits="userSpaceOnUse">
-                        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#E2E8F0" strokeWidth="0.8" strokeDasharray="2,2" />
-                      </pattern>
-                    </defs>
-
-                    <rect width="800" height="440" fill="url(#lightGrid)" />
-
-                    {/* Outer Boundary Floor */}
-                    <rect x="40" y="30" width="720" height="380" rx="10" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="2" />
-
-                    {/* Docking Bay Zone */}
-                    <rect x="60" y="270" width="110" height="120" rx="6" fill="#F1F5F9" stroke="#94A3B8" strokeDasharray="4,4" />
-                    <text x="75" y="295" fill="#475569" fontSize="11" fontFamily="monospace" fontWeight="bold">DOCKING BAY</text>
-                    <rect x="75" y="310" width="34" height="18" rx="3" fill="#E2E8F0" stroke="#94A3B8" />
-                    <rect x="125" y="310" width="34" height="18" rx="3" fill="#E2E8F0" stroke="#94A3B8" />
-
-                    {/* Zone A Storage / Tables */}
-                    <rect x="90" y="70" width="90" height="150" rx="6" fill="#F1F5F9" stroke="#CBD5E1" />
-                    <text x="110" y="150" fill="#64748B" fontSize="12" fontWeight="bold" fontFamily="monospace">ZONE A</text>
-
-                    {/* Center Aisles Racks Column 1 (Grey Bars matching Image 1) */}
-                    <g fill="#F1F5F9" stroke="#CBD5E1">
-                      <rect x="230" y="70" width="36" height="140" rx="3" />
-                      <rect x="290" y="70" width="36" height="140" rx="3" />
-                      <rect x="350" y="70" width="36" height="140" rx="3" />
-                      <rect x="410" y="70" width="36" height="140" rx="3" />
-                    </g>
-
-                    {/* Center Aisles Racks Column 2 */}
-                    <g fill="#F1F5F9" stroke="#CBD5E1">
-                      <rect x="230" y="250" width="36" height="130" rx="3" />
-                      <rect x="290" y="250" width="36" height="130" rx="3" />
-                      <rect x="350" y="250" width="36" height="130" rx="3" />
-                      <rect x="410" y="250" width="36" height="130" rx="3" />
-                    </g>
-
-                    {/* Right Partition & Zones B & C */}
-                    <line x1="490" y1="30" x2="490" y2="230" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="6,4" />
-                    <rect x="520" y="70" width="95" height="90" rx="6" fill="#F1F5F9" stroke="#CBD5E1" />
-                    <rect x="640" y="70" width="95" height="90" rx="6" fill="#F1F5F9" stroke="#CBD5E1" />
-                    <text x="545" y="120" fill="#64748B" fontSize="11" fontWeight="bold" fontFamily="monospace">ZONE B</text>
-                    <text x="665" y="120" fill="#64748B" fontSize="11" fontWeight="bold" fontFamily="monospace">ZONE C</text>
-
-                    {/* Navigation Path Vectors */}
-                    {/* Path 1 */}
-                    <path d="M 220 140 L 420 140" stroke="#0062FF" strokeWidth="2" strokeDasharray="4,4" />
-                    <polygon points="424,140 416,136 416,144" fill="#0062FF" />
-
-                    {/* Path 2 */}
-                    <path d="M 610 160 L 610 260 L 530 260" stroke="#00D2FF" strokeWidth="2" strokeDasharray="4,4" />
-                    <polygon points="526,260 534,256 534,264" fill="#00D2FF" />
-
-                    {/* Path 3 */}
-                    <path d="M 270 270 L 440 270" stroke="#10B981" strokeWidth="2" strokeDasharray="4,4" />
-
-                    {/* LiDAR Point Cloud Layer */}
-                    {showLidarLayer && (
-                      <g opacity="0.6">
-                        <circle cx="210" cy="130" r="2" fill="#0062FF" />
-                        <circle cx="215" cy="145" r="2" fill="#0062FF" />
-                        <circle cx="225" cy="135" r="2" fill="#0062FF" />
-                        <circle cx="605" cy="155" r="2" fill="#00D2FF" />
-                        <circle cx="615" cy="165" r="2" fill="#00D2FF" />
-                        <circle cx="475" cy="165" r="2" fill="#EF4444" />
-                      </g>
-                    )}
-
-                    {/* Moving AMR Markers (Matching Image 1: 'AMR01 - Active', 'AMR02 - Moving', etc.) */}
-                    {amrNodes.map((node) => {
-                      const isSelected = selectedAmr?.id === node.id;
-                      const isWarning = node.battery < 20;
-
-                      return (
-                        <g
-                          key={node.id}
-                          className="cursor-pointer transition-all duration-300"
-                          onClick={() => setSelectedAmr(node)}
-                        >
-                          {/* Animated Pulse Ring */}
-                          <circle
-                            cx={node.x}
-                            cy={node.y}
-                            r={isSelected ? "18" : "14"}
-                            fill={isWarning ? "#EF4444" : "#0062FF"}
-                            opacity={isSelected ? "0.35" : "0.15"}
-                            className={node.status === 'moving' || node.status === 'active' ? 'animate-ping' : ''}
-                          />
-
-                          {/* Robot Marker Box */}
-                          <rect
-                            x={node.x - 12}
-                            y={node.y - 12}
-                            width="24"
-                            height="24"
-                            rx="5"
-                            fill={isWarning ? "#FEE2E2" : "#FFFFFF"}
-                            stroke={isWarning ? "#EF4444" : isSelected ? "#00D2FF" : "#0062FF"}
-                            strokeWidth="2.5"
-                            className="filter drop-shadow-sm"
-                          />
-
-                          {/* Center Node Dot */}
-                          <circle
-                            cx={node.x}
-                            cy={node.y}
-                            r="4"
-                            fill={isWarning ? "#EF4444" : "#0062FF"}
-                          />
-
-                          {/* Floating Tag Label (Matching Image 1: 'AMR01 - Active') */}
-                          <g transform={`translate(${node.x - 42}, ${node.y - 32})`}>
-                            <rect
-                              width="84"
-                              height="20"
-                              rx="5"
-                              fill="#0A192F"
-                              stroke={isSelected ? "#00D2FF" : "#1E293B"}
-                              strokeWidth="1"
-                            />
-                            <text
-                              x="42"
-                              y="14"
-                              textAnchor="middle"
-                              fill={isWarning ? "#FCA5A5" : "#FFFFFF"}
-                              fontSize="10"
-                              fontFamily="monospace"
-                              fontWeight="bold"
-                            >
-                              {node.name} • {node.status === 'active' ? 'Active' : node.status === 'moving' ? 'Moving' : node.status === 'charging' ? 'Charge' : 'Idle'}
-                            </text>
-                          </g>
-                        </g>
-                      );
-                    })}
-                  </svg>
-
-                  {/* Empty state overlay when no AMRs connected */}
-                  {amrNodes.length === 0 && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/85 backdrop-blur-[1px] p-6 text-center z-10 pointer-events-none">
-                      <Radio className="w-8 h-8 text-slate-400 mb-2 animate-pulse" />
-                      <h4 className="text-xs font-bold text-slate-700">Chưa có Robot AMR nào kết nối với Fleet Command Center</h4>
-                      <p className="text-[11px] text-slate-500 max-w-sm mt-1">
-                        Hệ thống chưa ghi nhận telemetry từ robot nào. Hãy khởi động dịch vụ RobotService hoặc kết nối Edge Node của nhà hàng.
-                      </p>
-                    </div>
-                  )}
+              {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
+              <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs relative">
+                {/* SLAM Map Viewer in Technical Mode */}
+                <div className="relative flex-1 min-h-[460px] sm:min-h-[520px] flex flex-col">
+                  <SlamFloorMapViewer
+                    tables={mapTables}
+                    robots={mapRobots}
+                    selectedTableId={selectedTableId || undefined}
+                    onSelectTable={(tableId) => {
+                      setSelectedTableId(tableId);
+                      const t = tables.find((x) => x.id === tableId || x.tableNo === tableId);
+                      showToast(`Đã chọn ${t ? `Bàn ${t.tableNo || t.id}` : tableId} trên bản đồ kỹ thuật`, 'info');
+                    }}
+                    selectedRobotId={selectedAmr?.id}
+                    onSelectRobot={(robotId) => {
+                      const foundNode = amrNodes.find((n) => n.id === robotId || n.name === robotId);
+                      if (foundNode) {
+                        setSelectedAmr(foundNode);
+                        showToast(`Đã chọn AMR ${foundNode.name} (${foundNode.battery}%)`, 'info');
+                      }
+                    }}
+                    mode="technical"
+                    className="w-full flex-1"
+                  />
 
                   {/* Interactive Selected AMR Telemetry Popover Modal */}
                   {selectedAmr && (
-                    <div className="absolute top-4 right-4 bg-white border-2 border-blue-600 rounded-2xl p-4 shadow-2xl backdrop-blur-md w-72 space-y-3 text-xs animate-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div className="absolute top-16 right-4 bg-slate-900/95 text-white border border-cyan-500/80 rounded-2xl p-4 shadow-2xl backdrop-blur-md w-72 space-y-3 text-xs z-30 animate-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                         <div className="flex items-center gap-2">
-                          <span className="font-black text-blue-700 font-mono text-sm">{selectedAmr.id}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${selectedAmr.battery < 20 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'
-                            }`}>
+                          <span className="font-black text-cyan-400 font-mono text-sm">{selectedAmr.id}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${selectedAmr.battery < 20 ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
                             {selectedAmr.battery}% Pin
                           </span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setSelectedAmr(null)}
-                          className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer font-bold"
+                          className="text-slate-400 hover:text-white p-1 cursor-pointer font-bold"
                         >
                           ✕
                         </button>
                       </div>
 
-                      <div className="space-y-1.5 text-xs text-slate-600">
+                      <div className="space-y-1.5 text-xs text-slate-300">
                         <div className="flex justify-between">
                           <span className="text-slate-400">Nhiệm vụ:</span>
-                          <span className="font-semibold text-slate-800 truncate max-w-[150px]">{selectedAmr.mission}</span>
+                          <span className="font-semibold text-white truncate max-w-[150px]">{selectedAmr.mission}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-400">Tốc độ:</span>
-                          <span className="font-mono text-blue-600 font-bold">{selectedAmr.speed}</span>
+                          <span className="font-mono text-cyan-400 font-bold">{selectedAmr.speed}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-slate-400">Tải trọng:</span>
-                          <span className="font-mono text-slate-700">{selectedAmr.payload}</span>
+                          <span className="font-mono text-slate-200">{selectedAmr.payload}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-400">Tọa độ SLAM:</span>
-                          <span className="font-mono text-slate-700">X:{Math.round(selectedAmr.x)}, Y:{Math.round(selectedAmr.y)}</span>
+                          <span className="text-slate-400">Tọa độ ROS2 (m):</span>
+                          <span className="font-mono text-cyan-300">X:{selectedAmr.x.toFixed(2)}, Y:{selectedAmr.y.toFixed(2)}</span>
                         </div>
                       </div>
 
                       {/* Working Action Buttons for Selected AMR */}
-                      <div className="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
+                      <div className="pt-2 border-t border-slate-800 flex flex-col gap-1.5">
                         <button
                           type="button"
                           onClick={() => handleSendToDock(selectedAmr.id)}
-                          className="w-full py-1.5 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs border border-blue-200 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="w-full py-1.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <BatteryCharging className="w-3.5 h-3.5" />
                           <span>Điều Về Trạm Sạc Docking</span>
@@ -727,7 +578,7 @@ export const AdminTechnicalPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handlePauseAmr(selectedAmr.id)}
-                          className="w-full py-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
                           <Power className="w-3.5 h-3.5" />
                           <span>{selectedAmr.status === 'idle' ? 'Kích Hoạt AMR' : 'Tạm Dừng AMR'}</span>
@@ -1455,10 +1306,15 @@ export const AdminTechnicalPage: React.FC = () => {
                   onChange={(e) => setNewMissionDest(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-600"
                 >
-                  <option value="Bàn A-01">Bàn A-01 (Khu Trong Nhà)</option>
-                  <option value="Bàn A-02">Bàn A-02 (Khu Trong Nhà)</option>
-                  <option value="Bàn B-02">Bàn B-02 (Khu Sân Vườn VIP)</option>
-                  <option value="Bàn C-01">Bàn C-01 (Tầng 1 Lẩu Nướng)</option>
+                  {tables.length > 0 ? (
+                    tables.map((t) => (
+                      <option key={t.id} value={`Bàn ${t.tableNo || t.id}`}>
+                        Bàn {t.tableNo || t.id} {t.zone ? `(${t.zone})` : ''}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="Bàn 01">Bàn 01 (Mặc định)</option>
+                  )}
                   <option value="Dock Sạc #01">Trạm Sạc Docking #01</option>
                   <option value="Khu Bếp Chính">Khu Bếp Chính (Kitchen Station)</option>
                 </select>
