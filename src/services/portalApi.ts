@@ -247,25 +247,50 @@ export const fleetService = {
   },
 };
 
+export interface MissionStatsDto {
+  totalToday: number;
+  active: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  avgDurationMinutes: number;
+  byRobot: Record<string, number>;
+}
+
 export const missionService = {
   getMissions: async (): Promise<MissionItem[]> => {
     try {
       const res = await portalClient.get('/tasks');
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        return res.data.map((t: any) => ({
-          id: t.id ? (typeof t.id === 'string' && t.id.startsWith('MQ-') ? t.id : `MQ-${t.id.toString().slice(0, 6)}`) : `MQ-${Math.floor(1000 + Math.random() * 9000)}`,
-          title: t.title || t.description || 'Lệnh điều phối vận chuyển',
-          assignedTo: t.assignedRobotName || t.robotName || t.assignedTo || 'Chưa gán',
-          priority: t.priority === 2 || t.priority === 'High' || t.priority === 'Cao' ? 'Cao' : 'Bình thường',
-          destination: t.toStationName || t.destination || 'Bàn A-01',
-          status: t.status === 'Completed' ? 'queued' : 'running',
-          eta: t.estimatedDurationSeconds ? `${Math.round(t.estimatedDurationSeconds / 60)} phút` : '1-2 phút',
-        }));
+        return res.data.map((t: any) => {
+          const st = (t.status || '').toLowerCase();
+          const isDone = st === 'completed' || st === 'cancelled' || st === 'failed';
+          const destName = t.toStation?.name || t.toStationName || t.destination || 'Bàn phục vụ';
+          const title = t.title || t.description || `Vận chuyển đến ${destName}`;
+          return {
+            id: t.id ? (typeof t.id === 'string' && t.id.startsWith('MQ-') ? t.id : `MQ-${t.id.toString().slice(0, 6)}`) : `MQ-${Math.floor(1000 + Math.random() * 9000)}`,
+            title,
+            assignedTo: t.assignedRobotName || t.robotName || t.assignedTo || 'Chưa gán',
+            priority: t.priority === 2 || t.priority === 3 || t.priority === 'High' || t.priority === 'Cao' ? 'Cao' : 'Bình thường',
+            destination: destName,
+            status: isDone ? 'queued' : 'running',
+            eta: t.estimatedDurationSeconds ? `${Math.round(t.estimatedDurationSeconds / 60)} phút` : isDone ? 'Hoàn thành' : '1-2 phút',
+          };
+        });
       }
     } catch {
       // Empty
     }
     return [];
+  },
+
+  getMissionStats: async (): Promise<MissionStatsDto | null> => {
+    try {
+      const res = await portalClient.get('/tasks/stats');
+      return res.data || null;
+    } catch {
+      return null;
+    }
   },
 
   createMission: async (data: { title: string; destination: string; robotId: string; priority?: string }): Promise<MissionItem> => {
