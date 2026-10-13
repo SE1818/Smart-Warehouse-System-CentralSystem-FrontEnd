@@ -107,18 +107,8 @@ export const robotService = {
     return response.data;
   },
 
-  // Get active SLAM map metadata (Primary: BE API from Server/Edge; Fallback: SQLite cache)
+  // Get active SLAM map metadata (Fallback: SQLite cache or default)
   async getActiveSlamMap(): Promise<SlamMapResponse> {
-    try {
-      const response = await apiClient.get<SlamMapResponse>('/v1/robots/map/active');
-      if (response.data && response.data.mapId) {
-        try { await sqliteService.saveSlamMap(response.data); } catch { }
-        return response.data;
-      }
-    } catch (err) {
-      console.warn('[robotService] Không thể kết nối BE để lấy active SLAM map, thử đọc từ SQLite cache:', err);
-    }
-
     try {
       const localMap = await sqliteService.getSlamMap();
       if (localMap && localMap.mapId) {
@@ -128,7 +118,22 @@ export const robotService = {
       console.warn('[robotService] Lỗi đọc SLAM Map từ SQLite:', e);
     }
 
-    throw new Error('Chưa có dữ liệu bản đồ từ Server hoặc SQLite.');
+    return {
+      mapId: 'slam-map-default',
+      name: 'Sơ đồ nhà hàng VORA',
+      resolution: 0.05,
+      originX: -20.0,
+      originY: -15.0,
+      originZ: 0.0,
+      width: 800,
+      height: 600,
+      mapUrl: '',
+      format: 'png',
+      tables: [],
+      stations: [],
+      waypoints: [],
+      lastUpdated: new Date().toISOString(),
+    };
   },
 
   // Broadcast or update SLAM map via API and persist to SQLite

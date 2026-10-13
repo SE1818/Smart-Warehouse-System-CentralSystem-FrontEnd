@@ -98,25 +98,35 @@ describe('App routing and integration', () => {
 
   /* ── Technical Engineer & Staff KDS routes ── */
 
-  it('renders AdminTechnicalPage on /technical', async () => {
+  it('renders AdminTechnicalPage on /technical when authenticated as technical', async () => {
+    storeAuth('technical');
     window.history.pushState(null, '', '/technical');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
   });
 
-  it('renders StaffKdsPage on /staff', async () => {
+  it('redirects unauthenticated user from /technical to /login', async () => {
+    window.history.pushState(null, '', '/technical');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument());
+  });
+
+  it('renders StaffKdsPage on /staff when authenticated as staff', async () => {
+    storeAuth('staff');
     window.history.pushState(null, '', '/staff');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('staff-page')).toBeInTheDocument());
   });
 
-  it('renders StoreEdgeSetupPage on /edge-setup', async () => {
+  it('renders StoreEdgeSetupPage on /edge-setup when authenticated', async () => {
+    storeAuth('technical');
     window.history.pushState(null, '', '/edge-setup');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('edge-setup-page')).toBeInTheDocument());
   });
 
-  it('renders RobotMonitorPage on /robot-monitor', async () => {
+  it('renders RobotMonitorPage on /robot-monitor when authenticated', async () => {
+    storeAuth('technical');
     window.history.pushState(null, '', '/robot-monitor');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('robot-monitor-page')).toBeInTheDocument());
@@ -125,12 +135,14 @@ describe('App routing and integration', () => {
   /* ── Admin route redirects to /technical ── */
 
   it('redirects /admin to /technical', async () => {
+    storeAuth('admin');
     window.history.pushState(null, '', '/admin');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
   });
 
   it('redirects /admin/dashboard to /technical', async () => {
+    storeAuth('admin');
     window.history.pushState(null, '', '/admin/dashboard');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());

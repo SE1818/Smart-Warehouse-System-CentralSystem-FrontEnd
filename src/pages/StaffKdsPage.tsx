@@ -12,6 +12,8 @@ import {
   Send,
   Map as MapIcon,
   LayoutGrid,
+  LogOut,
+  AlertTriangle,
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
 import { fixMojibake } from '../utils/textUtils';
@@ -53,8 +55,6 @@ export const StaffKdsPage: React.FC = () => {
   const [_subdomain, setSubdomain] = useState<string>('launuong-saigon');
   const [_isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Active Filter Zone
-  const [selectedZone, setSelectedZone] = useState<string>('all');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
 
@@ -133,7 +133,7 @@ export const StaffKdsPage: React.FC = () => {
           const mappedTables: TableNode[] = tableList.map((t) => ({
             id: t.tableNo || t.id,
             name: `Bàn ${t.tableNo || t.id}`,
-            zone: t.zone || 'Khu Trong Nhà',
+            zone: t.zone || '',
             status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty',
             guestsCount: t.capacity || 4,
             currentOrders: t.currentOrders || [],
@@ -178,7 +178,7 @@ export const StaffKdsPage: React.FC = () => {
   const currentSelectedTable: TableNode = tables.find((t) => t.id === selectedTableId) || tables[0] || {
     id: 'Chưa có',
     name: 'Chưa chọn bàn',
-    zone: 'Toàn quán',
+    zone: '',
     status: 'empty'
   };
 
@@ -198,12 +198,6 @@ export const StaffKdsPage: React.FC = () => {
     ? autoSelectedRobot
     : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot;
 
-  // Filtered tables based on zone filter
-  const filteredTables = tables.filter((t) => {
-    if (selectedZone === 'all') return true;
-    return t.zone === selectedZone;
-  });
-
   const {
     currentPage: tablePage,
     pageSize: tablePageSize,
@@ -212,7 +206,7 @@ export const StaffKdsPage: React.FC = () => {
     paginatedItems: paginatedTables,
     setPage: setTablePage,
     setPageSize: setTablePageSize,
-  } = usePagination(filteredTables, 12);
+  } = usePagination(tables, 12);
 
   // Action: Load Pending Order items onto trays
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
@@ -315,7 +309,7 @@ export const StaffKdsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="text-base font-black text-[#0A192F] tracking-tight font-heading">VORA KDS</span>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
-                STAFF TOUCH
+                STAFF WEB
               </span>
             </div>
             <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
@@ -339,13 +333,6 @@ export const StaffKdsPage: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <Link
-              to="/technical"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-blue-600 transition-all shadow-2xs"
-              title="Chuyển sang giao diện Kỹ Sư Kỹ Thuật (AMR Fleet & Telemetry)"
-            >
-              <span>👷 View Kỹ Sư</span>
-            </Link>
-            <Link
               to="/login"
               onClick={() => {
                 localStorage.removeItem('authToken');
@@ -353,9 +340,10 @@ export const StaffKdsPage: React.FC = () => {
                 localStorage.removeItem('user');
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
-              title="Đăng xuất để đổi tài khoản"
+              title="Đăng xuất khỏi hệ thống"
             >
-              <span>Đổi TK</span>
+              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              <span>Đăng Xuất</span>
             </Link>
           </div>
         </div>
@@ -365,39 +353,14 @@ export const StaffKdsPage: React.FC = () => {
       <main className="flex-1 p-3 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
         {/* LEFT / CENTER COLUMN: TABLE FLOOR MAP (7 COLS) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Floor Zone Filter Tabs */}
-          <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2 overflow-x-auto">
-            <div className="flex items-center gap-1.5">
-              {[
-                { id: 'all', label: 'Tất Cả Khu Vực' },
-                { id: 'Khu Trong Nhà', label: 'Khu Trong Nhà (A)' },
-                { id: 'Khu Sân Vườn VIP', label: 'Khu Sân Vườn (B)' },
-                { id: 'Tầng 1 Lẩu Nướng', label: 'Tầng 1 Lẩu Nướng (C)' },
-              ].map((zone) => (
-                <button
-                  key={zone.id}
-                  type="button"
-                  onClick={() => setSelectedZone(zone.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${selectedZone === zone.id
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                >
-                  {zone.label}
-                </button>
-              ))}
-            </div>
-
-            <span className="text-[11px] font-mono text-slate-600 pr-2 hidden sm:inline">
-              {filteredTables.length} Bàn
-            </span>
-          </div>
-
           {/* Interactive Table Section */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
                 <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
+                <span className="text-[11px] font-mono font-normal text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  {tables.length} Bàn
+                </span>
               </h2>
 
               {/* View Switcher: SLAM Map vs Cards Grid */}
@@ -431,20 +394,21 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* View Mode 1: SLAM Map Viewer */}
+            {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
             {viewMode === 'slam-map' ? (
               <SlamFloorMapViewer
-                tables={filteredTables}
+                tables={tables}
                 selectedTableId={selectedTableId}
                 onSelectTable={(id) => {
                   setSelectedTableId(id);
                   const matched = tables.find((t) => t.id === id);
-                  showToast(`Đã chọn ${matched?.name || id} trên bản đồ SLAM`, 'info');
+                  showToast(`Đã chọn ${matched?.name || id} trên sơ đồ`, 'info');
                 }}
                 robots={robots}
-                className="flex-1"
+                mode="simplified"
+                className="flex-1 min-h-[440px]"
               />
-            ) : filteredTables.length === 0 ? (
+            ) : tables.length === 0 ? (
               <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">
                 <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-700">Chưa có danh mục bàn ăn nào</h4>
@@ -515,7 +479,7 @@ export const StaffKdsPage: React.FC = () => {
 
                         {/* Middle Info */}
                         <div className="my-2.5 space-y-1">
-                          <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div>
+                          {table.zone ? <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div> : null}
                           <div className="text-[10px] font-mono">
                             {isServing ? (
                               <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
@@ -540,8 +504,8 @@ export const StaffKdsPage: React.FC = () => {
                           <span className="text-slate-500 text-[10px]">
                             {table.currentOrders ? `${table.currentOrders.length} Món` : 'Chưa gọi'}
                           </span>
-                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
-                            {isSelected ? 'Đang chọn' : 'Chạm để chọn'}
+                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400 group-hover:text-blue-600 transition-colors'}`}>
+                            {isSelected ? 'Đang chọn' : 'Click để chọn'}
                           </span>
                         </div>
                       </button>
@@ -592,9 +556,11 @@ export const StaffKdsPage: React.FC = () => {
               <div>
                 <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
                   <span>{currentSelectedTable.name}</span>
-                  <span className="text-[10px] font-mono font-normal text-slate-500">
-                    ({currentSelectedTable.zone})
-                  </span>
+                  {currentSelectedTable.zone && currentSelectedTable.zone !== 'Toàn quán' && (
+                    <span className="text-[10px] font-mono font-normal text-slate-500">
+                      ({currentSelectedTable.zone})
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-500">
                   Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : 'Đang đón khách'}</strong>
@@ -608,14 +574,14 @@ export const StaffKdsPage: React.FC = () => {
           </div>
 
           {/* Pending Orders Selector Bar */}
-          {pendingOrders.length > 0 && (
+          {pendingOrders.length > 0 ? (
             <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/90 space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-amber-900">
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-600" />
                   <span>Đơn Món Chờ Ra Bếp ({pendingOrders.length})</span>
                 </span>
-                <span className="text-[10px] font-mono text-amber-700">Chạm để nạp khay</span>
+                <span className="text-[10px] font-mono text-amber-700">Click đơn để nạp khay</span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {pendingOrders.map((ord) => (
@@ -623,7 +589,7 @@ export const StaffKdsPage: React.FC = () => {
                     key={ord.id}
                     type="button"
                     onClick={() => handleSelectPendingOrder(ord)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border ${activeOrderId === ord.id
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border cursor-pointer ${activeOrderId === ord.id
                         ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
                         : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
                       }`}
@@ -632,6 +598,14 @@ export const StaffKdsPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Chưa có đơn món chờ ra từ POS/QR</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Tự động đồng bộ</span>
             </div>
           )}
 
@@ -831,20 +805,32 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             )}
 
-            {/* ONE-TOUCH DISPATCH BUTTON */}
+            {/* DISPATCH ACTION BUTTON */}
             <button
               type="button"
-              disabled={isDispatching || !effectiveRobot}
+              disabled={isDispatching || !effectiveRobot || !currentSelectedTable.id}
               onClick={handleDispatchOrder}
-              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold text-white flex items-center justify-center gap-2 shadow-lg transition-all active:scale-[0.98] ${isDispatching
-                  ? 'bg-blue-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 shadow-blue-500/25 cursor-pointer'
+              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isDispatching
+                  ? 'bg-blue-400 text-white cursor-not-allowed'
+                  : !effectiveRobot || !currentSelectedTable.id
+                    ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
+                    : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
                 }`}
             >
               {isDispatching ? (
                 <>
                   <RotateCcw className="w-4 h-4 animate-spin text-white" />
                   <span>ĐANG PHÁT LỆNH ĐIỀU PHỐI...</span>
+                </>
+              ) : !effectiveRobot ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-slate-400" />
+                  <span>CHƯA CÓ AMR SẴN SÀNG</span>
+                </>
+              ) : !currentSelectedTable.id ? (
+                <>
+                  <Send className="w-4 h-4 text-slate-400" />
+                  <span>VUI LÒNG CHỌN BÀN ĐỂ GIAO MÓN</span>
                 </>
               ) : (
                 <>

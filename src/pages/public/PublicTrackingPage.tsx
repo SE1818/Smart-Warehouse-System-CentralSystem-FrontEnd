@@ -50,10 +50,6 @@ export const PublicTrackingPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
-  const [otpCode, setOtpCode] = useState<string>('');
-  const [unlockLoading, setUnlockLoading] = useState<boolean>(false);
-  const [unlockMessage, setUnlockMessage] = useState<{ text: string; isError: boolean } | null>(null);
-  const [remainingAttempts, setRemainingAttempts] = useState<number>(5);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [tableNotice, setTableNotice] = useState<string | null>(null);
   const [replayNotice, setReplayNotice] = useState<string | null>(null);
@@ -207,7 +203,7 @@ export const PublicTrackingPage: React.FC = () => {
       // Locker Unlocked notification
       connection.on('ReceiveLockerUnlocked', () => {
         setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
-        setUnlockMessage({ text: 'Cốp xe đã được mở tự động! Xin mời quý khách lấy hàng.', isError: false });
+        setTableNotice('🎉 Robot đã đến bàn! Xin mời quý khách lấy món trực tiếp từ khay thức ăn.');
       });
 
       connection.start()
@@ -222,38 +218,6 @@ export const PublicTrackingPage: React.FC = () => {
       hubConnectionRef.current = connection;
     } catch (err) {
       console.error('SignalR setup error', err);
-    }
-  };
-
-  const handleUnlockOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpCode || otpCode.length !== 6) {
-      setUnlockMessage({ text: 'Vui lòng nhập đúng 6 chữ số mã OTP.', isError: true });
-      return;
-    }
-
-    setUnlockLoading(true);
-    setUnlockMessage(null);
-
-    try {
-      const res = await fetch(`/api/v1/tracking/public/${token}/unlock`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otpCode })
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
-        setUnlockMessage({ text: data.message || 'Mở cốp thành công!', isError: false });
-      } else {
-        setRemainingAttempts(data.remainingAttempts ?? remainingAttempts - 1);
-        setUnlockMessage({ text: data.message || 'Mã OTP không đúng.', isError: true });
-      }
-    } catch (err) {
-      setUnlockMessage({ text: 'Không thể kết nối máy chủ xác thực OTP. Vui lòng kiểm tra mạng và thử lại.', isError: true });
-    } finally {
-      setUnlockLoading(false);
     }
   };
 
@@ -524,80 +488,40 @@ export const PublicTrackingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* OTP / Locker Verification Action Card (Module 06) */}
+          {/* Khay Phục Vụ Tự Động (AMR 3 Khay Mở) */}
           <div className="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg space-y-4">
             <div className="flex items-center space-x-2">
-              <span className="text-xl">🔐</span>
+              <span className="text-xl">🍽️</span>
               <div>
-                <h3 className="font-bold text-sm text-white">Xác nhận Mở Cốp Xe</h3>
-                <p className="text-xs text-slate-400">Nhập mã PIN 6 số hoặc quét QR khi Robot đến nơi</p>
+                <h3 className="font-bold text-sm text-white">Khay Phục Vụ Tự Động (AMR Khay Mở)</h3>
+                <p className="text-xs text-slate-400">Robot giao món tận bàn với 3 tầng khay mở tiện lợi</p>
               </div>
             </div>
 
-            {tracking?.isLockerUnlocked ? (
-              <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-4 text-center space-y-2">
-                <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">
-                  🔓
-                </div>
-                <h4 className="font-bold text-emerald-400 text-sm">Cốp Xe Đang Mở</h4>
-                <p className="text-xs text-emerald-300/80">
-                  Quý khách vui lòng lấy hàng và đóng nắp cốp sau khi nhận xong. Cảm ơn quý khách!
-                </p>
+            <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-4 text-center space-y-2">
+              <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl">
+                🍲
               </div>
-            ) : (
-              <form onSubmit={handleUnlockOtp} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Mã OTP Mở Cốp (6 Chữ Số)
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="vd: 123456"
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-center text-2xl font-mono tracking-widest text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                {unlockMessage && (
-                  <div
-                    className={`text-xs p-2.5 rounded-lg border font-medium ${
-                      unlockMessage.isError
-                        ? 'bg-rose-950/40 border-rose-800/60 text-rose-300'
-                        : 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-                    }`}
-                  >
-                    {unlockMessage.text}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowQrModal(true)}
-                    className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition-all"
-                  >
-                    <span>📷</span>
-                    <span>Quét Mã QR</span>
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={unlockLoading || otpCode.length !== 6}
-                    className="py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-lg transition-all disabled:opacity-50 flex items-center justify-center space-x-1"
-                    style={{ backgroundColor: safePrimaryColor }}
-                  >
-                    {unlockLoading ? (
-                      <span className="animate-spin mr-1">⏳</span>
-                    ) : (
-                      <span>🔓 Mở Cốp Xe</span>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
+              <h4 className="font-bold text-emerald-400 text-sm">
+                {tracking?.status === 'Delivered' ? 'Đã Nhận Món Thành Công' : 'Món Ăn Đang Được Giao Đến Bàn'}
+              </h4>
+              <p className="text-xs text-emerald-300/80">
+                Khay thức ăn mở sẵn. Quý khách vui lòng lấy món trực tiếp từ khay khi Robot AMR dừng tại bàn. Chúc quý khách ngon miệng!
+              </p>
+              {tracking?.status !== 'Delivered' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
+                  }}
+                  className="mt-2 py-2 px-4 rounded-xl text-xs font-bold text-white shadow-lg transition-all cursor-pointer hover:opacity-90 inline-flex items-center gap-1.5"
+                  style={{ backgroundColor: safePrimaryColor }}
+                >
+                  <span>✓</span>
+                  <span>Xác Nhận Đã Nhận Đủ Món</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -616,16 +540,16 @@ export const PublicTrackingPage: React.FC = () => {
               📱
             </div>
             <p className="text-xs text-slate-400">
-              Hướng camera điện thoại vào mã QR hiển thị trên màn hình Robot AMR để mở cốp nhanh.
+              Quét mã QR trên robot để xác nhận bàn nhận món.
             </p>
             <button
               onClick={() => {
                 setShowQrModal(false);
-                setOtpCode('123456');
+                setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
               }}
-              className="w-full py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all"
+              className="w-full py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
             >
-              Mô phỏng Quét Thành Công (123456)
+              Xác Nhận Đã Nhận Món
             </button>
           </div>
         </div>

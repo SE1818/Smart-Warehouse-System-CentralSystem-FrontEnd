@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { authService } from '@/services';
+import { authService, tenantService } from '@/services';
 import { Icons } from '@/components/Icons';
 
 export function LoginPage() {
@@ -62,14 +62,35 @@ export function LoginPage() {
       localStorage.setItem('authToken', res.accessToken);
 
       let userId = '';
+      let tenantId = '';
+      let subdomain = '';
       try {
         const tokenParts = res.accessToken.split('.');
         if (tokenParts.length > 1) {
           const payload = JSON.parse(atob(tokenParts[1]));
           userId = payload.sub || payload.nameid || payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] || '';
+          tenantId = payload.tenant_id || payload.tenantId || payload.TenantId || '';
+          subdomain = payload.subdomain || payload.tenant_slug || payload.tenantSlug || '';
         }
       } catch (e) {
         console.error('Failed to parse JWT token:', e);
+      }
+
+      // Dynamic Tenant Resolution via Backend API
+      const tenantInfo = await tenantService.resolveUserTenant(email);
+      if (tenantInfo) {
+        if (!tenantId && tenantInfo.tenantId) {
+          tenantId = tenantInfo.tenantId;
+        }
+        if (!subdomain && tenantInfo.tenantSlug) {
+          subdomain = tenantInfo.tenantSlug;
+        }
+      }
+
+      if (subdomain) {
+        localStorage.setItem('TENANT_SUBDOMAIN', subdomain);
+      } else {
+        localStorage.removeItem('TENANT_SUBDOMAIN');
       }
 
       localStorage.setItem(
@@ -79,6 +100,11 @@ export function LoginPage() {
           role: res.role,
           name: email.split('@')[0] || 'Người dùng',
           email: email,
+          tenantId: tenantId,
+          subdomain: subdomain,
+          tenantSlug: subdomain,
+          tenantName: tenantInfo?.tenantName || '',
+          isSuperAdmin: tenantInfo?.isSuperAdmin || false,
         })
       );
 

@@ -26,6 +26,7 @@ const AdminTechnicalPage = lazy(() => import('./pages/AdminTechnicalPage').then(
 const StaffKdsPage = lazy(() => import('./pages/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
 const StoreEdgeSetupPage = lazy(() => import('./pages/technical/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
 const RobotMonitorPage = lazy(() => import('./pages/technical/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Customer & Integration pages
 const QrOrderPage = lazy(() => import('./pages/public/QrOrderPage').then(m => ({ default: m.QrOrderPage })));
@@ -111,12 +112,40 @@ function App() {
 					<Route path="/" element={<Navigate to="/login" replace />} />
 
 					{/* Technical Engineer & Staff KDS routes */}
-					<Route path="/technical" element={<AdminTechnicalPage />} />
-					<Route path="/staff" element={<StaffKdsPage />} />
+					<Route
+						path="/technical"
+						element={
+							<ProtectedRoute allowedRoles={['technical', 'admin']}>
+								<AdminTechnicalPage />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/staff"
+						element={
+							<ProtectedRoute allowedRoles={['staff', 'admin']}>
+								<StaffKdsPage />
+							</ProtectedRoute>
+						}
+					/>
 
 					{/* Direct technical & store edge routes */}
-					<Route path="/edge-setup" element={<StoreEdgeSetupPage />} />
-					<Route path="/robot-monitor" element={<RobotMonitorPage />} />
+					<Route
+						path="/edge-setup"
+						element={
+							<ProtectedRoute allowedRoles={['technical', 'admin']}>
+								<StoreEdgeSetupPage />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/robot-monitor"
+						element={
+							<ProtectedRoute allowedRoles={['technical', 'admin']}>
+								<RobotMonitorPage />
+							</ProtectedRoute>
+						}
+					/>
 
 					{/* Admin routes: Permanently migrated to SaaS Portal */}
 					<Route path="/admin/*" element={<Navigate to="/technical" replace />} />
