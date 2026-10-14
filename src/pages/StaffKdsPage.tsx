@@ -281,7 +281,7 @@ export const StaffKdsPage: React.FC = () => {
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast notifications */}
       <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
@@ -301,7 +301,7 @@ export const StaffKdsPage: React.FC = () => {
       {/* Staff Touch Header */}
       <header className="h-16 px-4 sm:px-6 bg-white border-b border-slate-200 shadow-2xs flex items-center justify-between shrink-0 sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <Link to="/" className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group hover:border-[#0062FF]/60 hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0" title="Về trang chủ">
+          <Link to="/staff" className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group hover:border-[#0062FF]/60 hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0" title="VORA Staff KDS">
             <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
           </Link>
 
@@ -350,7 +350,7 @@ export const StaffKdsPage: React.FC = () => {
       </header>
 
       {/* Main Staff Operational Canvas */}
-      <main className="flex-1 p-3 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
+      <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
         {/* LEFT / CENTER COLUMN: TABLE FLOOR MAP (7 COLS) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
           {/* Interactive Table Section */}
@@ -849,6 +849,54 @@ export const StaffKdsPage: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* STICKY BOTTOM DISPATCH BAR FOR MOBILE TABLETS & POS (Thumb-friendly Action Zone) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3 safe-area-pb">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-sm shrink-0 shadow-2xs">
+            {currentSelectedTable.id !== 'Chưa có' ? currentSelectedTable.id : '?'}
+          </div>
+          <div className="truncate">
+            <div className="text-xs font-extrabold text-slate-900 truncate">
+              {currentSelectedTable.name}
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono truncate flex items-center gap-1.5 mt-0.5">
+              <span>AMR:</span>
+              <strong className="text-blue-600 font-bold">{effectiveRobot?.code || 'Chưa có'}</strong>
+              {effectiveRobot && (
+                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded border border-emerald-200">
+                  {effectiveRobot.battery}% Pin
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          disabled={isDispatching || !effectiveRobot || !currentSelectedTable.id || currentSelectedTable.id === 'Chưa có'}
+          onClick={handleDispatchOrder}
+          className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
+            isDispatching
+              ? 'bg-blue-400 text-white cursor-not-allowed'
+              : !effectiveRobot || !currentSelectedTable.id || currentSelectedTable.id === 'Chưa có'
+                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer'
+          }`}
+        >
+          {isDispatching ? (
+            <>
+              <RotateCcw className="w-4 h-4 animate-spin" />
+              <span>Đang Lệnh...</span>
+            </>
+          ) : (
+            <>
+              <Send className="w-4 h-4" />
+              <span>GIAO MÓN</span>
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 };

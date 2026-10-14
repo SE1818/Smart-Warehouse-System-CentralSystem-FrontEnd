@@ -24,14 +24,12 @@ import { LocalSqliteSyncCard } from '@/components/admin/LocalSqliteSyncCard';
 import { useRobotStore } from '@/stores/robotStore';
 import {
   fleetService,
-  tenantService,
   missionService,
   alertService,
   tableService,
   type DiningTableDto,
   type FleetAMR,
   type MissionStatsDto,
-  type TenantSummaryDto,
 } from '../services/portalApi';
 import {
   SlamFloorMapViewer,
@@ -103,43 +101,16 @@ export const AdminTechnicalPage: React.FC = () => {
     }
   }, []);
 
-  const isSuperAdmin = useMemo(() => {
-    const role = (currentUser?.role || '').toLowerCase();
-    const email = (currentUser?.email || '').toLowerCase();
-    return (
-      role === 'superadmin' ||
-      role === 'super_admin' ||
-      role === 'admin' ||
-      email.includes('superadmin') ||
-      email === 'admin@vora.vn'
-    );
-  }, [currentUser]);
 
-  // For SuperAdmin: allow switching between "Tất cả" or a specific tenant filter
-  const [selectedSuperAdminTenant, setSelectedSuperAdminTenant] = useState<string>('');
-  const [availableTenants, setAvailableTenants] = useState<TenantSummaryDto[]>([]);
-
-  useEffect(() => {
-    if (isSuperAdmin) {
-      tenantService.getTenantsList().then((list) => {
-        if (Array.isArray(list)) {
-          setAvailableTenants(list);
-        }
-      });
-    }
-  }, [isSuperAdmin]);
 
   const tenantSlug = useMemo(() => {
-    if (isSuperAdmin) {
-      return selectedSuperAdminTenant;
-    }
     return (
       currentUser?.tenantSlug ||
       currentUser?.subdomain ||
       localStorage.getItem('TENANT_SUBDOMAIN') ||
       ''
     ).trim();
-  }, [currentUser, isSuperAdmin, selectedSuperAdminTenant]);
+  }, [currentUser]);
 
   // Real-time SignalR Hub Telemetry Connection
   const {
@@ -278,15 +249,11 @@ export const AdminTechnicalPage: React.FC = () => {
     try {
       setLoading(true);
 
-      const resolvedTenantId = !isSuperAdmin
-        ? currentUser?.tenantId
-        : (availableTenants.find((t) => t.slug === selectedSuperAdminTenant)?.id || undefined);
+      const resolvedTenantId = currentUser?.tenantId;
 
-      const robotsPromise = (tenantSlug && !isSuperAdmin)
+      const robotsPromise = tenantSlug
         ? fleetService.getRobotsByTenant(tenantSlug, resolvedTenantId)
-        : (selectedSuperAdminTenant
-            ? fleetService.getRobotsByTenant(selectedSuperAdminTenant, resolvedTenantId)
-            : fleetService.getAllRobots());
+        : fleetService.getAllRobots();
 
       const [robotsData, missionsData, alertsData, tablesData, statsData] = await Promise.all([
         robotsPromise,
@@ -352,7 +319,7 @@ export const AdminTechnicalPage: React.FC = () => {
       // Live alerts: strictly filtered for tenant robots only
       const liveAlerts: AlertItem[] = alertsData
         .filter((a) => {
-          if (isSuperAdmin && !tenantSlug) return true;
+          if (!tenantSlug) return true;
           return scopedRobotIds.has(a.robot) || scopedRobotNames.has(a.robot);
         })
         .map((a) => ({
@@ -377,7 +344,7 @@ export const AdminTechnicalPage: React.FC = () => {
       setAlerts(liveAlerts);
 
       // Filter missions strictly for tenant robots only
-      const scopedMissions = (!isSuperAdmin || tenantSlug)
+      const scopedMissions = tenantSlug
         ? missionsData.filter((m) => scopedRobotIds.has(m.assignedTo) || scopedRobotNames.has(m.assignedTo))
         : missionsData;
       setMissions(scopedMissions);
@@ -548,7 +515,7 @@ export const AdminTechnicalPage: React.FC = () => {
   };
 
   return (
-    <div className="h-screen overflow-y-auto bg-slate-100 text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast Notification Container */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none animate-in slide-in-from-top-2 duration-200">
@@ -570,7 +537,7 @@ export const AdminTechnicalPage: React.FC = () => {
       <header className="h-16 px-4 sm:px-6 bg-[#0A192F] text-white flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-md">
         {/* Brand & Title */}
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-          <Link to="/" className="flex items-center gap-2.5 group shrink-0" title="Về trang chủ">
+          <Link to="/technical" className="flex items-center gap-2.5 group shrink-0" title="Trang Điều Phối Kỹ Thuật AMR">
             <div className="w-9 h-9 rounded-xl bg-white border border-slate-700/80 p-1 flex items-center justify-center shadow-[0_0_16px_rgba(0,98,255,0.35)] group-hover:border-[#00D2FF] group-hover:shadow-[0_0_20px_rgba(0,210,255,0.5)] transition-all">
               <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
             </div>
@@ -579,28 +546,9 @@ export const AdminTechnicalPage: React.FC = () => {
                 VORA
               </span>
               <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/40">
-                TECH CENTER
+                CENTRAL OS
               </span>
-              {isSuperAdmin ? (
-                <div className="hidden sm:flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-300 border border-purple-400/40">
-                    SUPERADMIN
-                  </span>
-                  <select
-                    value={selectedSuperAdminTenant}
-                    onChange={(e) => setSelectedSuperAdminTenant(e.target.value)}
-                    className="bg-slate-800 text-cyan-300 border border-slate-600 rounded px-2 py-0.5 text-xs font-mono font-bold focus:outline-none focus:border-cyan-400 cursor-pointer"
-                    title="Chọn phạm vi hiển thị Tenant"
-                  >
-                    <option value="">Toàn bộ Hệ Thống (All Tenants)</option>
-                    {availableTenants.map((t) => (
-                      <option key={t.id || t.slug} value={t.slug}>
-                        {t.name || t.slug} (@{t.slug})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : tenantSlug ? (
+              {tenantSlug ? (
                 <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
                   Tenant: {currentUser?.tenantName || tenantSlug.toUpperCase()}
                 </span>

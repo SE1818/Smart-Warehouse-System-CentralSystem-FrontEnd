@@ -711,7 +711,7 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
       {/* MODAL 1: ADD TABLE (TECHNICAL ENGINEER SETUP) */}
       {activeActionModal === 'create' && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-5 animate-scale-in">
+          <div className="bg-white rounded-3xl max-w-md w-full max-h-[92dvh] overflow-y-auto p-5 sm:p-8 shadow-2xl border border-slate-200 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[11px] font-mono font-bold text-indigo-600 uppercase tracking-wider block">
@@ -816,7 +816,7 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
       {/* MODAL 2: GỘP BÀN (MERGE TABLES) */}
       {activeActionModal === 'merge' && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-5 animate-scale-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92dvh] overflow-y-auto p-5 sm:p-8 shadow-2xl border border-slate-200 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[11px] font-mono font-bold text-purple-600 uppercase tracking-wider block">
@@ -918,7 +918,7 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
       {/* MODAL 3: DISPATCH AMR & DIRECT TABLE ACTION MODAL */}
       {selectedTable && activeActionModal !== 'create' && activeActionModal !== 'merge' && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92dvh] overflow-y-auto p-5 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[11px] font-mono font-bold text-blue-600 uppercase tracking-wider block">

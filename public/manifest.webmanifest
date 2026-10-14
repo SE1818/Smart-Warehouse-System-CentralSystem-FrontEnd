@@ -1,0 +1,23 @@
+{
+  "name": "VORA Central OS & KDS",
+  "short_name": "VORA Staff",
+  "description": "Hệ thống Điều Phối Bàn & Trạm AMR KDS dành cho Nhân Viên Nhà Hàng",
+  "start_url": "/staff",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0A192F",
+  "icons": [
+    {
+      "src": "/brand/vora-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

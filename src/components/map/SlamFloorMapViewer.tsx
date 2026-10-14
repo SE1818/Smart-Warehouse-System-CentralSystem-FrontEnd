@@ -354,6 +354,132 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     setIsDragging(false);
   };
 
+  // Touch Gestures: Pan & Pinch-to-Zoom Support for POS Terminals & Tablets
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    panStartX: number;
+    panStartY: number;
+    initialDistance: number;
+    initialZoom: number;
+    moved: boolean;
+    startTime: number;
+  }>({
+    startX: 0,
+    startY: 0,
+    panStartX: 0,
+    panStartY: 0,
+    initialDistance: 0,
+    initialZoom: 1,
+    moved: false,
+    startTime: 0,
+  });
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      touchStateRef.current = {
+        startX: t.clientX,
+        startY: t.clientY,
+        panStartX: pan.x,
+        panStartY: pan.y,
+        initialDistance: 0,
+        initialZoom: zoom,
+        moved: false,
+        startTime: Date.now(),
+      };
+      setIsDragging(true);
+    } else if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      touchStateRef.current = {
+        startX: (t1.clientX + t2.clientX) / 2,
+        startY: (t1.clientY + t2.clientY) / 2,
+        panStartX: pan.x,
+        panStartY: pan.y,
+        initialDistance: dist,
+        initialZoom: zoom,
+        moved: true,
+        startTime: Date.now(),
+      };
+      setIsDragging(false);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length === 1 && isDragging) {
+      const t = e.touches[0];
+      const dx = t.clientX - touchStateRef.current.startX;
+      const dy = t.clientY - touchStateRef.current.startY;
+      if (Math.hypot(dx, dy) > 6) {
+        touchStateRef.current.moved = true;
+      }
+      setPan({
+        x: touchStateRef.current.panStartX + dx,
+        y: touchStateRef.current.panStartY + dy,
+      });
+    } else if (e.touches.length === 2 && touchStateRef.current.initialDistance > 0) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const currDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      const scale = currDist / touchStateRef.current.initialDistance;
+      const newZoom = Math.min(Math.max(touchStateRef.current.initialZoom * scale, 0.2), 5.0);
+      setZoom(newZoom);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const wasMoved = touchStateRef.current.moved;
+    const duration = Date.now() - touchStateRef.current.startTime;
+
+    setIsDragging(false);
+
+    // If it was a quick tap without drag on touch device, trigger hit test!
+    if (!wasMoved && duration < 350 && e.changedTouches.length > 0) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const t = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const clientX = t.clientX - rect.left;
+      const clientY = t.clientY - rect.top;
+
+      const totalScale = zoom * autoScale;
+      const rawPx = (clientX - pan.x) / totalScale;
+      const rawPy = (clientY - pan.y) / totalScale;
+
+      // Touch hit radius: extra generous for fingers (36px for simplified KDS mode)
+      const hitRadiusRobot = mode === 'simplified' ? 36 : 28;
+      for (const robot of resolvedRobots) {
+        if (robot.worldX !== undefined && robot.worldY !== undefined) {
+          const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
+          const dist = Math.hypot(rawPx - robotPx.x, rawPy - robotPx.y);
+          if (dist <= hitRadiusRobot) {
+            if (onSelectRobot) {
+              onSelectRobot(robot.id || robot.code);
+              return;
+            }
+          }
+        }
+      }
+
+      const hitRadiusPixel = mode === 'simplified' ? 38 : 30;
+      for (const table of resolvedTables) {
+        if (table.worldX !== undefined && table.worldY !== undefined) {
+          const tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+          const dist = Math.hypot(rawPx - tablePx.x, rawPy - tablePx.y);
+          if (dist <= hitRadiusPixel) {
+            if (onSelectTable) {
+              onSelectTable(table.id);
+            }
+            break;
+          }
+        }
+      }
+    }
+  };
+
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1044,7 +1170,11 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           onMouseUp={handleMouseUp}
           onWheel={handleWheel}
           onClick={handleClick}
-          className={`rounded-xl shadow-2xl transition-transform ${
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          className={`rounded-xl shadow-2xl transition-transform touch-none select-none ${
             mode === 'simplified' ? 'border border-slate-200' : 'border border-slate-800/80'
           }`}
         />
