@@ -60,6 +60,9 @@ export function LoginPage() {
     try {
       const res = await authService.login({ email, password });
       localStorage.setItem('authToken', res.accessToken);
+      if (res.refreshToken) {
+        localStorage.setItem('refreshToken', res.refreshToken);
+      }
 
       let userId = '';
       let tenantId = '';

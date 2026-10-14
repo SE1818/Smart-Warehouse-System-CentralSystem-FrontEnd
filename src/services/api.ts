@@ -8,7 +8,7 @@ export const resolveBaseUrl = (): string => {
   // 1. Runtime override via localStorage for quick testing without redeploying
   if (typeof window !== 'undefined') {
     // When served from Docker port 3200 or local domain, use relative /api to utilize Nginx reverse proxy and eliminate CORS
-    if (window.location.port === '3200' || window.location.hostname.endsWith('.local')) {
+    if (window.location.port === '3200' || window.location.hostname?.endsWith('.local')) {
       return '/api';
     }
 
@@ -188,7 +188,7 @@ function redirectToLogin() {
 
 // Bare axios, not apiClient: routing this through apiClient would re-enter the
 // interceptor and recurse on its own failure.
-function refreshAccessToken(refreshToken?: string): Promise<AuthSession> {
+export function refreshAccessToken(refreshToken?: string): Promise<AuthSession> {
   if (!inflightRefresh) {
     inflightRefresh = axios
       .post<AuthSession>(

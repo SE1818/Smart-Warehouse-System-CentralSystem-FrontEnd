@@ -125,6 +125,7 @@ describe('LoginPage', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('authToken')).toBe('mock-token');
+      expect(localStorage.getItem('refreshToken')).toBe('mock-refresh');
     });
   });
 

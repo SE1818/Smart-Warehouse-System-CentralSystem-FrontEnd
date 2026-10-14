@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { sqliteService } from './sqliteService';
+import { refreshAccessToken } from './api';
 
 export const resolvePortalBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     // When served from Docker port 3200 or local domain, use relative /api/v1 to utilize Nginx reverse proxy
-    if (window.location.port === '3200' || window.location.hostname.endsWith('.local')) {
+    if (window.location.port === '3200' || window.location.hostname?.endsWith('.local')) {
       return '/api/v1';
     }
 
@@ -60,6 +61,42 @@ portalClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+portalClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error?.config as (typeof error.config & { _retried?: boolean }) | undefined;
+    const status = error?.response?.status;
+    const url = config?.url || '';
+
+    if (status !== 401 || config?._retried || url.includes('/auth/')) {
+      return Promise.reject(error);
+    }
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      return Promise.reject(error);
+    }
+
+    if (config) {
+      config._retried = true;
+    }
+
+    try {
+      const session = await refreshAccessToken(refreshToken);
+      localStorage.setItem('authToken', session.accessToken);
+      if (session.refreshToken) {
+        localStorage.setItem('refreshToken', session.refreshToken);
+      }
+      if (config?.headers) {
+        config.headers.Authorization = `Bearer ${session.accessToken}`;
+      }
+      return portalClient(config || {});
+    } catch {
+      return Promise.reject(error);
+    }
+  }
+);
 
 // Domain Interfaces
 export interface FleetAMR {
