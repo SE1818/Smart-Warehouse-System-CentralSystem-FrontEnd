@@ -3,6 +3,11 @@ import { sqliteService } from './sqliteService';
 
 export const resolvePortalBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
+    // When served from Docker port 3200 or local domain, use relative /api/v1 to utilize Nginx reverse proxy
+    if (window.location.port === '3200' || window.location.hostname.endsWith('.local')) {
+      return '/api/v1';
+    }
+
     const override = localStorage.getItem('API_GATEWAY_URL')?.trim() || localStorage.getItem('API_BASE_URL')?.trim();
     if (override) {
       const clean = override.replace(/\/+$/, '');

@@ -7,14 +7,14 @@ type AuthSession = AuthResponse;
 export const resolveBaseUrl = (): string => {
   // 1. Runtime override via localStorage for quick testing without redeploying
   if (typeof window !== 'undefined') {
+    // When served from Docker port 3200 or local domain, use relative /api to utilize Nginx reverse proxy and eliminate CORS
+    if (window.location.port === '3200' || window.location.hostname.endsWith('.local')) {
+      return '/api';
+    }
+
     const override = localStorage.getItem('API_BASE_URL')?.trim();
     if (override) {
       return override.replace(/\/+$/, '');
-    }
-
-    // When served from Docker port 3200, use relative /api to utilize Nginx reverse proxy and eliminate CORS
-    if (window.location.port === '3200') {
-      return '/api';
     }
   }
 
