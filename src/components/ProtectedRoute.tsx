@@ -20,15 +20,24 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
+  // Block access if restaurant/tenant is suspended
+  if (user.isSuspended || user.tenantStatus?.toLowerCase() === 'suspended' || user.tenantStatus?.toLowerCase() === 'terminated') {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = (user.role || '').toLowerCase();
+    // Normalize diacritics (e.g. "Phục Vụ Bàn" -> "phuc vu ban")
+    const cleanRole = userRole.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
     const isAllowed = allowedRoles.some((r) => {
       const allowed = r.toLowerCase();
-      if (allowed === userRole) return true;
+      if (allowed === userRole || allowed === cleanRole) return true;
       if (allowed === 'technical' || allowed === 'technician') {
         return (
-          userRole.includes('tech') ||
-          userRole.includes('engineer') ||
+          cleanRole.includes('tech') ||
+          cleanRole.includes('engineer') ||
+          cleanRole.includes('ky thuat') ||
           userRole === 'admin' ||
           userRole === 'superadmin'
         );
@@ -38,11 +47,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
       }
       if (allowed === 'staff') {
         return (
-          userRole.includes('staff') ||
-          userRole.includes('waiter') ||
-          userRole.includes('kds') ||
-          userRole.includes('kitchen') ||
-          userRole.includes('phucvu') ||
+          cleanRole.includes('staff') ||
+          cleanRole.includes('waiter') ||
+          cleanRole.includes('kds') ||
+          cleanRole.includes('kitchen') ||
+          cleanRole.includes('phuc vu') ||
+          cleanRole.includes('phucvu') ||
+          cleanRole.includes('bep') ||
           userRole === 'admin' ||
           userRole === 'superadmin'
         );
