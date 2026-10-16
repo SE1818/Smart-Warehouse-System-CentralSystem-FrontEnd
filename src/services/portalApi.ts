@@ -218,7 +218,21 @@ export const tenantService = {
         return res.data;
       }
     } catch (err) {
-      console.warn('Lỗi gọi API resolve-user tenant:', err);
+      console.warn('Lỗi gọi API resolve-user tenant qua portalClient, thử gọi fallback cục bộ:', err);
+      try {
+        const fallbackUrl = email ? `/api/v1/tenant/resolve-user?email=${encodeURIComponent(email)}` : '/api/v1/tenant/resolve-user';
+        const fallbackRes = await axios.get(fallbackUrl, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('authToken') ? { Authorization: `Bearer ${localStorage.getItem('authToken')}` } : {})
+          }
+        });
+        if (fallbackRes.data) {
+          return fallbackRes.data;
+        }
+      } catch (fallbackErr) {
+        console.warn('Lỗi gọi fallback resolve-user tenant:', fallbackErr);
+      }
     }
     return {
       isSuperAdmin: false,
