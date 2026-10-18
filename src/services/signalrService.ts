@@ -1,4 +1,5 @@
 import * as signalR from '@microsoft/signalr';
+import { getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from './api';
 
 type Status = 'connected' | 'connecting' | 'disconnected';
 type EventHandler = (data: any) => void;
@@ -14,10 +15,8 @@ interface HubState {
   path: string;
 }
 
-const getToken = () => localStorage.getItem('authToken');
-
 const buildConnectionOptions = () => ({
-  accessTokenFactory: () => getToken() || '',
+  accessTokenFactory: async () => (await getValidAuthTokenOrRefresh()) || '',
   headers: import.meta.env.DEV ? { 'ngrok-skip-browser-warning': 'true' } : undefined,
   skipNegotiation: false,
   transport: signalR.HttpTransportType.WebSockets,
@@ -39,7 +38,13 @@ function startHub(
   hub.connection = new signalR.HubConnectionBuilder()
     .withUrl(url, buildConnectionOptions())
     .withAutomaticReconnect({
-      nextRetryDelayInMilliseconds: (ctx) => getRetryDelay(ctx.previousRetryCount),
+      nextRetryDelayInMilliseconds: (ctx) => {
+        if (ctx.retryReason && isUnauthorizedError(ctx.retryReason)) {
+          void handleSignalR401();
+          return null;
+        }
+        return getRetryDelay(ctx.previousRetryCount);
+      },
     })
     .configureLogging(signalR.LogLevel.Information)
     .build();
@@ -65,6 +70,10 @@ function startHub(
     console.error(`[SignalR] ${hub.name} closed.`, error?.message);
     hub.status = 'disconnected';
     onStatus('disconnected');
+    if (isUnauthorizedError(error)) {
+      void handleSignalR401();
+      return;
+    }
     if (hub.reconnectCount === 0) hub.reconnectCount = 1;
     setTimeout(() => {
       if (hub.connection && hub.status === 'disconnected') {
@@ -85,10 +94,18 @@ function startHub(
       onStatus('connected');
       console.log(`[SignalR] ${hub.name} connected.`);
     })
-    .catch((err) => {
+    .catch(async (err) => {
       hub.status = 'disconnected';
       onStatus('disconnected');
-      console.error(`[SignalR] ${hub.name} start failed:`, err.message);
+      console.error(`[SignalR] ${hub.name} start failed:`, err?.message || err);
+      if (isUnauthorizedError(err)) {
+        const refreshed = await handleSignalR401();
+        if (refreshed && hub.connection && hub.status === 'disconnected') {
+          console.log(`[SignalR] Token refreshed, retrying start ${hub.name}...`);
+          startHub(hub, onStatus);
+        }
+        return;
+      }
       setTimeout(() => {
         if (hub.connection && hub.status === 'disconnected') {
           console.log(`[SignalR] ${hub.name} retrying start...`);

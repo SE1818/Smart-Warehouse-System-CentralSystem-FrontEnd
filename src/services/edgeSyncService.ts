@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr';
-import { resolveBaseUrl } from './api';
+import { resolveBaseUrl, getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from './api';
 import { sqliteService } from './sqliteService';
 
 export interface EdgeSyncRequest {
@@ -73,7 +73,6 @@ class EdgeSyncService {
     this.isAutoSyncStarted = true;
     this.readTenantConfig();
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : '';
     const cleanBase = resolveBaseUrl().replace(/\/+$/, '');
     const connectionUrl = cleanBase.endsWith('/v1')
       ? `${cleanBase}/robots/tracking-hub`
@@ -81,11 +80,20 @@ class EdgeSyncService {
 
     this.connection = new signalR.HubConnectionBuilder()
       .withUrl(connectionUrl, {
-        accessTokenFactory: () => token || '',
+        accessTokenFactory: async () => (await getValidAuthTokenOrRefresh()) || '',
         headers: { 'ngrok-skip-browser-warning': 'true' },
       })
       .configureLogging(signalR.LogLevel.Information)
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (retryContext) => {
+          if (retryContext.retryReason && isUnauthorizedError(retryContext.retryReason)) {
+            void handleSignalR401();
+            return null;
+          }
+          const delays = [0, 2000, 5000, 10000, 30000];
+          return delays[retryContext.previousRetryCount] ?? null;
+        },
+      })
       .build();
 
     // 1. Listen for background sync request initiated by SuperAdmin on VPS
@@ -134,6 +142,9 @@ class EdgeSyncService {
       console.warn('[EdgeSync Background] Chưa thể kết nối tới VPS Hub:', err);
       this.connectionState = 'disconnected';
       this.notifyStateChanged();
+      if (isUnauthorizedError(err)) {
+        void handleSignalR401();
+      }
     }
   }
 

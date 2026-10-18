@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as signalR from '@microsoft/signalr';
 import { toast } from 'react-toastify';
 import React from 'react';
+import { getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from '@/services/api';
 
 interface NotificationPayload {
   title: string;
@@ -26,17 +27,20 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       if (get().connection) return;
 
       set({ status: 'connecting' });
-      const token = localStorage.getItem('authToken');
       const connectionUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/notifications/hub?userId=${userId}`;
 
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {
-          accessTokenFactory: () => token || '',
+          accessTokenFactory: async () => (await getValidAuthTokenOrRefresh()) || '',
           headers: import.meta.env.DEV ? { 'ngrok-skip-browser-warning': 'true' } : undefined,
         })
         .configureLogging(signalR.LogLevel.Information)
         .withAutomaticReconnect({
           nextRetryDelayInMilliseconds: (retryContext) => {
+            if (retryContext.retryReason && isUnauthorizedError(retryContext.retryReason)) {
+              void handleSignalR401();
+              return null;
+            }
             const delay = Math.min(2000 * Math.pow(2, retryContext.previousRetryCount), 30000);
             console.log(`[SignalR] Notification Hub reconnect attempt #${retryContext.previousRetryCount + 1} in ${delay}ms`);
             return delay;
@@ -78,9 +82,18 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
             set({ status: 'connected', connection });
             console.log('[SignalR] Connected to Notification Hub for user:', userId);
           })
-          .catch((err) => {
+          .catch(async (err) => {
             set({ status: 'disconnected' });
             console.error('[SignalR] Notification Hub connection failed:', err);
+            if (isUnauthorizedError(err)) {
+              const refreshed = await handleSignalR401();
+              if (refreshed && get().connection && get().status === 'disconnected') {
+                console.log('[SignalR] Token refreshed, retrying Notification Hub...');
+                set({ status: 'connecting' });
+                startConnection();
+              }
+              return;
+            }
             setTimeout(() => {
               if (get().connection && get().status === 'disconnected') {
                 console.log('[SignalR] Retrying initial connection to Notification Hub...');
@@ -94,6 +107,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
       connection.onclose((error) => {
         set({ status: 'disconnected' });
         console.error('[SignalR] Notification Hub connection closed.', error);
+        if (isUnauthorizedError(error)) {
+          void handleSignalR401();
+          return;
+        }
         setTimeout(() => {
           if (get().connection && get().status === 'disconnected') {
             console.log('[SignalR] Restarting connection to Notification Hub after close...');

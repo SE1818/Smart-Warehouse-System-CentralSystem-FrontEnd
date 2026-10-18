@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as signalR from '@microsoft/signalr';
 import { robotService } from '@/services/robot';
-import { resolveBaseUrl } from '@/services/api';
+import { resolveBaseUrl, getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from '@/services/api';
 import { sqliteService } from '@/services/sqliteService';
 import { edgeSyncService } from '@/services/edgeSyncService';
 import type { Robot } from '@/types/robot';
@@ -91,7 +91,6 @@ export const useRobotStore = create<RobotState>((set, get) => {
       set({ status: 'connecting' });
       get().addLog('Đang kết nối đến Robot Hub...', 'info');
 
-      const token = localStorage.getItem('authToken');
       const cleanBase = resolveBaseUrl().replace(/\/+$/, '');
       const connectionUrl = cleanBase.endsWith('/v1')
         ? `${cleanBase}/robots/tracking-hub`
@@ -99,12 +98,16 @@ export const useRobotStore = create<RobotState>((set, get) => {
 
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {
-          accessTokenFactory: () => token || '',
+          accessTokenFactory: async () => (await getValidAuthTokenOrRefresh()) || '',
           headers: { 'ngrok-skip-browser-warning': 'true' },
         })
         .configureLogging(signalR.LogLevel.Information)
         .withAutomaticReconnect({
           nextRetryDelayInMilliseconds: (retryContext) => {
+            if (retryContext.retryReason && isUnauthorizedError(retryContext.retryReason)) {
+              void handleSignalR401();
+              return null;
+            }
             const delay = Math.min(2000 * Math.pow(2, retryContext.previousRetryCount), 30000);
             get().addLog(`Thử kết nối lại Robot Hub lần #${retryContext.previousRetryCount + 1} sau ${delay}ms...`, 'warning');
             return delay;
@@ -257,9 +260,18 @@ export const useRobotStore = create<RobotState>((set, get) => {
             get().addLog('Kết nối SignalR Hub thành công.', 'success');
             void edgeSyncService.startEdgeSync();
           })
-          .catch((err) => {
+          .catch(async (err) => {
             set({ status: 'disconnected' });
-            get().addLog(`Kết nối SignalR Hub thất bại: ${err.message}`, 'error');
+            get().addLog(`Kết nối SignalR Hub thất bại: ${err?.message || err}`, 'error');
+            if (isUnauthorizedError(err)) {
+              const refreshed = await handleSignalR401();
+              if (refreshed && get().connection && get().status === 'disconnected') {
+                get().addLog('Đã làm mới phiên xác thực. Thử kết nối lại Robot Hub...', 'info');
+                set({ status: 'connecting' });
+                startConnection();
+              }
+              return;
+            }
             setTimeout(() => {
               if (get().connection && get().status === 'disconnected') {
                 get().addLog('Thử kết nối lại Robot Hub...', 'info');
@@ -273,6 +285,10 @@ export const useRobotStore = create<RobotState>((set, get) => {
       connection.onclose((error) => {
         set({ status: 'disconnected' });
         get().addLog(`Kết nối Robot Hub bị đóng: ${error?.message}`, 'error');
+        if (isUnauthorizedError(error)) {
+          void handleSignalR401();
+          return;
+        }
         setTimeout(() => {
           if (get().connection && get().status === 'disconnected') {
             get().addLog('Thử khởi động lại kết nối Robot Hub...', 'info');

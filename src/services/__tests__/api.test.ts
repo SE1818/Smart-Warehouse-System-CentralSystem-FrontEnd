@@ -168,4 +168,56 @@ describe('services/api.ts', () => {
     capturedRequestHandler!(authConfig);
     expect(authConfig.baseURL).toBe(API_BASE_URL);
   });
+
+  // ── SignalR 401 & Silent Refresh Helpers ──────────────────────────────
+
+  it('correctly detects 401 unauthorized errors', async () => {
+    const { isUnauthorizedError } = await import('@/services/api');
+    expect(isUnauthorizedError({ statusCode: 401 })).toBe(true);
+    expect(isUnauthorizedError({ status: 401 })).toBe(true);
+    expect(isUnauthorizedError(new Error('Failed to start connection: Error: Unauthorized'))).toBe(true);
+    expect(isUnauthorizedError(new Error('Error: 401 Unauthorized during negotiate'))).toBe(true);
+    expect(isUnauthorizedError(new Error('Network error: 500 Internal Server Error'))).toBe(false);
+    expect(isUnauthorizedError(null)).toBe(false);
+  });
+
+  it('detects expired JWT tokens based on exp claim', async () => {
+    const { isJwtTokenExpired } = await import('@/services/api');
+    expect(isJwtTokenExpired(null)).toBe(true);
+    expect(isJwtTokenExpired('')).toBe(true);
+    expect(isJwtTokenExpired('invalid-token')).toBe(true);
+
+    // Create a mock token expiring in the past
+    const pastExp = Math.floor(Date.now() / 1000) - 60;
+    const expiredPayload = btoa(JSON.stringify({ exp: pastExp }));
+    expect(isJwtTokenExpired(`header.${expiredPayload}.signature`)).toBe(true);
+
+    // Create a mock token expiring in 1 hour
+    const futureExp = Math.floor(Date.now() / 1000) + 3600;
+    const validPayload = btoa(JSON.stringify({ exp: futureExp }));
+    expect(isJwtTokenExpired(`header.${validPayload}.signature`)).toBe(false);
+  });
+
+  it('handleSignalR401 clears auth session and redirects to /login if no refreshToken', async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { pathname: '/dashboard', href: '' } as unknown as Location,
+    });
+
+    const { handleSignalR401 } = await import('@/services/api');
+    localStorage.setItem('authToken', 'expired-token');
+    localStorage.removeItem('refreshToken');
+
+    const refreshed = await handleSignalR401();
+    expect(refreshed).toBe(false);
+    expect(localStorage.getItem('authToken')).toBeNull();
+    expect(window.location.href).toBe('/login');
+
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: originalLocation,
+    });
+  });
 });
+

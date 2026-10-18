@@ -174,16 +174,107 @@ const apiClient = axios.create({
 
 let inflightRefresh: Promise<AuthSession> | null = null;
 
-function clearAuthSession() {
+export function clearAuthSession(): void {
   localStorage.removeItem('authToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
 }
 
-function redirectToLogin() {
-  if (window.location.pathname !== '/login') {
+export function redirectToLogin(): void {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
     window.location.href = '/login';
   }
+}
+
+/**
+ * Checks if the JWT access token is expired or close to expiry (<= 30 seconds).
+ */
+export function isJwtTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const payloadBase64 = token.split('.')[1];
+    if (!payloadBase64) return true;
+    const decoded = JSON.parse(atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')));
+    if (decoded.exp && typeof decoded.exp === 'number') {
+      const nowInSec = Math.floor(Date.now() / 1000);
+      return decoded.exp <= nowInSec + 30;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns a valid authToken, performing a silent refresh with refreshToken if expired.
+ * If refresh fails or no refreshToken exists, clears session and redirects to /login (out ra ngoài).
+ */
+export async function getValidAuthTokenOrRefresh(): Promise<string | null> {
+  const token = localStorage.getItem('authToken');
+  const refreshToken = localStorage.getItem('refreshToken');
+
+  if (token && !isJwtTokenExpired(token)) {
+    return token;
+  }
+
+  if (refreshToken) {
+    try {
+      const session = await refreshAccessToken(refreshToken);
+      if (session.accessToken) {
+        localStorage.setItem('authToken', session.accessToken);
+      }
+      if (session.refreshToken) {
+        localStorage.setItem('refreshToken', session.refreshToken);
+      }
+      return session.accessToken;
+    } catch {
+      clearAuthSession();
+      redirectToLogin();
+      return null;
+    }
+  }
+
+  if (token) {
+    // Had expired token but no refresh token
+    clearAuthSession();
+    redirectToLogin();
+  }
+  return null;
+}
+
+/**
+ * Handles a 401 Unauthorized from SignalR hubs (negotiate or socket auth error).
+ * Tries silent refresh once. If successful, returns true to allow reconnection.
+ * If refresh fails or no refreshToken exists, clears session and redirects to /login (out ra ngoài).
+ */
+export async function handleSignalR401(): Promise<boolean> {
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (refreshToken) {
+    try {
+      const session = await refreshAccessToken(refreshToken);
+      if (session.accessToken) {
+        localStorage.setItem('authToken', session.accessToken);
+      }
+      if (session.refreshToken) {
+        localStorage.setItem('refreshToken', session.refreshToken);
+      }
+      return true;
+    } catch {
+      clearAuthSession();
+      redirectToLogin();
+      return false;
+    }
+  }
+  clearAuthSession();
+  redirectToLogin();
+  return false;
+}
+
+export function isUnauthorizedError(error: any): boolean {
+  if (!error) return false;
+  if (error.statusCode === 401 || error.status === 401) return true;
+  const msg = String(error.message || error);
+  return msg.includes('401') || msg.toLowerCase().includes('unauthorized');
 }
 
 // Bare axios, not apiClient: routing this through apiClient would re-enter the
