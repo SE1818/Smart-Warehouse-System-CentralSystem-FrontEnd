@@ -385,6 +385,28 @@ class SqliteService {
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS amr_tasks (
+        task_id TEXT PRIMARY KEY,
+        order_id TEXT,
+        robot_code TEXT,
+        task_type TEXT,
+        pickup_station TEXT,
+        dropoff_station TEXT,
+        status TEXT DEFAULT 'Idle',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS local_orders (
+        order_id TEXT PRIMARY KEY,
+        order_code TEXT NOT NULL,
+        customer_name TEXT,
+        table_number TEXT,
+        total_amount REAL DEFAULT 0,
+        items_summary TEXT,
+        status TEXT DEFAULT 'Completed',
+        created_at TEXT NOT NULL
+      );
     `);
   }
 
@@ -745,6 +767,58 @@ class SqliteService {
       startedAt: String(row[6]),
       finishedAt: row[7] ? String(row[7]) : null,
       createdAt: String(row[8]),
+    }));
+  }
+
+  // ==========================================
+  // STAFF DISPATCH & AMR TASKS (SQLite)
+  // ==========================================
+
+  public async recordDispatchTask(orderId: string, destinationTable: string, robotCode: string): Promise<string> {
+    const db = await this.getDb();
+    const taskId = `TSK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+
+    db.run(
+      `INSERT INTO amr_tasks (task_id, order_id, robot_code, task_type, pickup_station, dropoff_station, status, created_at)
+       VALUES (?, ?, ?, 'FoodDelivery', 'Bếp Trung Tâm', ?, 'Delivering', ?)`,
+      [taskId, orderId, robotCode, destinationTable, now]
+    );
+
+    db.run(
+      `INSERT INTO local_orders (order_id, order_code, customer_name, table_number, total_amount, items_summary, status, created_at)
+       VALUES (?, ?, ?, ?, 350000, 'Đơn món ra bếp', 'Serving', ?)
+       ON CONFLICT(order_id) DO UPDATE SET table_number = excluded.table_number, status = 'Serving'`,
+      [orderId, orderId, `Khách ${destinationTable}`, destinationTable, now]
+    );
+
+    db.run(
+      `UPDATE dining_tables SET status = 'serving', assigned_robot_code = ? WHERE table_no = ? OR name = ?`,
+      [robotCode, destinationTable.replace(/^Bàn\s*/i, ''), destinationTable]
+    );
+
+    await this.persist();
+    return taskId;
+  }
+
+  public async getRecentDispatchTasks(limit = 10): Promise<Array<{
+    taskId: string;
+    orderId: string;
+    robotCode: string;
+    destination: string;
+    status: string;
+    createdAt: string;
+  }>> {
+    const db = await this.getDb();
+    const res = db.exec(`SELECT task_id, order_id, robot_code, dropoff_station, status, created_at FROM amr_tasks ORDER BY created_at DESC LIMIT ${limit}`);
+    if (!res || res.length === 0 || !res[0].values) return [];
+    return res[0].values.map((row) => ({
+      taskId: String(row[0]),
+      orderId: String(row[1] || ''),
+      robotCode: String(row[2] || ''),
+      destination: String(row[3] || ''),
+      status: String(row[4] || 'Idle'),
+      createdAt: String(row[5] || ''),
     }));
   }
 

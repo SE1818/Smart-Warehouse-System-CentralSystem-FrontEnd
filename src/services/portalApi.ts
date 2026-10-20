@@ -579,6 +579,36 @@ export const orderService = {
     }
   },
 
+  dispatchToSqlite: async (
+    subdomain: string,
+    orderId: string,
+    destinationTable: string,
+    robotCode?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await portalClient.post(`/tenant/${subdomain}/database/dispatch`, {
+        orderId,
+        destinationTable,
+        robotCode: robotCode || 'AMR-01',
+      });
+      return res.data;
+    } catch {
+      try {
+        const res2 = await portalClient.post(`/admin/tenants/${subdomain}/sqlite/dispatch`, {
+          orderId,
+          destinationTable,
+          robotCode: robotCode || 'AMR-01',
+        });
+        return res2.data;
+      } catch (err2: any) {
+        return {
+          success: false,
+          message: err2?.response?.data?.message || 'Không thể ghi nhận lệnh điều phối vào SQLite',
+        };
+      }
+    }
+  },
+
   confirmOrder: async (orderId: string): Promise<boolean> => {
     try {
       await portalClient.post(`/orders/${orderId}/confirm`);

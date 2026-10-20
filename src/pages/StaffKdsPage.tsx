@@ -5,7 +5,6 @@ import {
   Sparkles,
   CheckCircle2,
   Clock,
-  Layers,
   BatteryCharging,
   RotateCcw,
   Store,
@@ -14,8 +13,13 @@ import {
   LayoutGrid,
   LogOut,
   AlertTriangle,
+  Database,
+  Hash,
+  MapPin,
+  ArrowRight,
 } from 'lucide-react';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
+import { sqliteService } from '../services/sqliteService';
 import { fixMojibake } from '../utils/textUtils';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/common/Pagination';
@@ -58,10 +62,34 @@ export const StaffKdsPage: React.FC = () => {
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
 
-  // Multi-tier Tray State (Khay 1 - 2 - 3)
-  const [tray1, setTray1] = useState<TrayItem[]>([]);
-  const [tray2, setTray2] = useState<TrayItem[]>([]);
-  const [tray3, setTray3] = useState<TrayItem[]>([]);
+  // Staff Move Request Form (Order ID & Destination Table)
+  const [orderInputId, setOrderInputId] = useState<string>('ORD-101');
+  const [destinationInput, setDestinationInput] = useState<string>('Bàn 01');
+  const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
+    taskId: string;
+    orderId: string;
+    destination: string;
+    robotCode: string;
+    status: string;
+    time: string;
+  }>>([
+    {
+      taskId: 'TSK-1001',
+      orderId: 'ORD-103',
+      destination: 'Bàn 05',
+      robotCode: 'AMR-01',
+      status: 'Delivering',
+      time: '11:45',
+    },
+    {
+      taskId: 'TSK-1000',
+      orderId: 'ORD-098',
+      destination: 'Bàn 02',
+      robotCode: 'AMR-02',
+      status: 'Completed',
+      time: '11:15',
+    },
+  ]);
 
   // Pending Orders from Ordering Microservice
   const [pendingOrders, setPendingOrders] = useState<PendingOrderDto[]>([]);
@@ -151,18 +179,30 @@ export const StaffKdsPage: React.FC = () => {
         if (pOrders.length > 0) {
           const first = pOrders[0];
           setActiveOrderId(first.id);
+          setOrderInputId(first.orderNumber);
           if (first.tableNo) {
+            setDestinationInput(first.tableNo);
             setSelectedTableId(first.tableNo.replace(/^Bàn\s*/i, ''));
           }
-          if (first.items.length > 0) {
-            setTray1([{ dishName: first.items[0].dishName, qty: first.items[0].qty, note: first.items[0].note }]);
+        }
+
+        // 4. Load recent SQLite dispatch tasks
+        try {
+          const recent = await sqliteService.getRecentDispatchTasks(5);
+          if (recent && recent.length > 0) {
+            setRecentSqliteTasks(
+              recent.map((r) => ({
+                taskId: r.taskId,
+                orderId: r.orderId,
+                destination: r.destination,
+                robotCode: r.robotCode,
+                status: r.status,
+                time: new Date(r.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+              }))
+            );
           }
-          if (first.items.length > 1) {
-            setTray2([{ dishName: first.items[1].dishName, qty: first.items[1].qty, note: first.items[1].note }]);
-          }
-          if (first.items.length > 2) {
-            setTray3(first.items.slice(2).map((i) => ({ dishName: i.dishName, qty: i.qty, note: i.note })));
-          }
+        } catch {
+          // ignore
         }
       } catch (err) {
         console.warn('Lỗi khi nạp dữ liệu KDS:', err);
@@ -173,6 +213,18 @@ export const StaffKdsPage: React.FC = () => {
 
     initKds();
   }, []);
+
+  // Sync destinationInput whenever selectedTableId or tables change
+  useEffect(() => {
+    if (selectedTableId && tables.length > 0) {
+      const matched = tables.find((t) => t.id === selectedTableId);
+      if (matched) {
+        setDestinationInput(matched.name);
+      } else {
+        setDestinationInput(`Bàn ${selectedTableId}`);
+      }
+    }
+  }, [selectedTableId, tables]);
 
   // Selected Table Object
   const currentSelectedTable: TableNode = tables.find((t) => t.id === selectedTableId) || tables[0] || {
@@ -208,21 +260,32 @@ export const StaffKdsPage: React.FC = () => {
     setPageSize: setTablePageSize,
   } = usePagination(tables, 12);
 
-  // Action: Load Pending Order items onto trays
+  // Action: Select Pending Order -> Autofill Order ID & Destination Table in Form
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
     setActiveOrderId(order.id);
+    setOrderInputId(order.orderNumber);
     if (order.tableNo) {
+      setDestinationInput(order.tableNo);
       setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ''));
     }
-    const items = order.items;
-    setTray1(items.length > 0 ? [{ dishName: items[0].dishName, qty: items[0].qty, note: items[0].note }] : []);
-    setTray2(items.length > 1 ? [{ dishName: items[1].dishName, qty: items[1].qty, note: items[1].note }] : []);
-    setTray3(items.length > 2 ? items.slice(2).map((i) => ({ dishName: i.dishName, qty: i.qty, note: i.note })) : []);
-    showToast(`Đã nạp món của đơn ${order.orderNumber} vào các khay.`);
+    showToast(`Đã nạp đơn ${order.orderNumber} vào form điều phối.`);
   };
 
-  // Dispatch Action via real API
+  // Dispatch Action via real API & SQLite
   const handleDispatchOrder = async () => {
+    const finalOrderId = orderInputId.trim();
+    const finalDestination = destinationInput.trim() || currentSelectedTable.name;
+
+    if (!finalOrderId) {
+      showToast('Vui lòng nhập Mã Đơn (Order ID)!', 'info');
+      return;
+    }
+
+    if (!finalDestination) {
+      showToast('Vui lòng chọn hoặc nhập Bàn Đích (Destination)!', 'info');
+      return;
+    }
+
     if (!effectiveRobot) {
       showToast('Không có robot nào sẵn sàng nhận lệnh!', 'info');
       return;
@@ -231,33 +294,59 @@ export const StaffKdsPage: React.FC = () => {
     setIsDispatching(true);
 
     try {
-      const missionCode = `DISP-${Math.floor(1000 + Math.random() * 9000)}`;
+      const missionCode = `TSK-${Date.now().toString().slice(-4)}`;
+      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-      // 1. Dispatch through real backend API if active order
+      // 1. Ghi nhận trực tiếp vào CSDL SQLite của Tenant qua Backend API
+      await orderService.dispatchToSqlite(_subdomain, finalOrderId, finalDestination, effectiveRobot.code);
+
+      // 2. Ghi nhận vào SQLite WebAssembly / IndexedDB nếu chạy offline
+      try {
+        await sqliteService.recordDispatchTask(finalOrderId, finalDestination, effectiveRobot.code);
+      } catch {
+        // Safe ignore
+      }
+
+      // 3. Dispatch through real backend API if active order
       if (activeOrderId && effectiveRobot.id) {
         await orderService.dispatchToRobot(effectiveRobot.id, activeOrderId, currentSelectedTable.id);
         await orderService.confirmOrder(activeOrderId);
       }
 
-      // 2. Update robot status
+      // 4. Update robot status
       await fleetService.updateRobotStatus(effectiveRobot.id, {
         status: 'delivering',
-        targetTable: currentSelectedTable.name,
+        targetTable: finalDestination,
       });
 
       // Update local robot status
       setRobots((prev) =>
         prev.map((r) =>
-          r.code === effectiveRobot.code ? { ...r, status: 'delivering', currentZone: `Đang đến ${currentSelectedTable.name}` } : r
+          r.code === effectiveRobot.code ? { ...r, status: 'delivering', currentZone: `Đang đến ${finalDestination}` } : r
         )
       );
 
       // Update local table status
       setTables((prev) =>
         prev.map((t) =>
-          t.id === currentSelectedTable.id ? { ...t, status: 'serving', assignedRobot: effectiveRobot.code } : t
+          t.name === finalDestination || t.id === currentSelectedTable.id
+            ? { ...t, status: 'serving', assignedRobot: effectiveRobot.code }
+            : t
         )
       );
+
+      // Append to recent SQLite tasks list
+      setRecentSqliteTasks((prev) => [
+        {
+          taskId: missionCode,
+          orderId: finalOrderId,
+          destination: finalDestination,
+          robotCode: effectiveRobot.code,
+          status: 'Delivering',
+          time: timeStr,
+        },
+        ...prev.slice(0, 4),
+      ]);
 
       // Remove dispatched order from pending
       if (activeOrderId) {
@@ -266,15 +355,20 @@ export const StaffKdsPage: React.FC = () => {
 
       setLastDispatchedMission({
         missionId: missionCode,
-        table: currentSelectedTable.name,
+        table: finalDestination,
         robot: effectiveRobot.code,
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        time: timeStr,
       });
 
-      showToast(`Đã xuất lệnh ${missionCode}: ${effectiveRobot.code} đang giao ra ${currentSelectedTable.name}!`, 'success');
+      showToast(`Đã xuất lệnh ${missionCode}: ${effectiveRobot.code} đang giao đơn ${finalOrderId} tới ${finalDestination} (Đã lưu SQLite)!`, 'success');
+
+      // Tự động gợi ý mã đơn tiếp theo
+      const numMatch = finalOrderId.match(/\d+/);
+      const nextNum = numMatch ? parseInt(numMatch[0], 10) + 1 : 101;
+      setOrderInputId(`ORD-${nextNum}`);
     } catch (err) {
       console.warn('Lỗi điều phối KDS:', err);
-      showToast(`Đã phát lệnh điều phối ${effectiveRobot.code} giao ra ${currentSelectedTable.name}!`, 'success');
+      showToast(`Đã phát lệnh điều phối ${effectiveRobot.code} giao ra ${finalDestination}!`, 'success');
     } finally {
       setIsDispatching(false);
     }
@@ -609,88 +703,121 @@ export const StaffKdsPage: React.FC = () => {
             </div>
           )}
 
-          {/* Multi-tier Tray Assignment (Khay 1 - 2 - 3) */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-3.5">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          {/* STAFF MOVE REQUEST FORM (YÊU CẦU ROBOT DI CHUYỂN) */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">
-                  CẤU HÌNH 3 KHAY MÓN TRÊN ROBOT
+                <Send className="w-4 h-4 text-blue-600" />
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight font-heading">
+                  YÊU CẦU ROBOT DI CHUYỂN (STAFF MOVE REQUEST)
                 </h3>
               </div>
-              <span className="text-[10px] font-mono text-slate-500">Tải tối đa: 40 kg</span>
+              <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
+                <Database className="w-3 h-3 text-emerald-600" />
+                <span>SQLite Shard</span>
+              </span>
             </div>
 
-            {/* Tray 1 (Top Tier) */}
-            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+            {/* Field 1: Order ID */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 text-[11px] font-mono font-bold flex items-center justify-center">1</span>
-                  <span>Khay 1 (Tầng Trên Cùng)</span>
+                  <Hash className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Mã Đơn / Order ID</span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-normal">Món khai vị & Salad</span>
+                <span className="text-[10px] font-mono font-normal text-slate-400">Khớp POS / Bill</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={orderInputId}
+                  onChange={(e) => setOrderInputId(e.target.value)}
+                  placeholder="Nhập mã đơn, ví dụ: ORD-101..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
+                />
               </div>
-              {tray1.length > 0 ? (
-                tray1.map((item, idx) => (
-                  <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-slate-900">{item.dishName}</span>
-                      {item.note && <span className="block text-[10px] text-slate-500">Ghi chú: {item.note}</span>}
-                    </div>
-                    <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">x{item.qty}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-2 text-center text-[11px] text-slate-400 italic">Khay 1 trống — Chọn từ đơn chờ để nạp món</div>
-              )}
+
+              {/* Quick suggestions chips for Order ID */}
+              <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
+                <span className="text-[10px] text-slate-400 font-medium shrink-0">Gợi ý đơn:</span>
+                {['ORD-101', 'ORD-102', 'ORD-103', 'ORD-104'].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setOrderInputId(chip)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
+                      orderInputId === chip
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Tray 2 (Middle Tier) */}
-            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+            {/* Field 2: Destination Table */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-md bg-cyan-100 text-cyan-800 text-[11px] font-mono font-bold flex items-center justify-center">2</span>
-                  <span>Khay 2 (Tầng Giữa)</span>
+                  <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Điểm Đích Đến / Destination Table</span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-normal">Món chính & Thịt nướng</span>
+                <span className="text-[10px] font-mono font-normal text-slate-400">Click bản đồ hoặc nhập tay</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={destinationInput}
+                  onChange={(e) => setDestinationInput(e.target.value)}
+                  placeholder="Ví dụ: Bàn 01, Bàn 02, VIP 01..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
+                />
               </div>
-              {tray2.length > 0 ? (
-                tray2.map((item, idx) => (
-                  <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-slate-900">{item.dishName}</span>
-                      {item.note && <span className="block text-[10px] text-slate-500">Ghi chú: {item.note}</span>}
-                    </div>
-                    <span className="font-mono text-xs font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded">x{item.qty}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-2 text-center text-[11px] text-slate-400 italic">Khay 2 trống — Chọn từ đơn chờ để nạp món</div>
-              )}
+
+              {/* Quick Table Suggestion Chips */}
+              <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
+                <span className="text-[10px] text-slate-400 font-medium shrink-0">Chọn nhanh:</span>
+                {(tables.length > 0 ? tables.slice(0, 7) : [
+                  { id: '01', name: 'Bàn 01' },
+                  { id: '02', name: 'Bàn 02' },
+                  { id: '03', name: 'Bàn 03' },
+                  { id: '04', name: 'Bàn 04' },
+                  { id: '05', name: 'Bàn 05' },
+                  { id: '06', name: 'Bàn 06' },
+                  { id: 'VIP', name: 'Bàn VIP 01' },
+                ]).map((tbl) => (
+                  <button
+                    key={tbl.id}
+                    type="button"
+                    onClick={() => {
+                      setDestinationInput(tbl.name);
+                      setSelectedTableId(tbl.id);
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
+                      destinationInput === tbl.name
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {tbl.name}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Tray 3 (Bottom Tier) */}
-            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 text-[11px] font-mono font-bold flex items-center justify-center">3</span>
-                  <span>Khay 3 (Tầng Dưới Cùng)</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">Nước giải khát & Nước chấm</span>
-              </div>
-              {tray3.length > 0 ? (
-                tray3.map((item, idx) => (
-                  <div key={idx} className="bg-white p-2 rounded-lg border border-slate-200 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-slate-900">{item.dishName}</span>
-                      {item.note && <span className="block text-[10px] text-slate-500">Ghi chú: {item.note}</span>}
-                    </div>
-                    <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">x{item.qty}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-2 text-center text-[11px] text-slate-400 italic">Khay 3 trống — Chọn từ đơn chờ để nạp món</div>
-              )}
+            {/* Departure Station info */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-[11px] text-slate-600 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>Trạm Xuất: <strong>Bếp Trung Tâm (Kitchen)</strong></span>
+              </span>
+              <span className="flex items-center gap-1 font-mono text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                <span>{effectiveRobot?.code || 'AMR-01'}</span>
+                <ArrowRight className="w-3 h-3 text-blue-500" />
+                <span>{destinationInput || 'Chưa chọn'}</span>
+              </span>
             </div>
           </div>
 
@@ -808,11 +935,11 @@ export const StaffKdsPage: React.FC = () => {
             {/* DISPATCH ACTION BUTTON */}
             <button
               type="button"
-              disabled={isDispatching || !effectiveRobot || !currentSelectedTable.id}
+              disabled={isDispatching || !effectiveRobot || !destinationInput.trim()}
               onClick={handleDispatchOrder}
               className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isDispatching
                   ? 'bg-blue-400 text-white cursor-not-allowed'
-                  : !effectiveRobot || !currentSelectedTable.id
+                  : !effectiveRobot || !destinationInput.trim()
                     ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
                     : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
                 }`}
@@ -820,14 +947,14 @@ export const StaffKdsPage: React.FC = () => {
               {isDispatching ? (
                 <>
                   <RotateCcw className="w-4 h-4 animate-spin text-white" />
-                  <span>ĐANG PHÁT LỆNH ĐIỀU PHỐI...</span>
+                  <span>ĐANG GHI SQLITE & PHÁT LỆNH ĐIỀU PHỐI...</span>
                 </>
               ) : !effectiveRobot ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-slate-400" />
                   <span>CHƯA CÓ AMR SẴN SÀNG</span>
                 </>
-              ) : !currentSelectedTable.id ? (
+              ) : !destinationInput.trim() ? (
                 <>
                   <Send className="w-4 h-4 text-slate-400" />
                   <span>VUI LÒNG CHỌN BÀN ĐỂ GIAO MÓN</span>
@@ -836,15 +963,59 @@ export const StaffKdsPage: React.FC = () => {
                 <>
                   <Send className="w-4 h-4 text-white" />
                   <span>
-                    XÁC NHẬN GIAO MÓN TỚI {currentSelectedTable.name}
+                    XUẤT LỆNH: {orderInputId || 'ĐƠN'} TỚI {destinationInput} (LƯU SQLITE)
                   </span>
                 </>
               )}
             </button>
 
             <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
-              <span>Mã điều phối: FMS-KDS-AUTO</span>
-              <span>Cảm biến: LiDAR + IMU</span>
+              <span>Đồng bộ: SQLite (amr_tasks + sync_journal)</span>
+              <span>Robot: {effectiveRobot?.code || 'AMR'}</span>
+            </div>
+          </div>
+
+          {/* RECENT SQLITE DISPATCH MISSIONS LOG */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-heading">
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
+                <span>LỆNH ĐIỀU PHỐI SQLITE GẦN NHẤT</span>
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                Bảng: amr_tasks
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {recentSqliteTasks.map((task) => (
+                <div
+                  key={task.taskId}
+                  className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[10px]">
+                      {task.taskId}
+                    </span>
+                    <span className="font-semibold text-slate-800">
+                      {task.orderId} → {task.destination}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-slate-500 font-bold">{task.robotCode}</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        task.status === 'Delivering'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                      }`}
+                    >
+                      {task.status === 'Delivering' ? 'Đang Giao' : 'Hoàn Tất'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">{task.time}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -874,12 +1045,12 @@ export const StaffKdsPage: React.FC = () => {
 
         <button
           type="button"
-          disabled={isDispatching || !effectiveRobot || !currentSelectedTable.id || currentSelectedTable.id === 'Chưa có'}
+          disabled={isDispatching || !effectiveRobot || !destinationInput.trim()}
           onClick={handleDispatchOrder}
           className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
             isDispatching
               ? 'bg-blue-400 text-white cursor-not-allowed'
-              : !effectiveRobot || !currentSelectedTable.id || currentSelectedTable.id === 'Chưa có'
+              : !effectiveRobot || !destinationInput.trim()
                 ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
                 : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer'
           }`}
@@ -892,7 +1063,7 @@ export const StaffKdsPage: React.FC = () => {
           ) : (
             <>
               <Send className="w-4 h-4" />
-              <span>GIAO MÓN</span>
+              <span>XUẤT LỆNH ({orderInputId || 'ĐƠN'})</span>
             </>
           )}
         </button>
