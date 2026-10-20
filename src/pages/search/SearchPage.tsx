@@ -168,6 +168,7 @@ export function SearchPage() {
   const [chatHistory, setChatHistory] = useState<ChatMessageDto[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [confirmedZaloIds, setConfirmedZaloIds] = useState<Set<string>>(new Set());
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -227,9 +228,19 @@ export function SearchPage() {
   // --- Chat ---
   const handleAsk = async (e?: React.FormEvent) => {
     e?.preventDefault(); if (!question.trim()) return;
+    const text = question.trim();
+    const lowerText = text.toLowerCase();
+    const isAffirmative = ['ok', 'oke', 'okay', 'oki', 'có', 'có chứ', 'đồng ý', 'yes', 'yep', 'muốn', 'tôi muốn', 'trao đổi'].includes(lowerText);
+    const lastMsg = chatHistory[chatHistory.length - 1];
+    if (isAffirmative && lastMsg && lastMsg.role === 'assistant' && 
+       (lastMsg.content.includes('Bạn có muốn trao đổi với kĩ sư') || lastMsg.content.includes('Bạn có muốn trao đổi với kỹ sư'))) {
+      setConfirmedZaloIds(prev => new Set([...prev, lastMsg.id]));
+      window.open('https://zalo.me/0366648307', '_blank');
+    }
+
     setAskLoading(true); setAskError(null);
     try {
-      const res = await searchService.sendMessage({ content: question.trim(), conversationId: activeConversationId ?? undefined });
+      const res = await searchService.sendMessage({ content: text, conversationId: activeConversationId ?? undefined });
       setAskResponse({ answer: res.assistantReply.content, contextProducts: res.contextProducts });
       setChatHistory(prev => [...prev, res.userMessage, res.assistantReply]);
       setActiveConversationId(res.userMessage.id);
@@ -403,6 +414,42 @@ export function SearchPage() {
                           dangerouslySetInnerHTML={{ __html: parseMarkdown(m.content) }}
                         />
                       )}
+                      {m.role === 'assistant' && (m.content.includes('Bạn có muốn trao đổi với kĩ sư') || m.content.includes('Bạn có muốn trao đổi với kỹ sư')) && (
+                        <div className="mt-3 p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl space-y-2 text-left">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                            <Icons.Robot className="w-4 h-4 text-blue-600" />
+                            <span>Kết Nối Kỹ Sư Trưởng AMR</span>
+                          </div>
+                          <p className="text-xs text-blue-800 leading-relaxed">
+                            Cơ sở dữ liệu chưa có đủ thông tin chi tiết. Bạn có thể trao đổi trực tiếp với <strong>Kỹ Sư Nguyễn Văn Trọng (Trưởng Nhóm Kỹ Thuật AMR)</strong> qua Zalo hoặc Hotline 0366 648 307.
+                          </p>
+                          {confirmedZaloIds.has(m.id) ? (
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                              <Icons.SuccessCheck className="w-4 h-4 text-emerald-600" />
+                              <span>Đã mở Zalo kết nối với Kỹ Sư Trọng (0366 648 307)</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmedZaloIds(prev => new Set([...prev, m.id]));
+                                  window.open('https://zalo.me/0366648307', '_blank');
+                                }}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <span>OK (Mở Zalo ngay)</span>
+                              </button>
+                              <a
+                                href="tel:0366648307"
+                                className="text-xs text-blue-700 font-semibold hover:underline"
+                              >
+                                Hotline: 0366 648 307
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {m.responseTimeMs != null && m.role === 'assistant' && (
                         <span className="block text-[9px] mt-1.5 opacity-50 font-mono text-right">
                           {m.responseTimeMs}ms
@@ -425,6 +472,17 @@ export function SearchPage() {
                   className="prose prose-emerald max-w-none text-emerald-800 text-sm font-semibold leading-relaxed space-y-2"
                   dangerouslySetInnerHTML={{ __html: parseMarkdown(askResponse.answer) }}
                 />
+                {(askResponse.answer.includes('Bạn có muốn trao đổi với kĩ sư') || askResponse.answer.includes('Bạn có muốn trao đổi với kỹ sư')) && (
+                  <div className="mt-3 pt-2 border-t border-emerald-200/60 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.open('https://zalo.me/0366648307', '_blank')}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+                    >
+                      OK (Mở Zalo: 0366 648 307)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
