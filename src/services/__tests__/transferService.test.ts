@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/services/api', () => ({
   __esModule: true,
-  default: { get: vi.fn(), delete: vi.fn() },
+  default: { get: vi.fn(), delete: vi.fn(), post: vi.fn() },
 }));
 
 import apiClient from '@/services/api';
@@ -11,6 +11,7 @@ import { transferService } from '@/services/transferService';
 
 const get = apiClient.get as ReturnType<typeof vi.fn>;
 const del = apiClient.delete as ReturnType<typeof vi.fn>;
+const post = apiClient.post as ReturnType<typeof vi.fn>;
 
 beforeEach(() => { vi.clearAllMocks(); });
 
@@ -57,5 +58,29 @@ describe('transferService', () => {
     get.mockResolvedValue({ data: { commandId: 'c1', executionResult: 'OK' } });
     const res = await transferService.getCommandLog('c1');
     expect(res.executionResult).toBe('OK');
+  });
+  it('startServiceSequence calls /v1/tasks/sequence/start with payload', async () => {
+    const mockResult = {
+      success: true,
+      message: 'Sequence started',
+      robotId: 'r1',
+      robotName: 'AMR-01',
+      totalStops: 2,
+      totalWeightKg: 5.0,
+      createdTasks: [],
+    };
+    post.mockResolvedValue({ data: mockResult });
+
+    const req = {
+      fromStationId: 'st-kitchen',
+      trayAssignments: [
+        { cargoLevel: 1, toStationId: 'st-01', weightKg: 2.0, volumeLiters: 3.0, priority: 1 },
+      ],
+    };
+
+    const res = await transferService.startServiceSequence(req);
+    expect(post).toHaveBeenCalledWith('/v1/tasks/sequence/start', req);
+    expect(res.success).toBe(true);
+    expect(res.totalStops).toBe(2);
   });
 });

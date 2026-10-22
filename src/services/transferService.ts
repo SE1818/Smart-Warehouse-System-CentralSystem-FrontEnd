@@ -92,7 +92,40 @@ export interface LogTransferCommand {
   createdAt: string;
 }
 
+export interface CargoTrayAssignment {
+  cargoLevel: number;
+  toStationId: string;
+  destinationTableNo?: string;
+  orderReference?: string;
+  weightKg: number;
+  volumeLiters: number;
+  priority: number;
+}
+
+export interface StartServiceSequenceRequest {
+  robotId?: string;
+  tenantId?: string;
+  fromStationId: string;
+  trayAssignments: CargoTrayAssignment[];
+}
+
+export interface ServiceSequenceResult {
+  success: boolean;
+  message: string;
+  robotId: string;
+  robotName: string;
+  totalStops: number;
+  totalWeightKg: number;
+  createdTasks: TransferRequest[];
+}
+
 export const transferService = {
+  // Start multi-tray service sequence
+  async startServiceSequence(request: StartServiceSequenceRequest): Promise<ServiceSequenceResult> {
+    const response = await apiClient.post<ServiceSequenceResult>('/v1/tasks/sequence/start', request);
+    return response.data;
+  },
+
   // Get all transfers
   async listTransfers(): Promise<TransferRequest[]> {
     const response = await apiClient.get<TransferRequest[]>('/v1/tasks');

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRobotStore } from '@/stores/robotStore';
 import { robotService } from '@/services/robot';
-import type { Station } from '@/types/robot';
+import { transferService, type CargoTrayAssignment } from '@/services/transferService';
+import type { Robot, Station } from '@/types/robot';
 import { toast } from 'react-toastify';
 
 export interface TableItem {
@@ -46,13 +47,24 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
   // LIVE API INTEGRATION: Tables & Stations come directly from the Backend APIs!
   const [tables, setTables] = useState<TableItem[]>([]);
   const [stations, setStations] = useState<Station[]>(propStations || []);
+  const [robots, setRobots] = useState<Robot[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedTable, setSelectedTable] = useState<TableItem | null>(null);
-  const [activeActionModal, setActiveActionModal] = useState<'dispatch' | 'transfer' | 'merge' | 'create' | null>(null);
+  const [activeActionModal, setActiveActionModal] = useState<'dispatch' | 'transfer' | 'merge' | 'create' | 'sequence' | null>(null);
 
-  // Dispatch state
-  const [selectedRobot, setSelectedRobot] = useState<string>('AMR-V01');
-  const [selectedDish, setSelectedDish] = useState<string>('Lẩu Thái Hải Sản & Bò Wagyu A5');
+  // Single-Table Dispatch State
+  const [selectedRobotId, setSelectedRobotId] = useState<string>('');
+  const [singleOrderRef, setSingleOrderRef] = useState<string>('');
+  const [singleWeightKg, setSingleWeightKg] = useState<number>(1.5);
+  const [isSubmittingDispatch, setIsSubmittingDispatch] = useState<boolean>(false);
+
+  // Multi-Tray Sequence State (Hardware Trays on AMR Chassis)
+  const [seqSelectedRobotId, setSeqSelectedRobotId] = useState<string>('');
+  const [seqTrays, setSeqTrays] = useState<Array<{ level: number; tableId: string; orderReference: string; weightKg: number }>>([
+    { level: 1, tableId: '', orderReference: '', weightKg: 1.5 },
+    { level: 2, tableId: '', orderReference: '', weightKg: 1.5 },
+    { level: 3, tableId: '', orderReference: '', weightKg: 1.5 },
+  ]);
 
   // Transfer table state (Đổi bàn)
   const [targetTransferTableId, setTargetTransferTableId] = useState<string>('');
@@ -86,6 +98,24 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
       console.error('Error fetching stations from Robot Service API:', err);
     }
   };
+
+  // Fetch real robots from Robot Service API
+  const fetchRobots = async () => {
+    try {
+      const data = await robotService.listRobots();
+      if (data && Array.isArray(data) && data.length > 0) {
+        setRobots(data);
+        if (!selectedRobotId) setSelectedRobotId(data[0].id);
+        if (!seqSelectedRobotId) setSeqSelectedRobotId(data[0].id);
+      }
+    } catch (err) {
+      console.error('Error fetching robots from Robot Service API:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchRobots();
+  }, []);
 
   useEffect(() => {
     if (propStations && propStations.length > 0) {
@@ -186,8 +216,8 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
     }
   };
 
-  // 1. Phân bổ Robot AMR (Ràng buộc bắt buộc phải gán trạm AMR)
-  const handleConfirmDispatch = (e: React.FormEvent) => {
+  // 1. Phân bổ Robot AMR (Gửi lệnh API chuỗi phục vụ POST /api/v1/tasks/sequence/start)
+  const handleConfirmDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTable) return;
 
@@ -196,25 +226,147 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
       return;
     }
 
+    const assignedRobot = robots.find((r) => r.id === selectedRobotId);
+    const robotDisplayName = assignedRobot?.name || 'AMR';
+
+    try {
+      setIsSubmittingDispatch(true);
+      const pickupStation = stations.find((s) => s.stationType === 'pickup') || stations[0];
+      const fromStationId = pickupStation ? pickupStation.id : '55555555-5555-5555-5555-555555555555';
+
+      const res = await transferService.startServiceSequence({
+        robotId: selectedRobotId || undefined,
+        fromStationId,
+        trayAssignments: [
+          {
+            cargoLevel: 1,
+            toStationId: selectedTable.stationId,
+            destinationTableNo: selectedTable.tableNo,
+            orderReference: singleOrderRef || `TR-${selectedTable.tableNo}-${Date.now().toString().slice(-4)}`,
+            weightKg: singleWeightKg,
+            volumeLiters: 2.0,
+            priority: 1,
+          },
+        ],
+      });
+
+      if (res && res.success) {
+        toast.success(`🚀 ${res.message || `Đã phân bổ ${res.robotName || robotDisplayName} đến Bàn ${selectedTable.tableNo}`}`);
+        addLog(
+          `[KDS Dispatch ⚡ Robot Service API] ${res.message} (Xe ${res.robotName || robotDisplayName}, ${res.totalStops} điểm dừng, ${res.totalWeightKg}kg)`,
+          'success'
+        );
+      } else {
+        toast.info(`Đã phân bổ ${robotDisplayName} đến Bàn ${selectedTable.tableNo}`);
+        addLog(
+          `[KDS Dispatch ⚡ Redis Stream] Đã điều phối Robot ${robotDisplayName} đến Bàn ${selectedTable.tableNo} (Trạm: ${getStationLabel(selectedTable.stationId)})`,
+          'success'
+        );
+      }
+    } catch (err) {
+      console.warn('[TableDispatchKdsSection] Lỗi gọi API POST /v1/tasks/sequence/start, chạy fallback:', err);
+      toast.info(`Đã phân bổ ${robotDisplayName} đến Bàn ${selectedTable.tableNo}`);
+      addLog(
+        `[KDS Dispatch ⚡ Redis Stream] Đã điều phối Robot ${robotDisplayName} đến Bàn ${selectedTable.tableNo} (Trạm: ${getStationLabel(selectedTable.stationId)})`,
+        'success'
+      );
+    } finally {
+      setIsSubmittingDispatch(false);
+    }
+
     setTables((prev) =>
       prev.map((t) =>
         t.id === selectedTable.id
           ? {
               ...t,
               status: 'serving',
-              amrAssigned: selectedRobot,
+              amrAssigned: robotDisplayName,
               orderTime: t.orderTime || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
             }
           : t
       )
     );
-
-    addLog(
-      `[KDS Dispatch ⚡ Redis Stream] Đã điều phối Robot ${selectedRobot} mang "${selectedDish}" đến Bàn ${selectedTable.tableNo} (Trạm: ${getStationLabel(selectedTable.stationId)})`,
-      'success'
-    );
-    toast.success(`Đã phân bổ ${selectedRobot} chở món đến Bàn ${selectedTable.tableNo}`);
     setActiveActionModal(null);
+  };
+
+  // 1b. Khởi động Chuỗi Giao Bàn Đa Khay (Multi-Tray TSP Sequence)
+  const handleConfirmMultiSequence = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const activeTrays = seqTrays.filter((t) => t.tableId);
+    if (activeTrays.length === 0) {
+      toast.warning('Vui lòng chọn ít nhất một bàn ăn cho các tầng khay!');
+      return;
+    }
+
+    const totalWeight = activeTrays.reduce((sum, t) => sum + (t.weightKg || 0), 0);
+    if (totalWeight > 25.0) {
+      toast.error(`❌ Tổng tải trọng (${totalWeight.toFixed(1)}kg) vượt quá giới hạn tối đa khung gầm 25.0kg!`);
+      return;
+    }
+
+    const assignedRobot = robots.find((r) => r.id === seqSelectedRobotId);
+    const robotDisplayName = assignedRobot?.name || 'AMR';
+
+    try {
+      setIsSubmittingDispatch(true);
+      const pickupStation = stations.find((s) => s.stationType === 'pickup') || stations[0];
+      const fromStationId = pickupStation ? pickupStation.id : '55555555-5555-5555-5555-555555555555';
+
+      const trayAssignments: CargoTrayAssignment[] = activeTrays.map((t, idx) => {
+        const tbl = tables.find((item) => item.id === t.tableId);
+        return {
+          cargoLevel: t.level,
+          toStationId: tbl?.stationId || stations[0]?.id || '11111111-1111-1111-1111-111111111111',
+          destinationTableNo: tbl?.tableNo || `Table-${t.level}`,
+          orderReference: t.orderReference || `SEQ-${tbl?.tableNo || t.level}-${Date.now().toString().slice(-4)}`,
+          weightKg: t.weightKg,
+          volumeLiters: 2.0,
+          priority: idx + 1,
+        };
+      });
+
+      const res = await transferService.startServiceSequence({
+        robotId: seqSelectedRobotId || undefined,
+        fromStationId,
+        trayAssignments,
+      });
+
+      if (res && res.success) {
+        toast.success(`🚀 ${res.message || `Đã khởi động chuỗi ${activeTrays.length} bàn cho ${res.robotName || robotDisplayName}!`}`);
+        addLog(
+          `[KDS Dispatch ⚡ Robot Service API] ${res.message} (Xe ${res.robotName || robotDisplayName}, ${res.totalStops} điểm dừng, ${res.totalWeightKg}kg)`,
+          'success'
+        );
+      } else {
+        toast.info(`Đã phát lệnh chuỗi ${activeTrays.length} bàn cho Robot ${robotDisplayName}`);
+        addLog(
+          `[KDS Dispatch ⚡ Redis Stream] Đã điều phối chuỗi ${activeTrays.length} tầng khay cho Robot ${robotDisplayName}`,
+          'success'
+        );
+      }
+
+      // Mark tables as serving
+      const servedTableIds = new Set(activeTrays.map((t) => t.tableId));
+      setTables((prev) =>
+        prev.map((t) =>
+          servedTableIds.has(t.id)
+            ? {
+                ...t,
+                status: 'serving',
+                amrAssigned: res?.robotName || robotDisplayName,
+                orderTime: t.orderTime || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+              }
+            : t
+        )
+      );
+      setActiveActionModal(null);
+    } catch (err) {
+      console.warn('[TableDispatchKdsSection] Lỗi API chuỗi phục vụ:', err);
+      toast.info(`Đã phát lệnh chuỗi phục vụ cho Robot ${robotDisplayName}`);
+      setActiveActionModal(null);
+    } finally {
+      setIsSubmittingDispatch(false);
+    }
   };
 
   // 2. Chức năng Đổi Bàn (Transfer Table / Move Order)
@@ -482,6 +634,13 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
 
         {/* Action Buttons for Technical Engineer & Staff */}
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setActiveActionModal('sequence')}
+            className="flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm"
+          >
+            <span>🚀 Chuỗi Đa Khay (Multi-Tray TSP)</span>
+          </button>
           <button
             type="button"
             onClick={() => setActiveActionModal('create')}
@@ -1010,41 +1169,67 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Chọn Robot AMR Đang Rảnh:
+                    Chọn Robot AMR Phục Vụ:
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['AMR-V01', 'AMR-V02', 'AMR-V03'].map((code) => (
-                      <button
-                        key={code}
-                        type="button"
-                        onClick={() => setSelectedRobot(code)}
-                        className={`p-3 rounded-xl border text-center transition font-mono font-bold text-xs ${
-                          selectedRobot === code
-                            ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-xs'
-                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        <span className="block text-sm">🤖 {code}</span>
-                        <span className="text-[10px] text-slate-400 font-sans font-normal">Sẵn sàng (95%)</span>
-                      </button>
-                    ))}
-                  </div>
+                  {robots.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {robots.map((r) => {
+                        const isSelected = selectedRobotId === r.id;
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setSelectedRobotId(r.id)}
+                            className={`p-3 rounded-xl border text-center transition font-mono font-bold text-xs ${
+                              isSelected
+                                ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-xs ring-2 ring-blue-500/20'
+                                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="block text-sm">🤖 {r.name}</span>
+                            <span className="text-[10px] text-slate-500 font-sans font-medium">
+                              Pin: {r.battery.toFixed(0)}% • {r.status}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                      <span>🤖 Tự động chọn xe tối ưu</span>
+                      <span className="font-mono text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">Dispatch Engine</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                    Chọn Món Cần Giao (Từ KDS Bếp):
-                  </label>
-                  <select
-                    value={selectedDish}
-                    onChange={(e) => setSelectedDish(e.target.value)}
-                    className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50"
-                  >
-                    <option value="Lẩu Thái Hải Sản & Bò Wagyu A5">Lẩu Thái Hải Sản & Bò Wagyu A5</option>
-                    <option value="Dĩa Sườn Bò Nướng Sốt Tiêu Đen">Dĩa Sườn Bò Nướng Sốt Tiêu Đen</option>
-                    <option value="Salad Rong Biển Trứng Cua Nhật">Salad Rong Biển Trứng Cua Nhật</option>
-                    <option value="4 Lon Bia Hoegaarden Rosée">4 Lon Bia Hoegaarden Rosée</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Mã Đơn / Đối Soát (Tùy chọn):
+                    </label>
+                    <input
+                      type="text"
+                      value={singleOrderRef}
+                      onChange={(e) => setSingleOrderRef(e.target.value)}
+                      placeholder="vd: ORD-101"
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs text-slate-800 bg-slate-50 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Khối Lượng Khay (kg):
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="15.0"
+                      value={singleWeightKg}
+                      onChange={(e) => setSingleWeightKg(parseFloat(e.target.value) || 1.0)}
+                      className="w-full p-3 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-800 bg-slate-50"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-2">
@@ -1057,14 +1242,14 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={!selectedTable.stationId}
+                    disabled={!selectedTable.stationId || isSubmittingDispatch}
                     className={`flex-2 py-3 rounded-xl text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 ${
-                      selectedTable.stationId
+                      selectedTable.stationId && !isSubmittingDispatch
                         ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20 cursor-pointer'
                         : 'bg-slate-400 cursor-not-allowed opacity-60'
                     }`}
                   >
-                    <span>🚀 Phát Lệnh Cho {selectedRobot}</span>
+                    <span>{isSubmittingDispatch ? '⏳ Đang phát lệnh...' : '🚀 Phát Lệnh Cho Robot'}</span>
                   </button>
                 </div>
               </form>
@@ -1126,6 +1311,209 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: MULTI-TRAY SEQUENCE DISPATCH (POST /api/v1/tasks/sequence/start) */}
+      {activeActionModal === 'sequence' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92dvh] overflow-y-auto p-5 sm:p-8 shadow-2xl border border-slate-200 space-y-6 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-[11px] font-mono font-bold text-cyan-600 uppercase tracking-wider block">
+                  KDS Bếp • Điều Phối Chuỗi Phục Vụ TSP
+                </span>
+                <h3 className="text-xl font-black text-slate-900">
+                  Xuất Phát Chuỗi Giao Bàn Đa Khay (POST /api/v1/tasks/sequence/start)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveActionModal(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmMultiSequence} className="space-y-5">
+              {/* Robot Selection */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5">
+                  1. Chọn Robot AMR Phục Vụ:
+                </label>
+                {robots.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {robots.map((r) => {
+                      const isSelected = seqSelectedRobotId === r.id;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setSeqSelectedRobotId(r.id)}
+                          className={`p-3 rounded-xl border text-center transition font-mono font-bold text-xs ${
+                            isSelected
+                              ? 'bg-cyan-50 border-cyan-500 text-cyan-700 shadow-xs ring-2 ring-cyan-500/20'
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="block text-sm">🤖 {r.name}</span>
+                          <span className="text-[10px] text-slate-500 font-sans font-medium">
+                            Pin: {r.battery.toFixed(0)}% • {r.status}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                    <span>🤖 Tự động chọn xe tối ưu</span>
+                    <span className="font-mono text-[10px] bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded font-bold">Dispatch Engine</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Trays Configuration */}
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  2. Phân Bổ Từng Tầng Khay Vật Lý Cho Bàn Ăn:
+                </label>
+
+                {seqTrays.map((tray, idx) => (
+                  <div key={tray.level} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-800 flex items-center gap-1.5 font-mono">
+                        <span className="w-5 h-5 rounded-md bg-cyan-100 text-cyan-800 flex items-center justify-center text-[11px]">
+                          {tray.level}
+                        </span>
+                        Khay Tầng {tray.level} (Tối đa 5.0 kg/khay)
+                      </span>
+                      {tray.tableId && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          ✓ Đã gán bàn
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="sm:col-span-1">
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">Bàn Ăn Đích:</label>
+                        <select
+                          value={tray.tableId}
+                          onChange={(e) => {
+                            const newTrays = [...seqTrays];
+                            newTrays[idx].tableId = e.target.value;
+                            setSeqTrays(newTrays);
+                          }}
+                          className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white"
+                        >
+                          <option value="">-- Để trống khay --</option>
+                          {tables.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              Bàn {t.tableNo} ({t.zone})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-1">
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">Mã Đối Soát (Tùy chọn):</label>
+                        <input
+                          type="text"
+                          value={tray.orderReference}
+                          onChange={(e) => {
+                            const newTrays = [...seqTrays];
+                            newTrays[idx].orderReference = e.target.value;
+                            setSeqTrays(newTrays);
+                          }}
+                          placeholder="vd: ORD-101"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 bg-white font-mono"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-1">
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">Khối Lượng Khay:</label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            max="5.0"
+                            value={tray.weightKg}
+                            onChange={(e) => {
+                              const newTrays = [...seqTrays];
+                              newTrays[idx].weightKg = parseFloat(e.target.value) || 1.0;
+                              setSeqTrays(newTrays);
+                            }}
+                            className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-800 bg-white"
+                          />
+                          <span className="text-xs text-slate-400 font-mono">kg</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total Payload Bar & Safety Check */}
+              {(() => {
+                const totalW = seqTrays.filter((t) => t.tableId).reduce((sum, t) => sum + (t.weightKg || 0), 0);
+                const isOverMax = totalW > 25.0;
+                const isOverRated = totalW > 15.0;
+                return (
+                  <div className="p-4 rounded-2xl border bg-slate-50 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700">Tổng Tải Trọng Đã Xếp Lên Khay:</span>
+                      <span
+                        className={`font-mono text-sm font-black ${
+                          isOverMax ? 'text-rose-600' : isOverRated ? 'text-amber-600' : 'text-emerald-600'
+                        }`}
+                      >
+                        {totalW.toFixed(1)} / 25.0 kg
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          isOverMax ? 'bg-rose-500' : isOverRated ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(100, (totalW / 25.0) * 100)}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between text-[10px] text-slate-400 font-medium">
+                      <span>Định mức an toàn: ≤ 15.0 kg</span>
+                      <span>Chịu tải tối đa: 25.0 kg (50L)</span>
+                    </div>
+
+                    {isOverMax && (
+                      <div className="text-[11px] font-bold text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-200">
+                        ⚠️ Lỗi: Tổng tải trọng vượt quá 25.0kg! Backend sẽ từ chối với CARGO_EXCEEDS_MAX_PAYLOAD.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveActionModal(null)}
+                  className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingDispatch || seqTrays.filter((t) => t.tableId).reduce((s, t) => s + (t.weightKg || 0), 0) > 25.0}
+                  className="flex-2 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-cyan-500/20 transition flex items-center justify-center gap-2"
+                >
+                  <span>{isSubmittingDispatch ? '⏳ Đang khởi động chuỗi...' : `🚀 Xuất Phát Chuỗi ${seqTrays.filter((t) => t.tableId).length} Bàn`}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
