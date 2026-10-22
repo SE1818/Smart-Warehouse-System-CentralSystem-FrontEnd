@@ -1,115 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
-interface ProductVariant {
-  id: string;
-  skuCode: string;
-  variantName: string;
-  price: number;
-}
-
-interface Product {
-  id: string;
-  sku: string;
-  name: string;
-  description: string;
-  price: number;
-  imageUrl?: string;
-  category?: string;
-  variants?: ProductVariant[];
-}
-
-interface CartItem {
-  product: Product;
-  variant?: ProductVariant;
-  quantity: number;
-}
-
-export const QrOrderPage: React.FC = () => {
+export function QrOrderPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const storeId = searchParams.get('storeId') || '';
-  const tableNo = searchParams.get('tableNo') || searchParams.get('tableId') || 'Khách Tại Bàn';
+  const tableNo = searchParams.get('tableNo') || searchParams.get('tableId') || 'Bàn 01';
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
-  const [orderSuccess, setOrderSuccess] = useState<boolean>(false);
-  const [orderId, setOrderId] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<string>('PAYOS');
+  const [orderCode, setOrderCode] = useState<string>('');
+  const [serviceType, setServiceType] = useState<string>('delivery');
+  const [customerName, setCustomerName] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [orderSuccess, setOrderSuccess] = useState<boolean>(false);
+  const [createdOrderCode, setCreatedOrderCode] = useState<string>('');
+  const [trackingToken, setTrackingToken] = useState<string>('');
 
-  useEffect(() => {
-    fetchProducts();
-  }, [storeId]);
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/v1/products?pageSize=50${storeId ? `&storeId=${storeId}` : ''}`);
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(Array.isArray(data) ? data : data.items || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch products', err);
-    } finally {
-      setLoading(false);
+  const serviceOptions = [
+    {
+      id: 'delivery',
+      title: 'Giao món từ Bếp / Bar',
+      desc: 'Robot AMR vận chuyển khay món đã gọi từ quầy ra bàn của bạn',
+      icon: '🍲'
+    },
+    {
+      id: 'refill',
+      title: 'Tiếp nước / Đá / Gia vị',
+      desc: 'Robot mang thêm nước uống, khăn ướt hoặc đồ dùng bàn ăn',
+      icon: '🥤'
+    },
+    {
+      id: 'cleanup',
+      title: 'Thu dọn khay / Chén dĩa',
+      desc: 'Robot AMR ghé bàn để thu gom đồ dùng và khay trống',
+      icon: '🧹'
+    },
+    {
+      id: 'staff_call',
+      title: 'Gọi nhân viên phục vụ',
+      desc: 'Hỗ trợ đổi bàn, kiểm tra món hoặc thanh toán',
+      icon: '🛎️'
     }
-  };
+  ];
 
-  const addToCart = (product: Product, variant?: ProductVariant) => {
-    setCart((prev) => {
-      const existingIndex = prev.findIndex(
-        (item) => item.product.id === product.id && item.variant?.id === variant?.id
-      );
-      if (existingIndex > -1) {
-        const updated = [...prev];
-        updated[existingIndex].quantity += 1;
-        return updated;
-      }
-      return [...prev, { product, variant, quantity: 1 }];
-    });
-  };
-
-  const updateQuantity = (index: number, delta: number) => {
-    setCart((prev) => {
-      const updated = [...prev];
-      const newQty = updated[index].quantity + delta;
-      if (newQty <= 0) {
-        return updated.filter((_, i) => i !== index);
-      }
-      updated[index].quantity = newQty;
-      return updated;
-    });
-  };
-
-  const calculateTotal = () => {
-    return cart.reduce((sum, item) => {
-      const price = item.variant?.price || item.product.price;
-      return sum + price * item.quantity;
-    }, 0);
-  };
-
-  const handleCheckout = async () => {
-    if (cart.length === 0) return;
+  const handleSubmitRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsSubmitting(true);
+
+    const generatedCode = orderCode.trim() || `REQ-${Date.now().toString().slice(-6)}`;
+    const fullNotes = `[${serviceOptions.find(s => s.id === serviceType)?.title}] ${notes ? `- ${notes}` : ''} (Mã đối soát: ${generatedCode})`;
 
     const payload = {
       storeId: storeId || undefined,
       tableNo: tableNo,
-      paymentMethod: paymentMethod,
+      orderCode: generatedCode,
+      customerName: customerName || `Khách tại ${tableNo}`,
+      customerPhone: customerPhone || '0900000000',
+      paymentMethod: 'POST_PAID',
       platform: 'WebQR',
-      deliveryNodeId: 'TABLE_PICKUP',
-      shippingAddress: `Khách gọi món tại ${tableNo}`,
-      items: cart.map((item) => ({
-        productId: item.product.id,
-        variantId: item.variant?.id,
-        skuCode: item.variant?.skuCode || item.product.sku,
-        variantName: item.variant?.variantName || 'Mặc định',
-        quantity: item.quantity,
-        price: item.variant?.price || item.product.price
-      }))
+      deliveryNodeId: tableNo.replace(/\s+/g, '_').toUpperCase(),
+      shippingAddress: `Vị trí: ${tableNo} (${fullNotes})`,
+      items: []
     };
 
     try {
@@ -121,16 +73,16 @@ export const QrOrderPage: React.FC = () => {
 
       if (res.ok) {
         const data = await res.json();
-        setOrderId(data.orderId || 'SUCCESS');
+        setCreatedOrderCode(data.orderCode || generatedCode);
+        setTrackingToken(data.trackingToken || data.orderId || '');
         setOrderSuccess(true);
-        setCart([]);
-        setIsCartOpen(false);
       } else {
-        alert('Đặt món thất bại, vui lòng gọi nhân viên hỗ trợ.');
+        const errData = await res.json().catch(() => null);
+        alert(errData?.message || 'Gửi yêu cầu thất bại, vui lòng liên hệ nhân viên.');
       }
     } catch (err) {
-      console.error(err);
-      alert('Có lỗi kết nối hệ thống.');
+      console.error('Lỗi khi gửi yêu cầu gọi robot', err);
+      alert('Không thể kết nối đến hệ thống máy chủ VORA.');
     } finally {
       setIsSubmitting(false);
     }
@@ -138,212 +90,204 @@ export const QrOrderPage: React.FC = () => {
 
   if (orderSuccess) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mb-6 border border-emerald-500/30 animate-pulse">
-          <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mb-6 border border-emerald-500/30 animate-pulse">
+          <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h1 className="text-3xl font-extrabold mb-2">Đặt Món Thành Công!</h1>
-        <p className="text-slate-400 text-lg mb-4">Mã đơn hàng: <span className="text-emerald-400 font-mono">{orderId.slice(0, 8).toUpperCase()}</span></p>
-        <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-4 mb-6 max-w-sm w-full">
-          <p className="text-slate-300 font-medium">📍 Vị trí: <span className="text-white font-bold">{tableNo}</span></p>
-          <p className="text-slate-400 text-sm mt-1">Đơn hàng của bạn đã được gửi trực tiếp tới bếp và nhân viên phục vụ.</p>
+
+        <span className="text-xs font-mono font-bold tracking-widest text-emerald-400 uppercase bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full mb-3">
+          ĐÃ ĐIỀU PHỐI ROBOT AMR
+        </span>
+
+        <h1 className="text-2xl font-bold mb-2">Đã Tiếp Nhận Yêu Cầu!</h1>
+        <p className="text-slate-400 text-sm mb-6 max-w-sm">
+          Robot AMR đang chuẩn bị lộ trình di chuyển tới <span className="text-white font-bold">{tableNo}</span>.
+        </p>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6 max-w-sm w-full text-left space-y-3">
+          <div className="flex justify-between items-center text-sm border-b border-slate-800 pb-2">
+            <span className="text-slate-400">Vị trí bàn:</span>
+            <span className="font-bold text-white text-base">📍 {tableNo}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm border-b border-slate-800 pb-2">
+            <span className="text-slate-400">Mã ghi chú / Đơn:</span>
+            <span className="font-mono font-bold text-indigo-400">{createdOrderCode}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">Trạng thái:</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              Đang xếp hàng điều phối
+            </span>
+          </div>
         </div>
-        <button
-          onClick={() => setOrderSuccess(false)}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-8 rounded-xl transition"
-        >
-          Gọi Thêm Món
-        </button>
+
+        <div className="flex flex-col gap-3 w-full max-w-sm">
+          {trackingToken && (
+            <button
+              onClick={() => navigate(`/track/${trackingToken}`)}
+              className="w-full bg-[#0062FF] hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+            >
+              <span>Xem Bản Đồ Robot Di Chuyển</span>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </button>
+          )}
+
+          <button
+            onClick={() => setOrderSuccess(false)}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold py-3 px-6 rounded-xl border border-slate-800 transition"
+          >
+            Gửi Yêu Cầu Mới
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
-      {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600/20 rounded-lg text-indigo-400">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-16">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between max-w-lg mx-auto">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-[#0062FF]/15 border border-[#0062FF]/30 flex items-center justify-center">
+            <span className="text-lg">🤖</span>
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">Thực Đơn Đặt Món</h1>
+            <h1 className="font-bold text-base text-white leading-tight">VORA AMR Service</h1>
             <p className="text-xs text-indigo-400 font-semibold flex items-center gap-1">
               📍 {tableNo}
             </p>
           </div>
         </div>
-
-        <button
-          onClick={() => setIsCartOpen(true)}
-          className="relative p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl transition border border-slate-700"
-        >
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-          </svg>
-          {cart.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-slate-950 font-black text-xs w-5 h-5 rounded-full flex items-center justify-center">
-              {cart.reduce((s, i) => s + i.quantity, 0)}
-            </span>
-          )}
-        </button>
+        <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-emerald-950 border border-emerald-800/80 text-emerald-400 font-bold">
+          ONLINE
+        </span>
       </header>
 
-      {/* Menu Content */}
-      <main className="p-4 max-w-lg mx-auto">
-        {loading ? (
-          <div className="space-y-4 py-8">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-28 bg-slate-900 rounded-2xl animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4 mt-2">
-            {products.map((product) => {
-              const hasVariants = product.variants && product.variants.length > 0;
-              return (
-                <div
-                  key={product.id}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex gap-4 items-center hover:border-slate-700 transition"
-                >
-                  <img
-                    src={product.imageUrl || 'https://via.placeholder.com/100'}
-                    alt={product.name}
-                    className="w-20 h-20 object-cover rounded-xl bg-slate-800 flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-white truncate">{product.name}</h3>
-                    <p className="text-xs text-slate-400 line-clamp-2 mt-0.5">{product.description}</p>
-                    <p className="text-emerald-400 font-bold mt-2">
-                      {product.price.toLocaleString('vi-VN')} đ
-                    </p>
+      {/* Main Form */}
+      <main className="p-4 max-w-lg mx-auto mt-2">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 shadow-sm">
+          <h2 className="text-lg font-bold text-white mb-1">Gọi Robot Phục Vụ</h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Hệ thống không quản lý thực đơn hay tính tiền. Bạn chỉ cần chọn yêu cầu và ghi chú mã hóa đơn (nếu có) để Robot AMR mang khay tới đúng vị trí bàn của bạn.
+          </p>
+        </div>
 
-                    {hasVariants && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {product.variants!.map((v) => (
-                          <button
-                            key={v.id}
-                            onClick={() => addToCart(product, v)}
-                            className="text-xs bg-slate-800 hover:bg-indigo-600/30 hover:border-indigo-500/50 border border-slate-700 px-2 py-1 rounded-lg transition text-slate-200"
-                          >
-                            + {v.variantName} ({v.price.toLocaleString('vi-VN')}đ)
-                          </button>
-                        ))}
+        <form onSubmit={handleSubmitRequest} className="space-y-4">
+          {/* Service selection */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+              Loại Yêu Cầu Phục Vụ
+            </label>
+            <div className="grid grid-cols-1 gap-2.5">
+              {serviceOptions.map((opt) => {
+                const selected = serviceType === opt.id;
+                return (
+                  <button
+                    type="button"
+                    key={opt.id}
+                    onClick={() => setServiceType(opt.id)}
+                    className={`p-3.5 rounded-xl border text-left transition flex items-start gap-3 ${
+                      selected
+                        ? 'bg-blue-950/40 border-[#0062FF] text-white shadow-sm shadow-blue-500/10'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mt-0.5">{opt.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm">{opt.title}</span>
+                        {selected && (
+                          <span className="w-2 h-2 rounded-full bg-[#0062FF]" />
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {!hasVariants && (
-                    <button
-                      onClick={() => addToCart(product)}
-                      className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition flex-shrink-0"
-                    >
-                      +
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                      <p className="text-xs text-slate-400 mt-0.5 leading-normal">{opt.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-      </main>
 
-      {/* Floating Bottom Bar if Cart Has Items */}
-      {cart.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-4 left-4 right-4 max-w-lg mx-auto z-20">
+          {/* Reference Order Code Note */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1">
+                Mã Đơn / Số Hóa Đơn (Tùy chọn)
+              </label>
+              <input
+                type="text"
+                value={orderCode}
+                onChange={(e) => setOrderCode(e.target.value)}
+                placeholder="VD: #1042 hoặc Mã in trên phiếu gọi món"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#0062FF]"
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Mã này dùng để nhân viên bếp dán ghi chú lên khay và robot hiển thị khi tới bàn.
+              </span>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1">
+                Ghi Chú Thêm Cho Bếp / Phục Vụ
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="VD: Đồ uống ít đá, thêm 2 đôi đũa..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#0062FF]"
+              />
+            </div>
+          </div>
+
+          {/* Customer info */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Thông Tin Liên Hệ (Tùy Chọn)</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Tên khách"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#0062FF]"
+                />
+              </div>
+              <div>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="Số điện thoại"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#0062FF]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Submit button */}
           <button
-            onClick={() => setIsCartOpen(true)}
-            className="w-full bg-gradient-to-r from-indigo-600 to-emerald-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-xl flex items-center justify-between hover:brightness-110 transition"
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full bg-[#0062FF] hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-3.5 px-6 rounded-xl transition shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 text-base"
           >
-            <div className="flex items-center gap-2">
-              <span>{cart.reduce((s, i) => s + i.quantity, 0)} món</span>
-            </div>
-            <span>{calculateTotal().toLocaleString('vi-VN')} đ</span>
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Đang gửi yêu cầu...
+              </span>
+            ) : (
+              <span>🚀 Xác Nhận Gọi Robot Phục Vụ</span>
+            )}
           </button>
-        </div>
-      )}
-
-      {/* Cart Drawer */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex justify-end flex-col">
-          <div className="bg-slate-900 border-t border-slate-800 rounded-t-3xl p-6 max-w-lg mx-auto w-full max-h-[85vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-slate-800">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                Giỏ Hàng ({tableNo})
-              </h2>
-              <button
-                onClick={() => setIsCartOpen(false)}
-                className="text-slate-400 hover:text-white p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto py-4 space-y-3">
-              {cart.map((item, index) => (
-                <div key={index} className="flex justify-between items-center bg-slate-800/60 p-3 rounded-xl">
-                  <div>
-                    <p className="font-semibold text-white">{item.product.name}</p>
-                    {item.variant && (
-                      <p className="text-xs text-indigo-400">{item.variant.variantName}</p>
-                    )}
-                    <p className="text-xs text-slate-400 mt-1">
-                      {((item.variant?.price || item.product.price) * item.quantity).toLocaleString('vi-VN')} đ
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateQuantity(index, -1)}
-                      className="p-1 bg-slate-700 text-white rounded-lg hover:bg-slate-600 px-2"
-                    >
-                      -
-                    </button>
-                    <span className="font-bold w-6 text-center text-white">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(index, 1)}
-                      className="p-1 bg-slate-700 text-white rounded-lg hover:bg-slate-600 px-2"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-4 border-t border-slate-800 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400">Hình thức thanh toán:</span>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="bg-slate-800 text-white border border-slate-700 rounded-lg px-3 py-1.5 text-sm"
-                >
-                  <option value="PAYOS">📱 Chuyển khoản VietQR (PayOS)</option>
-                  <option value="Cash">💵 Tiền mặt (Tại thu ngân / tại bàn)</option>
-                  <option value="Wallet">💳 Tài khoản Ví cửa hàng</option>
-                </select>
-              </div>
-
-              <div className="flex justify-between text-lg font-bold">
-                <span className="text-slate-300">Tổng cộng:</span>
-                <span className="text-emerald-400">{calculateTotal().toLocaleString('vi-VN')} đ</span>
-              </div>
-
-              <button
-                onClick={handleCheckout}
-                disabled={isSubmitting || cart.length === 0}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition"
-              >
-                {isSubmitting ? 'Đang gửi đơn...' : 'Xác Nhận Đặt Món'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        </form>
+      </main>
     </div>
   );
-};
+}
+export default QrOrderPage;
