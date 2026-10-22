@@ -534,34 +534,34 @@ export const AdminTechnicalPage: React.FC = () => {
       )}
 
       {/* TOP HEADER: Dark Navy Banner Matching Reference Image 1 */}
-      <header className="h-16 px-4 sm:px-6 bg-[#0A192F] text-white flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-md">
+      <header className="h-14 sm:h-16 px-3 sm:px-6 bg-[#0A192F] text-white flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-md">
         {/* Brand & Title */}
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-          <Link to="/technical" className="flex items-center gap-2.5 group shrink-0" title="Trang Điều Phối Kỹ Thuật AMR">
-            <div className="w-9 h-9 rounded-xl bg-white border border-slate-700/80 p-1 flex items-center justify-center shadow-[0_0_16px_rgba(0,98,255,0.35)] group-hover:border-[#00D2FF] group-hover:shadow-[0_0_20px_rgba(0,210,255,0.5)] transition-all">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <Link to="/technical" className="flex items-center gap-2 group shrink-0" title="Trang Điều Phối Kỹ Thuật AMR">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-slate-700/80 p-1 flex items-center justify-center shadow-[0_0_16px_rgba(0,98,255,0.35)] group-hover:border-[#00D2FF] group-hover:shadow-[0_0_20px_rgba(0,210,255,0.5)] transition-all shrink-0">
               <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-lg tracking-tight text-white font-heading group-hover:text-[#00D2FF] transition-colors">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="font-black text-base sm:text-lg tracking-tight text-white font-heading group-hover:text-[#00D2FF] transition-colors">
                 VORA
               </span>
               <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/40">
                 CENTRAL OS
               </span>
               {tenantSlug ? (
-                <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
+                <span className="hidden md:inline-flex text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
                   Tenant: {currentUser?.tenantName || tenantSlug.toUpperCase()}
                 </span>
               ) : null}
             </div>
           </Link>
 
-          <div className="h-4 w-px bg-slate-700 hidden sm:block shrink-0" />
+          <div className="h-4 w-px bg-slate-700 hidden md:block shrink-0" />
 
-          <div className="min-w-0">
+          <div className="min-w-0 hidden md:block">
             <div className="text-xs sm:text-sm font-extrabold text-white tracking-wide uppercase flex items-center gap-2 font-mono truncate">
               <span className="truncate">FLEET COMMAND CENTER - AMR ORCHESTRATION</span>
-              <span className="hidden md:inline-flex text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/40 px-2 py-0.5 rounded-full font-bold">
+              <span className="hidden lg:inline-flex text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/40 px-2 py-0.5 rounded-full font-bold">
                 LiDAR v3.4 Live
               </span>
             </div>
@@ -569,7 +569,7 @@ export const AdminTechnicalPage: React.FC = () => {
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
 
           {/* Manual Refresh Button */}
           <button
@@ -578,7 +578,7 @@ export const AdminTechnicalPage: React.FC = () => {
               loadData();
               showToast('Đang làm mới dữ liệu từ máy chủ...', 'info');
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 hover:text-white transition-all shadow-xs cursor-pointer"
+            className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 hover:text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
             title="Làm mới toàn bộ dữ liệu"
           >
             <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
@@ -586,7 +586,7 @@ export const AdminTechnicalPage: React.FC = () => {
           </button>
 
           {/* User Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Link
               to="/login"
               onClick={() => {
@@ -594,11 +594,11 @@ export const AdminTechnicalPage: React.FC = () => {
                 localStorage.removeItem('refreshToken');
                 localStorage.removeItem('user');
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-rose-950/60 hover:border-rose-600/60 text-xs font-bold text-slate-300 hover:text-rose-200 transition-all shadow-xs"
+              className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-rose-950/60 hover:border-rose-600/60 text-xs font-bold text-slate-300 hover:text-rose-200 transition-all shadow-xs flex items-center gap-1.5"
               title="Đăng xuất khỏi hệ thống"
             >
               <LogOut className="w-3.5 h-3.5 text-rose-400" />
-              <span>Đăng Xuất</span>
+              <span className="hidden sm:inline">Đăng Xuất</span>
             </Link>
           </div>
 
@@ -635,7 +635,7 @@ export const AdminTechnicalPage: React.FC = () => {
               setEmergencyStop((prev) => !prev);
               showToast(emergencyStop ? 'Khôi phục vận hành đội xe bình thường!' : 'CẢNH BÁO: ĐÃ KÍCH HOẠT DỪNG KHẨN CẤP TOÀN BỘ AMR!', emergencyStop ? 'success' : 'warning');
             }}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${emergencyStop
+            className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${emergencyStop
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
                 : 'bg-rose-600 hover:bg-rose-500 text-white'
               }`}
@@ -651,8 +651,8 @@ export const AdminTechnicalPage: React.FC = () => {
       </header>
 
       {/* SUB-NAVIGATION TABS (Dashboard | Robots | Missions | Monitor | Edge-Setup | Analytics | Settings) */}
-      <div className="h-12 px-4 sm:px-6 bg-white border-b border-slate-200 flex items-center justify-between text-xs shadow-2xs overflow-x-auto">
-        <div className="flex items-center gap-2">
+      <div className="h-12 px-3 sm:px-6 bg-white border-b border-slate-200 flex items-center justify-between text-xs shadow-2xs overflow-x-auto no-scrollbar sticky top-14 sm:top-16 z-20">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {[
             { id: 'dashboard', label: 'Dashboard', desc: 'Bản Đồ & Tổng Quan' },
             { id: 'sqlite-sync', label: 'SQLite & VPS Sync', desc: 'CSDL Cục Bộ & Kênh Ngầm' },
@@ -667,7 +667,7 @@ export const AdminTechnicalPage: React.FC = () => {
               key={tab.id}
               type="button"
               onClick={() => setActiveSubTab(tab.id as any)}
-              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeSubTab === tab.id
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap text-[11px] sm:text-xs ${activeSubTab === tab.id
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
@@ -732,7 +732,7 @@ export const AdminTechnicalPage: React.FC = () => {
               {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
               <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs relative">
                 {/* SLAM Map Viewer in Technical Mode */}
-                <div className="relative flex-1 min-h-[460px] sm:min-h-[520px] flex flex-col">
+                <div className="relative flex-1 min-h-[340px] sm:min-h-[480px] flex flex-col">
                   <SlamFloorMapViewer
                     tables={mapTables}
                     robots={mapRobots}
@@ -756,7 +756,7 @@ export const AdminTechnicalPage: React.FC = () => {
 
                   {/* Interactive Selected AMR Telemetry Popover Modal */}
                   {selectedAmr && (
-                    <div className="absolute top-16 right-4 bg-slate-900/95 text-white border border-cyan-500/80 rounded-2xl p-4 shadow-2xl backdrop-blur-md w-72 space-y-3 text-xs z-30 animate-in zoom-in-95 duration-150">
+                    <div className="absolute top-14 sm:top-16 right-2 sm:right-4 bg-slate-900/95 text-white border border-cyan-500/80 rounded-2xl p-3.5 sm:p-4 shadow-2xl backdrop-blur-md w-72 max-w-[calc(100%-1rem)] space-y-3 text-xs z-30 animate-in zoom-in-95 duration-150">
                       <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                         <div className="flex items-center gap-2">
                           <span className="font-black text-cyan-400 font-mono text-sm">{selectedAmr.id}</span>
@@ -816,22 +816,22 @@ export const AdminTechnicalPage: React.FC = () => {
                 </div>
 
                 {/* Map Footer Status Bar */}
-                <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-mono">
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1.5">
+                <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-mono">
+                  <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-0.5">
+                    <span className="flex items-center gap-1.5 shrink-0">
                       <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Active ({amrNodes.filter(n => n.status === 'active').length})
                     </span>
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 shrink-0">
                       <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Moving ({amrNodes.filter(n => n.status === 'moving').length})
                     </span>
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 shrink-0">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Idle ({amrNodes.filter(n => n.status === 'idle').length})
                     </span>
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 shrink-0">
                       <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Charging ({amrNodes.filter(n => n.status === 'charging').length})
                     </span>
                   </div>
-                  <span className="hidden sm:inline text-slate-500">Tần số quét SLAM: 20 Hz • MQTT Active</span>
+                  <span className="hidden md:inline text-slate-500 shrink-0">Tần số quét SLAM: 20 Hz • MQTT Active</span>
                 </div>
               </div>
 

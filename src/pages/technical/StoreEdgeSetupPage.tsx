@@ -247,20 +247,20 @@ export function StoreEdgeSetupPage() {
   const openApiDocs = posIngestionService.getOpenApiDocs();
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 p-6 md:p-10 space-y-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-3 sm:p-6 md:p-8 lg:p-10 space-y-6 sm:space-y-8 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* Header: Edge Box at Store */}
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+        <div className="bg-white p-4 sm:p-6 lg:p-8 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex items-center space-x-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 via-indigo-600 to-purple-600 flex items-center justify-center p-0.5 shadow-lg shadow-brand-500/20 shrink-0">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-brand-600 via-indigo-600 to-purple-600 flex items-center justify-center p-0.5 shadow-lg shadow-brand-500/20 shrink-0">
               <div className="w-full h-full bg-white rounded-[14px] flex items-center justify-center text-brand-600">
-                <Icons.Robot className="w-8 h-8" />
+                <Icons.Robot className="w-6 h-6 sm:w-8 sm:h-8" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                   Thiết Lập VORA Edge Node & Tích Hợp Đa POS
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-50 text-brand-700 border border-brand-200">
@@ -278,17 +278,17 @@ export function StoreEdgeSetupPage() {
           </div>
 
           {/* Quick Indicators */}
-          <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2.5">
-              <Icons.Warehouse className="w-4 h-4 text-indigo-600" />
+          <div className="flex flex-wrap items-center gap-3 text-xs font-mono w-full lg:w-auto">
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2.5 flex-1 sm:flex-initial">
+              <Icons.Warehouse className="w-4 h-4 text-indigo-600 shrink-0" />
               <div>
                 <span className="text-slate-400 text-[10px] block font-sans font-semibold">Local Storage:</span>
                 <strong className="text-emerald-700 font-bold">SQLite vora_local.db</strong>
               </div>
             </div>
 
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2.5">
-              <Icons.Refresh className={`w-4 h-4 text-brand-600 ${signalRStatus === 'connecting' ? 'animate-spin' : ''}`} />
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2.5 flex-1 sm:flex-initial">
+              <Icons.Refresh className={`w-4 h-4 text-brand-600 shrink-0 ${signalRStatus === 'connecting' ? 'animate-spin' : ''}`} />
               <div>
                 <span className="text-slate-400 text-[10px] block font-sans font-semibold">RobotService Link:</span>
                 <strong className="text-slate-900 font-bold">
@@ -297,8 +297,8 @@ export function StoreEdgeSetupPage() {
               </div>
             </div>
 
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2.5">
-              <Icons.AdjustmentSettings className="w-4 h-4 text-purple-600" />
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center gap-2.5 flex-1 sm:flex-initial">
+              <Icons.AdjustmentSettings className="w-4 h-4 text-purple-600 shrink-0" />
               <div>
                 <span className="text-slate-400 text-[10px] block font-sans font-semibold">Mã Ghép Nối Edge:</span>
                 <strong className="text-indigo-700 font-bold">{pairingCode}</strong>
@@ -308,24 +308,24 @@ export function StoreEdgeSetupPage() {
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="flex bg-slate-200/70 p-1.5 rounded-2xl max-w-2xl text-xs font-bold">
+        <div className="flex overflow-x-auto no-scrollbar whitespace-nowrap bg-slate-200/70 p-1.5 rounded-2xl max-w-full text-xs font-bold gap-1">
           <button
             onClick={() => setActiveTab('pos')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 shrink-0 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'pos' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Icons.Store className="w-4 h-4" />
+            <Icons.Store className="w-4 h-4 shrink-0" />
             <span>Tích Hợp Đa POS (Adapter Layer)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('errors')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 shrink-0 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'errors' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-amber-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-amber-500 shrink-0">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
             </svg>
             <span>Xử Lý Lỗi Khép Kín (VORA Only)</span>
@@ -333,21 +333,21 @@ export function StoreEdgeSetupPage() {
 
           <button
             onClick={() => setActiveTab('robots')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 shrink-0 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'robots' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Icons.Robot className="w-4 h-4" />
+            <Icons.Robot className="w-4 h-4 shrink-0" />
             <span>Log Robot (RobotService)</span>
           </button>
 
           <button
             onClick={() => setActiveTab('db')}
-            className={`flex-1 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 shrink-0 py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
               activeTab === 'db' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Icons.Warehouse className="w-4 h-4" />
+            <Icons.Warehouse className="w-4 h-4 shrink-0" />
             <span>Local DB & Sync</span>
           </button>
         </div>

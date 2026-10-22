@@ -285,15 +285,15 @@ export function RobotManagementPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 md:p-10 space-y-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-3 sm:p-6 md:p-8 lg:p-10 space-y-6 sm:space-y-8">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
         
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-6">
           <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-              <div className="p-2.5 bg-brand-50 rounded-xl text-brand-600 shadow-sm border border-brand-100">
-                <Icons.Robot className="w-7 h-7" />
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+              <div className="p-2 sm:p-2.5 bg-brand-50 rounded-xl text-brand-600 shadow-sm border border-brand-100 shrink-0">
+                <Icons.Robot className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
               <span className="bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">Quản lý Robot AMR</span>
             </h1>
