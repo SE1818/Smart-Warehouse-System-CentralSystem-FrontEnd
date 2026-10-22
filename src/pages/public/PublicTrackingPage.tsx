@@ -32,9 +32,10 @@ interface TrackingData {
   robotStatus?: string;
   estimatedArrivalMinutes?: number;
 
-  // Locker & OTP
-  isLockerUnlocked: boolean;
-  isOtpRequired: boolean;
+  // Delivery confirmation (F&B Open Tray - No Locker OTP required)
+  isLockerUnlocked?: boolean;
+  isDelivered?: boolean;
+  isOtpRequired?: boolean;
   otpExpiresAt?: string;
 
   // White label
@@ -455,7 +456,7 @@ export const PublicTrackingPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Order Details & OTP Verification Section */}
+        {/* Order Details & Delivery Confirmation Section */}
         <div className="p-4 flex-1 space-y-4">
           {/* Order Summary Card */}
           <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-3">
@@ -511,7 +512,14 @@ export const PublicTrackingPage: React.FC = () => {
               {tracking?.status !== 'Delivered' && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    try {
+                      if (token) {
+                        await fetch(`/api/v1/tracking/public/${token}/confirm-delivery`, { method: 'POST' });
+                      }
+                    } catch (e) {
+                      console.error('Failed to confirm delivery', e);
+                    }
                     setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
                   }}
                   className="mt-2 py-2 px-4 rounded-xl text-xs font-bold text-white shadow-lg transition-all cursor-pointer hover:opacity-90 inline-flex items-center gap-1.5"
@@ -543,8 +551,15 @@ export const PublicTrackingPage: React.FC = () => {
               Quét mã QR trên robot để xác nhận bàn nhận món.
             </p>
             <button
-              onClick={() => {
+              onClick={async () => {
                 setShowQrModal(false);
+                try {
+                  if (token) {
+                    await fetch(`/api/v1/tracking/public/${token}/confirm-delivery`, { method: 'POST' });
+                  }
+                } catch (e) {
+                  console.error('Failed to confirm delivery', e);
+                }
                 setTracking(prev => prev ? { ...prev, isLockerUnlocked: true, status: 'Delivered' } : prev);
               }}
               className="w-full py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
