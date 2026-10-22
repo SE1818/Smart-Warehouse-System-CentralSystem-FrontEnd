@@ -18,6 +18,5 @@ export { StockAdjustmentsPage } from './stock/StockAdjustmentsPage';
 // Other pages
 export { SearchPage } from './search/SearchPage';
 export { NotificationsPage } from './NotificationsPage';
-export { PromotionsPage } from './PromotionsPage';
 export { RobotManagementPage } from './RobotManagementPage';
 export { ProfilePage } from './ProfilePage';
