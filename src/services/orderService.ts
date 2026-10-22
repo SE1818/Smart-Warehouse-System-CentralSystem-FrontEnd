@@ -1,18 +1,14 @@
 import apiClient from './api';
 import type { Order } from '@/types';
 
-export interface CreateOrderItemRequest {
-  productId: string;
-  quantity: number;
-  price: number;
-}
-
 export interface CreateOrderRequest {
   userId: string;
   deliveryNodeId: string;
   shippingAddress: string;
   paymentMethod: string;
-  items: CreateOrderItemRequest[];
+  totalAmount?: number;
+  tableId?: string;
+  tableNo?: string;
 }
 
 export interface CreateOrderResponse {

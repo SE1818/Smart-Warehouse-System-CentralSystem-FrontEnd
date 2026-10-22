@@ -18,7 +18,7 @@ describe('orderService', () => {
     post.mockResolvedValue({ data: { orderId: 'o1', paymentUrl: 'https://pay/x' } });
     const res = await orderService.createOrder({
       userId: 'u1', deliveryNodeId: 'd1', shippingAddress: 'addr',
-      paymentMethod: 'COD', items: [{ productId: 'p1', quantity: 2, price: 100 }]
+      paymentMethod: 'COD', totalAmount: 200
     });
     expect(res.orderId).toBe('o1');
     expect(res.paymentUrl).toBe('https://pay/x');

@@ -28,7 +28,7 @@ export interface OrderItem {
 export interface Order {
   id: string;
   userId: string;
-  items: OrderItem[];
+  items?: OrderItem[];
   totalAmount: number;
   status: string;
   shippingAddress: string;
