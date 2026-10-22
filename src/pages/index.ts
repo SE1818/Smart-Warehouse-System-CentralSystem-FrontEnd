@@ -20,5 +20,4 @@ export { SearchPage } from './search/SearchPage';
 export { NotificationsPage } from './NotificationsPage';
 export { PromotionsPage } from './PromotionsPage';
 export { RobotManagementPage } from './RobotManagementPage';
-export { WalletPage } from './WalletPage';
 export { ProfilePage } from './ProfilePage';
