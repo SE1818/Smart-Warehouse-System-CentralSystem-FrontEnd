@@ -13,27 +13,4 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
 }
-export interface CartItem {
-  productId: string;
-  product: Product;
-  quantity: number;
-}
-export interface OrderItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-}
-export interface Order {
-  id: string;
-  userId: string;
-  items?: OrderItem[];
-  totalAmount: number;
-  status: string;
-  shippingAddress: string;
-  note?: string;
-  createdAt: string;
-  updatedAt: string;
-  deliveryNodeId?: string;
-}
+export type { Order } from './subscription';
