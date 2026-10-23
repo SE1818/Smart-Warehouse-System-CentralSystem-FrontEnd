@@ -1456,43 +1456,22 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
                 ))}
               </div>
 
-              {/* Total Payload Bar & Safety Check */}
+              {/* Total Trays Summary */}
               {(() => {
-                const totalW = seqTrays.filter((t) => t.tableId).reduce((sum, t) => sum + (t.weightKg || 0), 0);
-                const isOverMax = totalW > 25.0;
-                const isOverRated = totalW > 15.0;
+                const activeCount = seqTrays.filter((t) => t.tableId).length;
                 return (
                   <div className="p-4 rounded-2xl border bg-slate-50 space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-slate-700">Tổng Tải Trọng Đã Xếp Lên Khay:</span>
-                      <span
-                        className={`font-mono text-sm font-black ${
-                          isOverMax ? 'text-rose-600' : isOverRated ? 'text-amber-600' : 'text-emerald-600'
-                        }`}
-                      >
-                        {totalW.toFixed(1)} / 25.0 kg
+                      <span className="text-slate-700">Khay Đã Xếp Món Sẵn Sàng:</span>
+                      <span className="font-mono text-sm font-black text-cyan-600">
+                        {activeCount} / {seqTrays.length} Khay
                       </span>
                     </div>
 
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-300 ${
-                          isOverMax ? 'bg-rose-500' : isOverRated ? 'bg-amber-500' : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${Math.min(100, (totalW / 25.0) * 100)}%` }}
-                      />
-                    </div>
-
                     <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                      <span>Định mức an toàn: ≤ 15.0 kg</span>
-                      <span>Chịu tải tối đa: 25.0 kg (50L)</span>
+                      <span>Thiết kế khay mở F&B phục vụ tự động</span>
+                      <span>Sức chứa: Tối đa 3 tầng độc lập</span>
                     </div>
-
-                    {isOverMax && (
-                      <div className="text-[11px] font-bold text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                        ⚠️ Lỗi: Tổng tải trọng vượt quá 25.0kg! Backend sẽ từ chối với CARGO_EXCEEDS_MAX_PAYLOAD.
-                      </div>
-                    )}
                   </div>
                 );
               })()}
@@ -1507,7 +1486,7 @@ export const TableDispatchKdsSection: React.FC<TableDispatchKdsProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingDispatch || seqTrays.filter((t) => t.tableId).reduce((s, t) => s + (t.weightKg || 0), 0) > 25.0}
+                  disabled={isSubmittingDispatch || seqTrays.filter((t) => t.tableId).length === 0}
                   className="flex-2 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-cyan-500/20 transition flex items-center justify-center gap-2"
                 >
                   <span>{isSubmittingDispatch ? '⏳ Đang khởi động chuỗi...' : `🚀 Xuất Phát Chuỗi ${seqTrays.filter((t) => t.tableId).length} Bàn`}</span>
