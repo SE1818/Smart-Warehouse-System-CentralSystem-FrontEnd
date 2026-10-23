@@ -194,8 +194,6 @@ export function NotificationsPage() {
     failed: notifications.filter((n) => n.status === 'Failed').length,
     inApp: notifications.filter((n) => n.type === 'InApp').length,
     email: notifications.filter((n) => n.type === 'Email').length,
-    push: notifications.filter((n) => n.type === 'Push').length,
-    sms: notifications.filter((n) => n.type === 'SMS').length,
   };
 
   const getChannelBadge = (type: string) => {
@@ -495,7 +493,7 @@ export function NotificationsPage() {
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Kênh truyền thông</label>
                       <div className="grid grid-cols-2 gap-2.5">
-                        {(['InApp', 'Email', 'SMS', 'Push'] as NotificationType[]).map((type) => (
+                        {(['InApp', 'Email'] as NotificationType[]).map((type) => (
                           <button
                             key={type}
                             type="button"

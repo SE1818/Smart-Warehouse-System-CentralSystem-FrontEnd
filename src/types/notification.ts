@@ -1,4 +1,4 @@
-export type NotificationType = 'Email' | 'SMS' | 'InApp' | 'Push';
+export type NotificationType = 'Email' | 'InApp';
 
 export type NotificationStatus = 'Pending' | 'Sent' | 'Failed' | 'Read';
 

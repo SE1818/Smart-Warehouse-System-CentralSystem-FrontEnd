@@ -12,14 +12,6 @@ const [confirmPassword, setConfirmPassword] = useState('');
 const [error, setError] = useState('');
 const [success, setSuccess] = useState(false);
 const [loading, setLoading] = useState(false);
-/*
- * [COMMENTED OUT] 2FA OTP State Variables
- * const [otp, setOtp] = useState('');
- * const [showOtpInput, setShowOtpInput] = useState(false);
- * const [otpError, setOtpError] = useState('');
- * const [otpSuccess, setOtpSuccess] = useState(false);
- * const [resendLoading, setResendLoading] = useState(false);
- */
 
 const hasRepeatingChars = (str: string): boolean => {
 for (let i = 0; i < str.length - 2; i++) {
@@ -145,12 +137,6 @@ setLoading(false);
 }
 };
 
-/*
- * [COMMENTED OUT] 2FA OTP Handlers
- * const handleResendOtp = async () => { ... };
- * const handleVerifyOtp = async (e: React.FormEvent) => { ... };
- */
-
 return (
 <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 tech-grid relative overflow-hidden">
 {/* Decorative gradient glowing circles */}
@@ -187,17 +173,6 @@ return (
 <span>Đăng ký tài khoản thành công! Đang chuyển hướng đến trang đăng nhập...</span>
 </div>
 
-{/*
- * [COMMENTED OUT] 2FA / OTP Verification UI
- * Form nhập mã xác minh OTP 6 chữ số qua email được comment lại để hỗ trợ flow test nhanh.
- *
- * {showOtpInput && (
- *   <form onSubmit={handleVerifyOtp} className="space-y-4">
- *     <input value={otp} onChange={...} placeholder="123456" />
- *     <button type="submit">Xác minh email</button>
- *   </form>
- * )}
- */}
 </div>
 )}
 

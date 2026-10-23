@@ -32,11 +32,9 @@ interface TrackingData {
   robotStatus?: string;
   estimatedArrivalMinutes?: number;
 
-  // Delivery confirmation (F&B Open Tray - No Locker OTP required)
+  // Delivery confirmation (F&B Open Tray - Direct confirmation)
   isLockerUnlocked?: boolean;
   isDelivered?: boolean;
-  isOtpRequired?: boolean;
-  otpExpiresAt?: string;
 
   // White label
   brand?: WhiteLabelBrand;
