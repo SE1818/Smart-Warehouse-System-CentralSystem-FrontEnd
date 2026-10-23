@@ -28,9 +28,6 @@ const StoreEdgeSetupPage = lazy(() => import('./pages/technical/StoreEdgeSetupPa
 const RobotMonitorPage = lazy(() => import('./pages/technical/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
 import { ProtectedRoute } from './components/ProtectedRoute';
 
-// Customer & Integration pages
-const QrOrderPage = lazy(() => import('./pages/public/QrOrderPage').then(m => ({ default: m.QrOrderPage })));
-const PublicTrackingPage = lazy(() => import('./pages/public/PublicTrackingPage').then(m => ({ default: m.PublicTrackingPage })));
 
 
 
@@ -102,12 +99,6 @@ function App() {
 					<Route path="/forgot-password" element={<ForgotPasswordPage />} />
 					<Route path="/reset-password" element={<ResetPasswordPage />} />
 					<Route path="/unauthorized" element={<UnauthorizedPage />} />
-					{/* Public & Customer routes */}
-					<Route path="/qr-order" element={<QrOrderPage />} />
-					<Route path="/track/:trackingToken" element={<PublicTrackingPage />} />
-					<Route path="/track" element={<PublicTrackingPage />} />
-					<Route path="/tracking/:trackingToken" element={<PublicTrackingPage />} />
-
 					{/* Redirect Root to Login */}
 					<Route path="/" element={<Navigate to="/login" replace />} />
 
