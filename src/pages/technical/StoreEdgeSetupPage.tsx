@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useRobotStore } from '@/stores/robotStore';
-import { Icons } from '@/components/Icons';
+import { Icons } from '@/components/common/Icons';
 import { robotMonitorService } from '@/services/robotMonitorService';
 import { toast } from 'react-toastify';
 

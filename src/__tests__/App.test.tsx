@@ -17,13 +17,13 @@ vi.mock('../pages/auth/RegisterPage', () => ({ RegisterPage: () => <div>Register
 vi.mock('../pages/auth/ForgotPasswordPage', () => ({ ForgotPasswordPage: () => <div>Forgot Password Page</div> }));
 vi.mock('../pages/auth/ResetPasswordPage', () => ({ ResetPasswordPage: () => <div>Reset Password Page</div> }));
 vi.mock('../pages/auth/StoreRegistrationPage', () => ({ StoreRegistrationPage: () => <div>Store Registration Page</div> }));
-vi.mock('../pages/AdminTechnicalPage', () => ({ AdminTechnicalPage: () => <div data-testid="technical-page">Technical Page</div> }));
-vi.mock('../pages/StaffKdsPage', () => ({ StaffKdsPage: () => <div data-testid="staff-page">Staff Page</div> }));
+vi.mock('../pages/technical/AdminTechnicalPage', () => ({ AdminTechnicalPage: () => <div data-testid="technical-page">Technical Page</div> }));
+vi.mock('../pages/staff/StaffKdsPage', () => ({ StaffKdsPage: () => <div data-testid="staff-page">Staff Page</div> }));
 vi.mock('../pages/technical/StoreEdgeSetupPage', () => ({ StoreEdgeSetupPage: () => <div data-testid="edge-setup-page">Store Edge Setup Page</div> }));
 vi.mock('../pages/technical/RobotMonitorPage', () => ({ RobotMonitorPage: () => <div data-testid="robot-monitor-page">Robot Monitor Page</div> }));
 
 // Icons mock (matches the keys used across pages)
-vi.mock('../components/Icons', () => {
+vi.mock('../components/common/Icons', () => {
   const mk = (name: string) => () => <span data-testid={`icon-${name}`}>ic</span>;
   return {
     Icons: {

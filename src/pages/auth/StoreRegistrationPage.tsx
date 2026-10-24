@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { Icons } from '@/components/Icons';
+import { Icons } from '@/components/common/Icons';
 import { storeService, robotService } from '@/services';
 import type { Area, Station } from '../../types/robot';
 

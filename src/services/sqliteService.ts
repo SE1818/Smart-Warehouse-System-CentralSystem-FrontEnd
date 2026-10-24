@@ -2,7 +2,7 @@ import initSqlJs, { type Database } from 'sql.js';
 import type { Robot } from '@/types/robot';
 import type { SlamMapResponse, SlamMapWaypointDto } from './robot';
 import type { DiningTableDto } from './portalApi';
-import type { LogTransfer } from './transferService';
+import type { LogTransfer } from '@/types/robot';
 
 const IDB_NAME = 'vora_local_db';
 const IDB_STORE = 'sqlite_storage';

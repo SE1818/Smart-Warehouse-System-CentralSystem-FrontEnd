@@ -18,9 +18,9 @@ import {
   Power,
   LogOut,
 } from 'lucide-react';
-import { RobotMonitorPage } from './technical/RobotMonitorPage';
-import { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
-import { LocalSqliteSyncCard } from '@/components/admin/LocalSqliteSyncCard';
+import { RobotMonitorPage } from './RobotMonitorPage';
+import { StoreEdgeSetupPage } from './StoreEdgeSetupPage';
+import { LocalSqliteSyncCard } from '@/components/technical/LocalSqliteSyncCard';
 import { useRobotStore } from '@/stores/robotStore';
 import {
   fleetService,
@@ -30,14 +30,14 @@ import {
   type DiningTableDto,
   type FleetAMR,
   type MissionStatsDto,
-} from '../services/portalApi';
+} from '@/services/portalApi';
 import {
   SlamFloorMapViewer,
   type MapTableNode,
   type MapRobotItem,
 } from '@/components/map/SlamFloorMapViewer';
-import { usePagination } from '../hooks/usePagination';
-import { Pagination } from '../components/common/Pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/common/Pagination';
 
 interface AMRNode {
   id: string;

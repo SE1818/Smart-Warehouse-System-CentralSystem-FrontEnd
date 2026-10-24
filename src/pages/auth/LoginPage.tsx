@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { authService, tenantService } from '@/services';
-import { Icons } from '@/components/Icons';
+import { Icons } from '@/components/common/Icons';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');

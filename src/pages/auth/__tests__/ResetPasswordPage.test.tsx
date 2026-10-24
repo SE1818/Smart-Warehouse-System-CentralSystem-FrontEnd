@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-vi.mock('@/components/Icons', () => ({
+vi.mock('@/components/common/Icons', () => ({
   Icons: {
     LockReset: () => <span data-testid="lock-reset-icon" />,
     Spinner: () => <span data-testid="spinner-icon" />,
@@ -50,7 +50,7 @@ describe('ResetPasswordPage', () => {
 
   it('renders form when token and email present', async () => {
     renderResetPassword(['/reset-password?token=valid-token&email=test@example.com']);
-    expect(await screen.findByText('Set New Password')).toBeDefined();
+    expect(await screen.findByText('Đặt lại mật khẩu')).toBeDefined();
     const pws = screen.getAllByPlaceholderText('••••••••');
     expect(pws.length).toBe(2);
   });

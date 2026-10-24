@@ -12,7 +12,7 @@ vi.mock('@/services', () => ({
 }));
 
 // Mock the Icons component
-vi.mock('@/components/Icons', () => ({
+vi.mock('@/components/common/Icons', () => ({
   Icons: {
     LockReset: () => <span data-testid="lock-reset-icon" />,
     AlertWarning: () => <span data-testid="alert-warning-icon" />,
@@ -50,8 +50,8 @@ describe('ForgotPasswordPage', () => {
   it('should render form with email input and submit button', () => {
     renderForgotPasswordPage();
 
-    expect(screen.getByText('SmartWarehouse')).toBeInTheDocument();
-    expect(screen.getByText('Reset Your Password')).toBeInTheDocument();
+    expect(screen.getByText('VORA')).toBeInTheDocument();
+    expect(screen.getByText('Khôi phục mật khẩu')).toBeInTheDocument();
     expect(getEmailInput()).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send Reset Link/i })).toBeInTheDocument();
   });

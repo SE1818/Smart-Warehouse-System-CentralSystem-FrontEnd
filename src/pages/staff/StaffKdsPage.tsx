@@ -18,9 +18,9 @@ import {
   MapPin,
   ArrowRight,
 } from 'lucide-react';
-import { fleetService, tableService, orderService, type PendingOrderDto } from '../services/portalApi';
-import { sqliteService } from '../services/sqliteService';
-import { fixMojibake } from '../utils/textUtils';
+import { fleetService, tableService, orderService, type PendingOrderDto } from '@/services/portalApi';
+import { sqliteService } from '@/services/sqliteService';
+import { fixMojibake } from '@/utils/textUtils';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/common/Pagination';
 import { SlamFloorMapViewer } from '@/components/map/SlamFloorMapViewer';

@@ -47,3 +47,26 @@ export interface FulfillmentRequest {
   orderId: string;
   robotId: string;
 }
+
+export interface LogTransfer {
+  id: string;
+  transferRequestId: string;
+  robotId: string;
+  statusResult: string;
+  distanceTravelled: number | null;
+  errorNotes: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+export interface Order {
+  id: string;
+  tableId?: string;
+  tableNo?: string;
+  storeId?: string;
+  totalAmount?: number;
+  status: string;
+  createdAt: string;
+  updatedAt?: string;
+}

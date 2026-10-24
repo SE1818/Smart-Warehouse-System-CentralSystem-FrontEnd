@@ -1,22 +1,14 @@
-export { AuditLogsPage } from './AuditLogsPage';
-export { MetricsPage } from './MetricsPage';
-export { AdminTechnicalPage } from './AdminTechnicalPage';
-export { StaffKdsPage } from './StaffKdsPage';
+// Technical & Edge pages
+export { AdminTechnicalPage } from './technical/AdminTechnicalPage';
 export { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
 export { RobotMonitorPage } from './technical/RobotMonitorPage';
+
+// Staff KDS pages
+export { StaffKdsPage } from './staff/StaffKdsPage';
 
 // Auth pages
 export { LoginPage } from './auth/LoginPage';
 export { RegisterPage } from './auth/RegisterPage';
-
-// Stock pages
-export { WarehousesPage } from './stock/WarehousesPage';
-export { StockLevelsPage } from './stock/StockLevelsPage';
-export { StockMovementsPage } from './stock/StockMovementsPage';
-export { StockAdjustmentsPage } from './stock/StockAdjustmentsPage';
-
-// Other pages
-export { SearchPage } from './search/SearchPage';
-export { NotificationsPage } from './NotificationsPage';
-export { RobotManagementPage } from './RobotManagementPage';
-export { ProfilePage } from './ProfilePage';
+export { StoreRegistrationPage } from './auth/StoreRegistrationPage';
+export { ForgotPasswordPage } from './auth/ForgotPasswordPage';
+export { ResetPasswordPage } from './auth/ResetPasswordPage';

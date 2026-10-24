@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { authService } from '@/services';
-import { Icons } from '@/components/Icons';
+import { Icons } from '@/components/common/Icons';
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');

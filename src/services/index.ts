@@ -1,15 +1,17 @@
 export { default as apiClient } from './api';
-export { auditLogService } from './auditLogService';
-export { metricsService } from './metricsService';
 export { authService } from './auth';
-export { orderService } from './orderService';
-export { userService } from './userService';
-export { productService } from './productService';
-export { stockService } from './stock';
-export { complaintService } from './complaintService';
-export { storeService } from './storeService';
 export { robotService } from './robot';
 export { robotMonitorService } from './robotMonitorService';
-export { transferService } from './transferService';
 export { fileService } from './file';
-export { tenantService } from './portalApi';
+export {
+  fleetService,
+  missionService,
+  alertService,
+  tableService,
+  orderService,
+  tenantService,
+  storeService,
+} from './portalApi';
+export { sqliteService } from './sqliteService';
+export { signalRService } from './signalrService';
+export { edgeSyncService } from './edgeSyncService';

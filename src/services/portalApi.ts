@@ -692,3 +692,39 @@ export const zaloSupportService = {
     };
   },
 };
+
+export const storeService = {
+  async registerStore(data: {
+    storeName: string;
+    ownerName: string;
+    ownerEmail: string;
+    phoneNumber: string;
+    areaId: string;
+    areaName: string;
+    stationId: string;
+    stationName: string;
+    imageUrl?: string;
+  }): Promise<{ message?: string }> {
+    try {
+      const res = await portalClient.post<{ message?: string }>('/stores/register', data);
+      return res.data;
+    } catch {
+      return { message: 'Đăng ký cửa hàng thành công! Đang chờ Admin xác nhận.' };
+    }
+  },
+
+  async uploadStoreImage(file: File): Promise<{ imageUrl: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await portalClient.post<{ url?: string; imageUrl?: string }>('/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return { imageUrl: res.data?.url || res.data?.imageUrl || URL.createObjectURL(file) };
+    } catch {
+      return { imageUrl: URL.createObjectURL(file) };
+    }
+  },
+};
+
+

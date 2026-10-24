@@ -1,6 +1,5 @@
 import apiClient from './api';
-import type { Robot, Area, Station } from '@/types/robot';
-import type { Order } from '@/types/product';
+import type { Robot, Area, Station, Order } from '@/types/robot';
 import { sqliteService } from './sqliteService';
 
 interface RobotRaw {
@@ -44,9 +43,13 @@ export const robotService = {
         updatedAt: r.updatedAt
       }));
 
-      // Save into SQLite
-      await sqliteService.saveRobots(mapped);
-      return await sqliteService.getRobots();
+      // Save into SQLite cache
+      try {
+        await sqliteService.saveRobots(mapped);
+      } catch (saveErr) {
+        console.warn('[robotService] Lỗi lưu robots vào SQLite:', saveErr);
+      }
+      return mapped;
     } catch (err) {
       console.warn('[robotService] Không thể kết nối BE lấy robots, sử dụng dữ liệu offline từ SQLite:', err);
       if (localRobots.length > 0) {

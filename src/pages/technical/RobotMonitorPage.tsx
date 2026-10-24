@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from 'react';
 import { useRobotStore } from '@/stores/robotStore';
-import { Icons } from '@/components/Icons';
+import { Icons } from '@/components/common/Icons';
 
 interface LogEntry {
   timestamp: string;

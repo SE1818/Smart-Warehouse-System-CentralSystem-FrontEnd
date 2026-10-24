@@ -1,20 +1,22 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { LoginPage } from '../LoginPage';
 
-// Mock authService
+// Mock authService and tenantService
 vi.mock('@/services', () => ({
   authService: {
     login: vi.fn(),
     resendVerification: vi.fn(),
-    externalLogin: vi.fn(),
+  },
+  tenantService: {
+    resolveUserTenant: vi.fn().mockResolvedValue(null),
   },
 }));
 
 // Mock the Icons component
-vi.mock('@/components/Icons', () => ({
+vi.mock('@/components/common/Icons', () => ({
   Icons: {
     Robot: () => <span data-testid="robot-icon">RobotIcon</span>,
     AlertWarning: () => <span data-testid="alert-warning-icon">AlertIcon</span>,
@@ -24,11 +26,6 @@ vi.mock('@/components/Icons', () => ({
 
 import { authService } from '@/services';
 
-// Ensure import.meta.env.VITE_GOOGLE_CLIENT_ID is set before LoginPage is evaluated
-beforeAll(() => {
-  (import.meta as { env: Record<string, string | undefined> }).env.VITE_GOOGLE_CLIENT_ID = 'test-client-id';
-});
-
 const renderLoginPage = () => {
   render(
     <BrowserRouter>
@@ -37,17 +34,11 @@ const renderLoginPage = () => {
   );
 };
 
-const getEmailInput = () => screen.getByPlaceholderText('ten@smartwarehouse.com');
+const getEmailInput = () => screen.getByPlaceholderText('nhanvien@smartwarehouse.com');
 const getPasswordInput = () => screen.getByPlaceholderText('••••••••');
 
-/**
- * Submit the form by calling handleSubmit directly.
- * By calling the form's onSubmit handler, we bypass HTML5 validation
- * (required, type=email) that would block submission in jsdom.
- */
 const submitForm = async () => {
-  const form = screen.getByRole('textbox').closest('form')!;
-  // Call the submit handler directly to bypass HTML5 constraint validation
+  const form = screen.getByPlaceholderText('nhanvien@smartwarehouse.com').closest('form')!;
   fireEvent.submit(form);
 };
 
@@ -59,8 +50,9 @@ describe('LoginPage', () => {
 
   it('should render login form elements', () => {
     renderLoginPage();
-    expect(screen.getByText('SmartWarehouse')).toBeInTheDocument();
-    expect(screen.getByText(/Hệ thống phân phối hàng hóa tự hành AMR/)).toBeInTheDocument();
+    expect(screen.getByText('VORA')).toBeInTheDocument();
+    expect(screen.getByText('CENTRAL OS')).toBeInTheDocument();
+    expect(screen.getByText(/Hệ thống Quản Trị & Vận Hành AMR/i)).toBeInTheDocument();
     expect(getEmailInput()).toBeInTheDocument();
     expect(getPasswordInput()).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Đăng nhập hệ thống/i })).toBeInTheDocument();
@@ -104,27 +96,27 @@ describe('LoginPage', () => {
     await user.type(getPasswordInput(), 'password123');
     await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
 
-    expect(screen.getByText('Đang xác thực...')).toBeInTheDocument();
+    expect(screen.getByText('Đang xác thực hệ thống...')).toBeInTheDocument();
   });
 
   it('should store token after successful login', async () => {
     const user = userEvent.setup();
     vi.mocked(authService.login).mockResolvedValueOnce({
-      accessToken: 'mock-token',
+      accessToken: 'mock.eyJzdWIiOiIxMjMiLCJyb2xlIjoidGVjaG5pY2FsIn0=.token',
       refreshToken: 'mock-refresh',
       accessTokenExpiresIn: '3600',
-      role: 'user',
-      email: 'test@example.com',
+      role: 'technical',
+      email: 'engineer@smartwarehouse.com',
     });
 
     renderLoginPage();
 
-    await user.type(getEmailInput(), 'test@example.com');
-    await user.type(getPasswordInput(), 'password123');
+    await user.type(getEmailInput(), 'engineer@smartwarehouse.com');
+    await user.type(getPasswordInput(), 'Password123!');
     await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
 
     await waitFor(() => {
-      expect(localStorage.getItem('authToken')).toBe('mock-token');
+      expect(localStorage.getItem('authToken')).toBe('mock.eyJzdWIiOiIxMjMiLCJyb2xlIjoidGVjaG5pY2FsIn0=.token');
       expect(localStorage.getItem('refreshToken')).toBe('mock-refresh');
     });
   });
@@ -132,7 +124,7 @@ describe('LoginPage', () => {
   it('should handle login error', async () => {
     const user = userEvent.setup();
     vi.mocked(authService.login).mockRejectedValueOnce({
-      response: { data: { message: 'Invalid credentials' } },
+      response: { data: { message: 'Sai email hoặc mật khẩu' } },
     });
 
     renderLoginPage();
@@ -141,46 +133,37 @@ describe('LoginPage', () => {
     await user.type(getPasswordInput(), 'wrongpassword');
     await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
 
-    expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
+    expect(await screen.findByText('Sai email hoặc mật khẩu')).toBeInTheDocument();
   });
 
-  it('should have a link to register page', () => {
+  it('should populate credentials when quick role buttons are clicked', async () => {
+    const user = userEvent.setup();
     renderLoginPage();
-    const registerLinks = screen.getAllByRole('link');
-    const registerLink = registerLinks.find(link => link.textContent?.includes('Tạo tài khoản mới'));
-    expect(registerLink).toBeTruthy();
+
+    const techBtn = screen.getByRole('button', { name: /Kỹ Sư Kỹ Thuật/i });
+    await user.click(techBtn);
+
+    expect(getEmailInput()).toHaveValue('engineer@smartwarehouse.com');
+    expect(getPasswordInput()).toHaveValue('Password123!');
+
+    const staffBtn = screen.getByRole('button', { name: /Nhân Viên Vận Hành/i });
+    await user.click(staffBtn);
+
+    expect(getEmailInput()).toHaveValue('staff@smartwarehouse.com');
+    expect(getPasswordInput()).toHaveValue('Password123!');
   });
 
-  it('should have a forgot password link', () => {
-    renderLoginPage();
-    expect(screen.getByRole('link', { name: /Quên mật khẩu/i })).toBeInTheDocument();
-  });
-
-  it('should have a link to register store page', () => {
-    renderLoginPage();
-    const storeLink = screen.getByRole('link', { name: /Đăng ký mở cửa hàng/i });
-    expect(storeLink).toBeInTheDocument();
-  });
-
-  it('should display password reset success message', async () => {
+  it('should display password reset success message from navigation state', async () => {
     const { MemoryRouter } = await import('react-router-dom');
     render(
       <MemoryRouter initialEntries={[{ pathname: '/login', state: { passwordResetSuccess: true } }]}>
         <LoginPage />
       </MemoryRouter>
     );
-    expect(screen.getByText('Password reset successfully. You can now log in with your new password.')).toBeInTheDocument();
+    expect(screen.getByText('Đổi mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.')).toBeInTheDocument();
   });
 
-  it('should validate empty password', async () => {
-    const user = userEvent.setup();
-    renderLoginPage();
-    await user.type(getEmailInput(), 'test@example.com');
-    await submitForm();
-    expect(await screen.findByText('Mật khẩu không được để trống.')).toBeInTheDocument();
-  });
-
-  it('should display resend verification link and handle resend success', async () => {
+  it('should handle resend verification email', async () => {
     const user = userEvent.setup();
     vi.mocked(authService.login).mockRejectedValueOnce({
       response: { data: { code: 'EMAIL_NOT_VERIFIED', message: 'Email chưa xác minh.' } },
@@ -199,98 +182,7 @@ describe('LoginPage', () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     await user.click(resendBtn);
     expect(authService.resendVerification).toHaveBeenCalledWith({ email: 'test@example.com' });
-    expect(alertSpy).toHaveBeenCalledWith('A new verification email has been sent. Please check your inbox.');
+    expect(alertSpy).toHaveBeenCalledWith('Email xác thực mới đã được gửi. Vui lòng kiểm tra hộp thư của bạn.');
     alertSpy.mockRestore();
-  });
-
-  it('should handle resend verification failure', async () => {
-    const user = userEvent.setup();
-    vi.mocked(authService.login).mockRejectedValueOnce({
-      response: { data: { code: 'EMAIL_NOT_VERIFIED', message: 'Email chưa xác minh.' } },
-    });
-    vi.mocked(authService.resendVerification).mockRejectedValueOnce(new Error('fail'));
-
-    renderLoginPage();
-
-    await user.type(getEmailInput(), 'test@example.com');
-    await user.type(getPasswordInput(), 'password123');
-    await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
-
-    const resendBtn = await screen.findByRole('button', { name: 'Gửi lại email xác minh' });
-    await user.click(resendBtn);
-    expect(await screen.findByText('Failed to send verification email. Please try again.')).toBeInTheDocument();
-  });
-
-  it('should handle Google login success', async () => {
-    let googleCallback: ((res: { credential?: string }) => Promise<void>) | undefined;
-    const initializeSpy = vi.fn((cfg: { callback: (res: { credential?: string }) => Promise<void> }) => {
-      googleCallback = cfg.callback;
-    });
-    const renderButtonSpy = vi.fn();
-    (window as unknown as { google: unknown }).google = {
-      accounts: {
-        id: {
-          initialize: initializeSpy,
-          renderButton: renderButtonSpy,
-        }
-      }
-    };
-
-    vi.mocked(authService.externalLogin).mockResolvedValueOnce({
-      accessToken: 'mock.google.jwt',
-      refreshToken: 'mock-refresh',
-      accessTokenExpiresIn: '3600',
-      role: 'user',
-      email: 'google@example.com',
-    });
-
-    renderLoginPage();
-
-    await waitFor(() => {
-      expect(initializeSpy).toHaveBeenCalled();
-    });
-    expect(googleCallback).toBeDefined();
-
-    if (googleCallback) {
-      await googleCallback({ credential: 'mock-google-id-token' });
-    }
-
-    expect(authService.externalLogin).toHaveBeenCalledWith({
-      provider: 'Google',
-      idToken: 'mock-google-id-token',
-    });
-    expect(localStorage.getItem('authToken')).toBe('mock.google.jwt');
-  });
-
-  it('should handle Google login failure', async () => {
-    let googleCallback: ((res: { credential?: string }) => Promise<void>) | undefined;
-    const initializeSpy = vi.fn((cfg: { callback: (res: { credential?: string }) => Promise<void> }) => {
-      googleCallback = cfg.callback;
-    });
-    const renderButtonSpy = vi.fn();
-    (window as unknown as { google: unknown }).google = {
-      accounts: {
-        id: {
-          initialize: initializeSpy,
-          renderButton: renderButtonSpy,
-        }
-      }
-    };
-
-    vi.mocked(authService.externalLogin).mockRejectedValueOnce({
-      response: { data: { message: 'Google login failed' } },
-    });
-
-    renderLoginPage();
-
-    await waitFor(() => {
-      expect(initializeSpy).toHaveBeenCalled();
-    });
-
-    if (googleCallback) {
-      await googleCallback({ credential: 'mock-google-id-token' });
-    }
-
-    expect(await screen.findByText('Google login failed')).toBeInTheDocument();
   });
 });

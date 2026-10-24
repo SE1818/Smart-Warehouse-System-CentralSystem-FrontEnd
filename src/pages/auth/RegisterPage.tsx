@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services';
-import { Icons } from '@/components/Icons';
+import { Icons } from '@/components/common/Icons';
 
 export function RegisterPage() {
 const navigate = useNavigate();

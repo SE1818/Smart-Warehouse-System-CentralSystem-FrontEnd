@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { StoreRegistrationPage } from '../StoreRegistrationPage';
 
-vi.mock('@/components/Icons', () => {
+vi.mock('@/components/common/Icons', () => {
   const MockIcon = () => <span data-testid="icon" />;
   return { Icons: { Truck: MockIcon, Spinner: MockIcon, Plus: MockIcon, Search: MockIcon, Close: MockIcon, Store: MockIcon, User: MockIcon, Mail: MockIcon, Phone: MockIcon, Calendar: MockIcon, Check: MockIcon, AlertWarning: MockIcon, Info: MockIcon, Folder: MockIcon, MapPin: MockIcon, Navigation: MockIcon, Eye: MockIcon, Trash: MockIcon, Edit: MockIcon, Home: MockIcon, Box: MockIcon, Settings: MockIcon, Logout: MockIcon, Menu: MockIcon, ChevronDown: MockIcon, Bell: MockIcon, FileText: MockIcon, Warehouse: MockIcon, Product: MockIcon, Package: MockIcon, Route: MockIcon, Archive: MockIcon, ClipboardList: MockIcon } };
 });

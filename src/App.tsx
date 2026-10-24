@@ -22,11 +22,11 @@ const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 const StoreRegistrationPage = lazy(() => import('./pages/auth/StoreRegistrationPage').then(m => ({ default: m.StoreRegistrationPage })));
 // Technical Engineer & Staff KDS pages
-const AdminTechnicalPage = lazy(() => import('./pages/AdminTechnicalPage').then(m => ({ default: m.AdminTechnicalPage })));
-const StaffKdsPage = lazy(() => import('./pages/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
+const AdminTechnicalPage = lazy(() => import('./pages/technical/AdminTechnicalPage').then(m => ({ default: m.AdminTechnicalPage })));
+const StaffKdsPage = lazy(() => import('./pages/staff/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
 const StoreEdgeSetupPage = lazy(() => import('./pages/technical/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
 const RobotMonitorPage = lazy(() => import('./pages/technical/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 
 
