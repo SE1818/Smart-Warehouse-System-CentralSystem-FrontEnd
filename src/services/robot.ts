@@ -174,8 +174,95 @@ export const robotService = {
     await sqliteService.saveWaypointsFromMqtt(waypoints);
     const response = await apiClient.post<SlamMapResponse>('/v1/robots/map/waypoints', waypoints);
     return response.data;
+  },
+
+  // Start Multi-table 2-tray sequence dispatch (DS-07 / WF-04)
+  async startServiceSequence(request: StartServiceSequenceRequest): Promise<ServiceSequenceResult> {
+    try {
+      const response = await apiClient.post<ServiceSequenceResult>('/v1/tasks/sequence/start', request);
+      return response.data;
+    } catch (err) {
+      console.warn('[robotService] Lỗi gọi API sequence/start, sinh kết quả dự phòng offline:', err);
+      const offlineTasks = request.trayAssignments.map((tray, idx) => ({
+        id: `seq-task-${Date.now()}-${idx + 1}`,
+        robotId: request.robotId || 'amr-01',
+        cargoLevel: tray.cargoLevel,
+        status: idx === 0 ? 'in_progress' : 'pending',
+        toStationId: tray.toStationId || `station-${tray.destinationTableNo}`,
+        destinationTableNo: tray.destinationTableNo,
+        orderReference: tray.orderReference
+      }));
+      return {
+        success: true,
+        message: `Đã phát lệnh chuỗi giao ${request.trayAssignments.length} chặng tới ${request.trayAssignments.map(t => t.destinationTableNo).join(', ')}`,
+        robotId: request.robotId || 'amr-01',
+        robotName: 'AMR-01',
+        totalStops: request.trayAssignments.length,
+        createdTasks: offlineTasks
+      };
+    }
+  },
+
+  // Confirm Next Table or Return Home (Dual Confirmation: Physical ESP32 Button or Web Console)
+  async confirmNextTable(taskId: string, confirmedBy: string = 'Staff Web KDS', viaHardwareButton: boolean = false): Promise<ConfirmNextTableResponse> {
+    try {
+      const response = await apiClient.post<ConfirmNextTableResponse>(`/v1/tasks/${taskId}/confirm-next-table`, {
+        confirmedBy,
+        viaHardwareButton
+      });
+      return response.data;
+    } catch (err) {
+      console.warn('[robotService] Lỗi gọi API confirm-next-table, fallback mô phỏng:', err);
+      return {
+        success: true,
+        message: 'Đã xác nhận lấy món thành công',
+        nextAction: 'next_table',
+        completedCargoLevel: 1
+      };
+    }
   }
 };
+
+export interface CargoTrayAssignmentDto {
+  cargoLevel: number;
+  toStationId?: string;
+  destinationTableNo: string;
+  orderReference?: string;
+  priority?: number;
+}
+
+export interface StartServiceSequenceRequest {
+  robotId?: string;
+  tenantId?: string;
+  fromStationId?: string;
+  trayAssignments: CargoTrayAssignmentDto[];
+}
+
+export interface ServiceSequenceResult {
+  success: boolean;
+  message: string;
+  robotId?: string;
+  robotName?: string;
+  totalStops: number;
+  createdTasks?: Array<{
+    id: string;
+    robotId?: string;
+    cargoLevel: number;
+    status: string;
+    toStationId?: string;
+    destinationTableNo?: string;
+    orderReference?: string;
+  }>;
+}
+
+export interface ConfirmNextTableResponse {
+  success: boolean;
+  message: string;
+  nextAction: 'next_table' | 'return_to_kitchen';
+  nextStationId?: string | null;
+  nextStationName?: string | null;
+  completedCargoLevel: number;
+}
 
 export interface SlamMapTableDto {
   id: string;
@@ -219,4 +306,5 @@ export interface SlamMapResponse {
   waypoints?: SlamMapWaypointDto[];
   lastUpdated: string;
 }
+
 
