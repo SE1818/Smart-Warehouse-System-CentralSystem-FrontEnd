@@ -34,12 +34,14 @@ interface TableNode {
   id: string;
   name: string;
   zone: string;
-  status: 'occupied' | 'serving' | 'empty' | 'waiting';
+  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
   currentOrders?: string[];
   guestsCount?: number;
   assignedRobot?: string | null;
   worldX?: number;
   worldY?: number;
+  stationId?: string;
+  mergedIntoTableId?: string | null;
 }
 
 export interface TrayItem {
@@ -98,6 +100,20 @@ export const StaffKdsPage: React.FC = () => {
   } | null>(null);
 
   const [isConfirmingTable, setIsConfirmingTable] = useState<boolean>(false);
+
+  // Mid-Transit Table Reroute Modal State
+  const [isRerouteModalOpen, setIsRerouteModalOpen] = useState<boolean>(false);
+  const [rerouteLegIndex, setRerouteLegIndex] = useState<number>(0);
+  const [rerouteNewTable, setRerouteNewTable] = useState<string>('');
+  const [rerouteReason, setRerouteReason] = useState<string>('Khách đổi bàn ăn');
+  const [isSubmittingReroute, setIsSubmittingReroute] = useState<boolean>(false);
+
+  // Table Merge & Split State
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState<boolean>(false);
+  const [mergeTargetTableId, setMergeTargetTableId] = useState<string>('');
+  const [mergeSourceTableId, setMergeSourceTableId] = useState<string>('');
+  const [mergeReason, setMergeReason] = useState<string>('Ghép bàn nhóm đông');
+  const [isSubmittingMerge, setIsSubmittingMerge] = useState<boolean>(false);
   const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
     taskId: string;
     orderId: string;
@@ -596,6 +612,98 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
+  // Open Mid-Transit Reroute Modal
+  const handleOpenRerouteModal = (legIndex: number) => {
+    if (!activeSequence) return;
+    setRerouteLegIndex(legIndex);
+    const currentTableNo = activeSequence.legs[legIndex]?.tableNo;
+    const defaultTarget = tables.find((t) => t.name !== currentTableNo && t.status !== 'merged');
+    setRerouteNewTable(defaultTarget?.name || 'Bàn 08');
+    setIsRerouteModalOpen(true);
+  };
+
+  // Confirm Mid-Transit Reroute
+  const handleConfirmReroute = async () => {
+    if (!activeSequence) return;
+    const leg = activeSequence.legs[rerouteLegIndex];
+    if (!leg || !rerouteNewTable) return;
+    setIsSubmittingReroute(true);
+    try {
+      const targetNode = tables.find((t) => t.name.toLowerCase() === rerouteNewTable.toLowerCase() || t.id === rerouteNewTable);
+      const targetStationId = targetNode?.stationId || targetNode?.id || '55555555-5555-5555-5555-555555555555';
+      await robotService.rerouteTask(leg.taskId, targetStationId, rerouteNewTable, rerouteReason);
+
+      setActiveSequence((prev) => {
+        if (!prev) return null;
+        const updatedLegs = [...prev.legs];
+        updatedLegs[rerouteLegIndex] = {
+          ...updatedLegs[rerouteLegIndex],
+          tableNo: rerouteNewTable
+        };
+        return { ...prev, legs: updatedLegs };
+      });
+
+      if (activeSequence.currentLegIndex === rerouteLegIndex) {
+        setRobots((prev) =>
+          prev.map((r) =>
+            r.code === activeSequence.robotCode
+              ? { ...r, currentZone: `Bẻ lái sang ${rerouteNewTable}` }
+              : r
+          )
+        );
+      }
+
+      showToast(`Đã chuyển hướng Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`, 'success');
+      setIsRerouteModalOpen(false);
+    } catch {
+      showToast('Lỗi khi chuyển hướng bàn, vui lòng thử lại.', 'info');
+    } finally {
+      setIsSubmittingReroute(false);
+    }
+  };
+
+  // Confirm Table Merge
+  const handleConfirmMerge = async () => {
+    if (!mergeTargetTableId || !mergeSourceTableId || mergeTargetTableId === mergeSourceTableId) {
+      showToast('Vui lòng chọn 2 bàn khác nhau để gộp!', 'info');
+      return;
+    }
+    setIsSubmittingMerge(true);
+    try {
+      await robotService.mergeTables(mergeTargetTableId, [mergeSourceTableId], '00000000-0000-0000-0000-000000000000', mergeReason);
+      setTables((prev) =>
+        prev.map((t) => {
+          if (t.id === mergeSourceTableId) {
+            return { ...t, status: 'merged' as const, mergedIntoTableId: mergeTargetTableId };
+          }
+          return t;
+        })
+      );
+      const targetName = tables.find((t) => t.id === mergeTargetTableId)?.name || mergeTargetTableId;
+      const sourceName = tables.find((t) => t.id === mergeSourceTableId)?.name || mergeSourceTableId;
+      showToast(`Đã gộp ${sourceName} vào ${targetName} thành công!`, 'success');
+      setIsMergeModalOpen(false);
+    } catch {
+      showToast('Lỗi khi gộp bàn.', 'info');
+    } finally {
+      setIsSubmittingMerge(false);
+    }
+  };
+
+  // Split Table
+  const handleSplitTable = async (tableId: string) => {
+    try {
+      await robotService.splitTable(tableId);
+      setTables((prev) =>
+        prev.map((t) => (t.id === tableId ? { ...t, status: 'empty' as const, mergedIntoTableId: null } : t))
+      );
+      const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
+      showToast(`Đã tách ${tableName} về trạng thái trống thành công!`, 'success');
+    } catch {
+      showToast('Lỗi khi tách bàn.', 'info');
+    }
+  };
+
   return (
     <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast notifications */}
@@ -679,8 +787,28 @@ export const StaffKdsPage: React.FC = () => {
                 </span>
               </h2>
 
-              {/* View Switcher: SLAM Map vs Cards Grid */}
+              {/* Actions & View Switcher */}
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMergeTargetTableId(tables[0]?.id || '');
+                    setMergeSourceTableId(tables[1]?.id || '');
+                    setIsMergeModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                >
+                  Gộp Bàn
+                </button>
+                {currentSelectedTable.status === 'merged' && (
+                  <button
+                    type="button"
+                    onClick={() => handleSplitTable(currentSelectedTable.id)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
+                  >
+                    Tách Bàn
+                  </button>
+                )}
                 <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
                   <button
                     type="button"
@@ -748,6 +876,9 @@ export const StaffKdsPage: React.FC = () => {
                   <span className="flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-200" /> Bàn trống
                   </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Đã gộp
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
@@ -778,9 +909,16 @@ export const StaffKdsPage: React.FC = () => {
                       >
                         {/* Top Row: Name & Tag */}
                         <div className="flex items-start justify-between">
-                          <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
-                            {table.name}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
+                              {table.name}
+                            </span>
+                            {table.status === 'merged' && (
+                              <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.5 rounded">
+                                Đã Gộp
+                              </span>
+                            )}
+                          </div>
                           <span
                             className={`w-2.5 h-2.5 rounded-full shrink-0 ${isWaiting
                                 ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
@@ -788,7 +926,9 @@ export const StaffKdsPage: React.FC = () => {
                                   ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
                                   : isOccupied
                                     ? 'bg-emerald-500'
-                                    : 'bg-slate-300'
+                                    : table.status === 'merged'
+                                      ? 'bg-purple-500'
+                                      : 'bg-slate-300'
                               }`}
                           />
                         </div>
@@ -986,6 +1126,18 @@ export const StaffKdsPage: React.FC = () => {
                   >
                     {activeSequence.legs[0].status === 'completed' ? 'Đã lấy món ✓' : 'Đang tới bàn...'}
                   </div>
+                  {activeSequence.legs[0].status !== 'completed' && activeSequence.status === 'in_progress' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenRerouteModal(0);
+                      }}
+                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
+                    >
+                      Đổi Bàn
+                    </button>
+                  )}
                 </div>
 
                 {/* Step 3: Tray 2 -> Table 2 */}
@@ -1015,6 +1167,18 @@ export const StaffKdsPage: React.FC = () => {
                         ? 'Đang tới bàn...'
                         : 'Chờ chặng 1'}
                   </div>
+                  {activeSequence.legs[1].status !== 'completed' && activeSequence.status === 'in_progress' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenRerouteModal(1);
+                      }}
+                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
+                    >
+                      Đổi Bàn
+                    </button>
+                  )}
                 </div>
 
                 {/* Step 4: Back to Kitchen */}
@@ -1076,10 +1240,21 @@ export const StaffKdsPage: React.FC = () => {
                       disabled={isConfirmingTable}
                       onClick={() => handleConfirmNextTable(true)}
                       className="w-full py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-emerald-500/40"
-                      title="Mô phỏng khách nhấn nút vật lý ESP32 gắn trên thân robot"
+                      title="Mô phỏng nhân viên phục vụ nhấn nút vật lý ESP32 gắn trên thân robot"
                     >
                       <Cpu className="w-3.5 h-3.5 text-amber-300" />
                       <span>Mô Phỏng Nút Bấm ESP32</span>
+                    </button>
+                  </div>
+
+                  {/* Mid-Transit Table Transfer Action Button */}
+                  <div className="pt-1 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenRerouteModal(activeSequence.currentLegIndex)}
+                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 text-xs font-semibold border border-cyan-500/30 transition-all cursor-pointer text-center"
+                    >
+                      Đổi Bàn Giữa Chặng Cho Khay {activeSequence.currentLegIndex + 1}
                     </button>
                   </div>
                 </div>
@@ -1691,6 +1866,170 @@ export const StaffKdsPage: React.FC = () => {
           )}
         </button>
       </div>
+
+      {/* MID-TRANSIT TABLE REROUTE MODAL */}
+      {isRerouteModalOpen && activeSequence && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 font-heading">
+                Đổi Bàn Giữa Chặng (Mid-Transit Reroute)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Chuyển hướng di chuyển của Robot {activeSequence.robotCode} sang bàn ăn mới.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                <div className="text-slate-500">Khay đang đổi hướng:</div>
+                <div className="font-bold text-slate-900">
+                  Khay {rerouteLegIndex + 1} (Hiện tại: {activeSequence.legs[rerouteLegIndex]?.tableNo})
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Chọn Bàn Đích Mới
+                </label>
+                <select
+                  value={rerouteNewTable}
+                  onChange={(e) => setRerouteNewTable(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  {tables
+                    .filter((t) => t.name !== activeSequence.legs[rerouteLegIndex]?.tableNo && t.status !== 'merged')
+                    .map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lý do chuyển bàn (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  value={rerouteReason}
+                  onChange={(e) => setRerouteReason(e.target.value)}
+                  placeholder="Khách đổi sang bàn máy lạnh, gộp tiệc..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isSubmittingReroute}
+                onClick={() => setIsRerouteModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingReroute || !rerouteNewTable}
+                onClick={handleConfirmReroute}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+              >
+                {isSubmittingReroute ? 'Đang Xử Lý...' : 'Xác Nhận Đổi Bàn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TABLE MERGE MODAL */}
+      {isMergeModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 font-heading">
+                Gộp Bàn Ăn (Table Merge)
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Hợp nhất 2 bàn ăn liền kề thành một bàn chính để phục vụ đoàn khách đông.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Bàn Chính (Bàn Tiếp Nhận)
+                </label>
+                <select
+                  value={mergeTargetTableId}
+                  onChange={(e) => setMergeTargetTableId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  {tables
+                    .filter((t) => t.status !== 'merged')
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Bàn Cần Gộp Vào (Bàn Phụ)
+                </label>
+                <select
+                  value={mergeSourceTableId}
+                  onChange={(e) => setMergeSourceTableId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  {tables
+                    .filter((t) => t.id !== mergeTargetTableId && t.status !== 'merged')
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lý do gộp bàn
+                </label>
+                <input
+                  type="text"
+                  value={mergeReason}
+                  onChange={(e) => setMergeReason(e.target.value)}
+                  placeholder="Ghép bàn nhóm đông, tiệc gia đình..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isSubmittingMerge}
+                onClick={() => setIsMergeModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingMerge || !mergeTargetTableId || !mergeSourceTableId}
+                onClick={handleConfirmMerge}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+              >
+                {isSubmittingMerge ? 'Đang Gộp...' : 'Xác Nhận Gộp Bàn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

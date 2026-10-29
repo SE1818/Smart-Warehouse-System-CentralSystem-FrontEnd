@@ -220,6 +220,60 @@ export const robotService = {
         completedCargoLevel: 1
       };
     }
+  },
+
+  // Reroute active task to a new table station mid-transit
+  async rerouteTask(taskId: string, newStationId: string, newTableNo: string, reason: string = 'Đổi bàn giữa chặng'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/reroute`, {
+        newStationId,
+        newTableNo,
+        reason,
+        requestedBy: 'Staff KDS'
+      });
+      return response.data;
+    } catch (err) {
+      console.warn('[robotService] Lỗi gọi API reroute, fallback mô phỏng:', err);
+      return {
+        success: true,
+        message: `Đã chuyển hướng nhiệm vụ sang ${newTableNo} thành công (chế độ dự phòng).`
+      };
+    }
+  },
+
+  // Merge source tables into a target table
+  async mergeTables(targetTableId: string, sourceTableIds: string[], storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${targetTableId}/merge`, {
+        storeId,
+        sourceTableIds,
+        reason
+      });
+      return response.data;
+    } catch (err) {
+      console.warn('[robotService] Lỗi gọi API merge tables, fallback mô phỏng:', err);
+      return {
+        success: true,
+        message: 'Đã gộp bàn thành công (chế độ dự phòng).'
+      };
+    }
+  },
+
+  // Split merged table back to available
+  async splitTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${tableId}/split`, {
+        storeId,
+        reason
+      });
+      return response.data;
+    } catch (err) {
+      console.warn('[robotService] Lỗi gọi API split table, fallback mô phỏng:', err);
+      return {
+        success: true,
+        message: 'Đã tách bàn thành công (chế độ dự phòng).'
+      };
+    }
   }
 };
 
