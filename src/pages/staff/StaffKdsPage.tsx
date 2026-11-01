@@ -21,7 +21,14 @@ import {
   Cpu,
   Navigation,
   Radio,
+  Plus,
+  FileSpreadsheet,
+  Download,
+  Upload,
+  X,
+  Target,
 } from 'lucide-react';
+import type { Station } from '@/types/robot';
 import { fleetService, tableService, orderService, type PendingOrderDto } from '@/services/portalApi';
 import { robotService } from '@/services/robot';
 import { sqliteService } from '@/services/sqliteService';
@@ -32,6 +39,7 @@ import { SlamFloorMapViewer } from '@/components/map/SlamFloorMapViewer';
 
 interface TableNode {
   id: string;
+  tableNo?: string;
   name: string;
   zone: string;
   status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
@@ -40,8 +48,10 @@ interface TableNode {
   assignedRobot?: string | null;
   worldX?: number;
   worldY?: number;
-  stationId?: string;
+  stationId?: string | null;
+  stationName?: string | null;
   mergedIntoTableId?: string | null;
+  qrCodeUrl?: string | null;
 }
 
 export interface TrayItem {
@@ -107,6 +117,33 @@ export const StaffKdsPage: React.FC = () => {
   const [rerouteNewTable, setRerouteNewTable] = useState<string>('');
   const [rerouteReason, setRerouteReason] = useState<string>('Khách đổi bàn ăn');
   const [isSubmittingReroute, setIsSubmittingReroute] = useState<boolean>(false);
+
+  // Physical Stations from ROS SLAM map
+  const [stations, setStations] = useState<Station[]>([]);
+
+  // Create Table Modal State
+  const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState<boolean>(false);
+  const [newTableNo, setNewTableNo] = useState<string>('');
+  const [newTableName, setNewTableName] = useState<string>('');
+  const [newTableCapacity, setNewTableCapacity] = useState<number>(4);
+  const [newTableStationId, setNewTableStationId] = useState<string>('');
+  const [isSubmittingCreateTable, setIsSubmittingCreateTable] = useState<boolean>(false);
+
+  // Import CSV Modal State
+  const [isImportCsvModalOpen, setIsImportCsvModalOpen] = useState<boolean>(false);
+  const [importCsvMode, setImportCsvMode] = useState<'upload' | 'text'>('upload');
+  const [importCsvFile, setImportCsvFile] = useState<File | null>(null);
+  const [importCsvContent, setImportCsvContent] = useState<string>(
+    'TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn 04,2,'
+  );
+  const [isSubmittingImportCsv, setIsSubmittingImportCsv] = useState<boolean>(false);
+  const [importResult, setImportResult] = useState<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] } | null>(null);
+
+  // Assign Station Modal State
+  const [isAssignStationModalOpen, setIsAssignStationModalOpen] = useState<boolean>(false);
+  const [assignStationTableId, setAssignStationTableId] = useState<string>('');
+  const [assignStationTargetStationId, setAssignStationTargetStationId] = useState<string>('');
+  const [isSubmittingAssignStation, setIsSubmittingAssignStation] = useState<boolean>(false);
 
   // Table Merge & Split State
   const [isMergeModalOpen, setIsMergeModalOpen] = useState<boolean>(false);
@@ -204,17 +241,32 @@ export const StaffKdsPage: React.FC = () => {
           setManualSelectedRobot(mappedRobots[0].code);
         }
 
+        // Fetch physical stations from ROS SLAM map
+        try {
+          const stList = await robotService.getStations();
+          if (stList && stList.length > 0) {
+            setStations(stList);
+          }
+        } catch (e) {
+          console.warn('[StaffKdsPage] Lỗi tải stations:', e);
+        }
+
         // 2. Fetch real tables for this store
         const tableList = await tableService.getTables(sub);
         if (tableList.length > 0) {
           const mappedTables: TableNode[] = tableList.map((t) => ({
             id: t.tableNo || t.id,
-            name: `Bàn ${t.tableNo || t.id}`,
+            tableNo: t.tableNo || t.id,
+            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
             zone: t.zone || '',
-            status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty',
+            status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : t.status === 'merged' ? 'merged' : 'empty',
             guestsCount: t.capacity || 4,
             currentOrders: t.currentOrders || [],
             assignedRobot: t.assignedRobotCode || null,
+            stationId: t.stationId,
+            stationName: t.stationName,
+            mergedIntoTableId: t.mergedIntoTableId,
+            qrCodeUrl: t.qrCodeUrl,
             worldX: t.worldX,
             worldY: t.worldY,
           }));
@@ -662,6 +714,148 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
+  // Create Table Manually
+  const handleCreateTable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTableNo.trim()) {
+      showToast('Vui lòng nhập số hiệu bàn', 'info');
+      return;
+    }
+    setIsSubmittingCreateTable(true);
+    try {
+      const res = await tableService.createTable({
+        tableNo: newTableNo.trim(),
+        tableName: newTableName.trim() || `Bàn ${newTableNo.trim()}`,
+        capacity: newTableCapacity,
+        stationId: newTableStationId || null,
+      });
+      if (res.success) {
+        showToast(`Tạo thành công bàn ${newTableNo}`, 'success');
+        setIsCreateTableModalOpen(false);
+        // Refresh tables list
+        const updatedList = await tableService.getTables(_subdomain);
+        if (updatedList.length > 0) {
+          setTables(updatedList.map((t) => ({
+            id: t.tableNo || t.id,
+            tableNo: t.tableNo || t.id,
+            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
+            zone: t.zone || '',
+            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
+            guestsCount: t.capacity || 4,
+            currentOrders: t.currentOrders || [],
+            assignedRobot: t.assignedRobotCode || null,
+            stationId: t.stationId,
+            stationName: t.stationName,
+            mergedIntoTableId: t.mergedIntoTableId,
+            qrCodeUrl: t.qrCodeUrl,
+            worldX: t.worldX,
+            worldY: t.worldY,
+          })));
+          setSelectedTableId(newTableNo.trim());
+        }
+      } else {
+        showToast(res.message || 'Không thể tạo bàn ăn', 'info');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Lỗi tạo bàn ăn', 'info');
+    } finally {
+      setIsSubmittingCreateTable(false);
+    }
+  };
+
+  // Import Tables via CSV / Excel
+  const handleImportCsv = async () => {
+    setIsSubmittingImportCsv(true);
+    try {
+      let res;
+      if (importCsvMode === 'upload' && importCsvFile) {
+        res = await tableService.uploadCsv('00000000-0000-0000-0000-000000000000', importCsvFile);
+      } else {
+        res = await tableService.importCsv('00000000-0000-0000-0000-000000000000', importCsvContent);
+      }
+      setImportResult(res);
+      if (res.success) {
+        showToast(`Nhập thành công ${res.totalCreated} bàn ăn!`, 'success');
+        // Refresh tables list
+        const updatedList = await tableService.getTables(_subdomain);
+        if (updatedList.length > 0) {
+          setTables(updatedList.map((t) => ({
+            id: t.tableNo || t.id,
+            tableNo: t.tableNo || t.id,
+            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
+            zone: t.zone || '',
+            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
+            guestsCount: t.capacity || 4,
+            currentOrders: t.currentOrders || [],
+            assignedRobot: t.assignedRobotCode || null,
+            stationId: t.stationId,
+            stationName: t.stationName,
+            mergedIntoTableId: t.mergedIntoTableId,
+            qrCodeUrl: t.qrCodeUrl,
+            worldX: t.worldX,
+            worldY: t.worldY,
+          })));
+        }
+      } else {
+        showToast('Có lỗi xảy ra khi nhập file CSV', 'info');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Lỗi xử lý file CSV', 'info');
+    } finally {
+      setIsSubmittingImportCsv(false);
+    }
+  };
+
+  // Download Sample CSV Template
+  const handleDownloadSampleCsv = () => {
+    const csvHeader = 'TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn Ban Công 04,2,\nT05,Bàn Ban Công 05,4,';
+    const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'VORA_DiningTables_Template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Đã tải xuống file CSV mẫu', 'info');
+  };
+
+  // Assign Station to Table
+  const handleAssignStation = async () => {
+    if (!assignStationTableId) {
+      showToast('Vui lòng chọn bàn cần gán', 'info');
+      return;
+    }
+    setIsSubmittingAssignStation(true);
+    try {
+      const res = await tableService.assignStation(assignStationTableId, assignStationTargetStationId || null);
+      if (res.success) {
+        const stationObj = stations.find((s) => s.id === assignStationTargetStationId);
+        setTables((prev) =>
+          prev.map((t) =>
+            t.id === assignStationTableId
+              ? {
+                  ...t,
+                  stationId: assignStationTargetStationId || null,
+                  stationName: stationObj ? stationObj.name : null,
+                  worldX: stationObj ? stationObj.xCoord : t.worldX,
+                  worldY: stationObj ? stationObj.yCoord : t.worldY,
+                }
+              : t
+          )
+        );
+        showToast(res.message || 'Gán trạm thành công', 'success');
+        setIsAssignStationModalOpen(false);
+      } else {
+        showToast(res.message || 'Lỗi gán trạm', 'info');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Lỗi gán trạm', 'info');
+    } finally {
+      setIsSubmittingAssignStation(false);
+    }
+  };
+
   // Confirm Table Merge
   const handleConfirmMerge = async () => {
     if (!mergeTargetTableId || !mergeSourceTableId || mergeTargetTableId === mergeSourceTableId) {
@@ -788,7 +982,48 @@ export const StaffKdsPage: React.FC = () => {
               </h2>
 
               {/* Actions & View Switcher */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTableNo(`T${(tables.length + 1).toString().padStart(2, '0')}`);
+                    setNewTableName(`Bàn ${(tables.length + 1).toString().padStart(2, '0')}`);
+                    setNewTableCapacity(4);
+                    setNewTableStationId('');
+                    setIsCreateTableModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Thêm Bàn</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportResult(null);
+                    setImportCsvFile(null);
+                    setIsImportCsvModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Nhập Excel / CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignStationTableId(currentSelectedTable.id);
+                    setAssignStationTargetStationId(currentSelectedTable.stationId || '');
+                    setIsAssignStationModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Gán Trạm Robot</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -1019,7 +1254,31 @@ export const StaffKdsPage: React.FC = () => {
                   )}
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : 'Đang đón khách'}</strong>
+                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : currentSelectedTable.status === 'merged' ? 'Đã gộp bàn' : 'Đang đón khách'}</strong>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-[11px]">
+                  <span className="text-slate-500 font-semibold">Trạm Robot:</span>
+                  {currentSelectedTable.stationName || currentSelectedTable.stationId ? (
+                    <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-purple-600" />
+                      <span>{currentSelectedTable.stationName || currentSelectedTable.stationId}</span>
+                    </span>
+                  ) : (
+                    <span className="text-amber-600 font-mono text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Chưa gán trạm
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignStationTableId(currentSelectedTable.id);
+                      setAssignStationTargetStationId(currentSelectedTable.stationId || '');
+                      setIsAssignStationModalOpen(true);
+                    }}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                  >
+                    [Gán/Đổi Trạm]
+                  </button>
                 </div>
               </div>
             </div>
@@ -1943,7 +2202,343 @@ export const StaffKdsPage: React.FC = () => {
         </div>
       )}
 
-      {/* TABLE MERGE MODAL */}
+      {/* MODAL 1: CREATE TABLE MANUALLY */}
+      {isCreateTableModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-blue-600" />
+                  <span>Thêm Bàn Ăn Mới</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Tạo thủ công bàn ăn và liên kết trạm tọa độ Robot SLAM.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateTableModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTable} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Mã / Số Bàn (TableNo) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newTableNo}
+                  onChange={(e) => setNewTableNo(e.target.value)}
+                  placeholder="Ví dụ: T01, B12..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tên Hiển Thị (TableName)
+                </label>
+                <input
+                  type="text"
+                  value={newTableName}
+                  onChange={(e) => setNewTableName(e.target.value)}
+                  placeholder="Ví dụ: Bàn 01 - Khu Ban Công"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Sức Chứa (Ghế)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={newTableCapacity}
+                    onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 4)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Trạm Robot (SLAM)
+                  </label>
+                  <select
+                    value={newTableStationId}
+                    onChange={(e) => setNewTableStationId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  >
+                    <option value="">-- Chưa gán trạm --</option>
+                    {stations.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.xCoord}, {s.yCoord})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTableModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCreateTable || !newTableNo.trim()}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/10 cursor-pointer"
+                >
+                  {isSubmittingCreateTable ? 'Đang Tạo...' : 'Tạo Bàn Ăn'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: IMPORT TABLES CSV / EXCEL */}
+      {isImportCsvModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Nhập Bàn Ăn Hàng Loạt (Excel / CSV)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Khởi tạo nhanh danh sách bàn ăn và liên kết trạm SLAM từ file mẫu.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImportCsvModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setImportCsvMode('upload')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    importCsvMode === 'upload' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
+                  }`}
+                >
+                  Tải Lên File (.csv)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportCsvMode('text')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    importCsvMode === 'text' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
+                  }`}
+                >
+                  Dán Nội Dung CSV
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadSampleCsv}
+                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Tải file mẫu CSV</span>
+              </button>
+            </div>
+
+            {/* Tab 1: Upload File */}
+            {importCsvMode === 'upload' ? (
+              <div className="space-y-2">
+                <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all bg-slate-50/50 hover:bg-blue-50/20">
+                  <Upload className="w-6 h-6 text-slate-400" />
+                  <span className="text-xs font-semibold text-slate-700">
+                    {importCsvFile ? importCsvFile.name : 'Chọn hoặc kéo thả file CSV vào đây'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">Định dạng file: .csv (phân cách phẩy hoặc chấm phẩy)</span>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setImportCsvFile(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            ) : (
+              /* Tab 2: Text Input */
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Nội dung CSV (Header: TableNo,TableName,Capacity,StationName)
+                </label>
+                <textarea
+                  rows={5}
+                  value={importCsvContent}
+                  onChange={(e) => setImportCsvContent(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px] text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            )}
+
+            {/* Import Result Stats */}
+            {importResult && (
+              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+                importResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
+              }`}>
+                <div className="font-bold flex items-center justify-between">
+                  <span>Kết quả xử lý:</span>
+                  <span>Tạo: {importResult.totalCreated} • Bỏ qua: {importResult.totalSkipped}</span>
+                </div>
+                {importResult.messages && importResult.messages.length > 0 && (
+                  <div className="max-h-24 overflow-y-auto text-[10px] font-mono space-y-0.5 pt-1 border-t border-emerald-200/60">
+                    {importResult.messages.slice(0, 6).map((msg, idx) => (
+                      <div key={idx}>• {msg}</div>
+                    ))}
+                    {importResult.messages.length > 6 && (
+                      <div>... và {importResult.messages.length - 6} thông báo khác.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsImportCsvModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingImportCsv || (importCsvMode === 'upload' && !importCsvFile)}
+                onClick={handleImportCsv}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/10 cursor-pointer"
+              >
+                {isSubmittingImportCsv ? 'Đang Nhập...' : 'Bắt Đầu Nhập Bàn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: ASSIGN STATION (WAYPOINT) TO TABLE */}
+      {isAssignStationModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-purple-600" />
+                  <span>Gán Trạm Robot (SLAM Waypoint)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ SLAM.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAssignStationModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Bàn Ăn Cần Gán Trạm
+                </label>
+                <select
+                  value={assignStationTableId}
+                  onChange={(e) => {
+                    setAssignStationTableId(e.target.value);
+                    const matched = tables.find((t) => t.id === e.target.value);
+                    setAssignStationTargetStationId(matched?.stationId || '');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.stationName ? `(Hiện tại: ${t.stationName})` : '(Chưa gán trạm)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Chọn Trạm Vật Lý (Đồng Bộ từ SLAM Nav2 qua MQTT)
+                </label>
+                <select
+                  value={assignStationTargetStationId}
+                  onChange={(e) => setAssignStationTargetStationId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  <option value="">-- Hủy gán trạm (Không gán xe) --</option>
+                  {stations.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      📍 {s.name} (X: {s.xCoord}, Y: {s.yCoord}) • {s.stationType || 'Bàn ăn'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-[11px] text-purple-900 space-y-1">
+                <span className="font-bold flex items-center gap-1">
+                  <Target className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Cơ chế điều phối tự động:</span>
+                </span>
+                <p className="text-purple-700 leading-relaxed">
+                  Khi bếp phát lệnh giao món tới bàn này, Robot AMR sẽ tự động di chuyển đến tọa độ của trạm được chọn để phục vụ.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAssignStationModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingAssignStation}
+                onClick={handleAssignStation}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/10 cursor-pointer"
+              >
+                {isSubmittingAssignStation ? 'Đang Lưu...' : 'Lưu Gán Trạm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TABLE MERGE MODAL (ENHANCED) */}
       {isMergeModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
@@ -1956,10 +2551,22 @@ export const StaffKdsPage: React.FC = () => {
               </p>
             </div>
 
+            {/* Architectural Clarification Banner */}
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5 text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>Nguyên tắc Robot khi Gộp Bàn:</span>
+              </div>
+              <p className="text-[11px] text-blue-700 leading-relaxed">
+                • Toàn bộ đơn hàng sẽ được Robot chuyển hướng giao tới <strong>Trạm vật lý của Bàn Chính</strong>.<br/>
+                • <strong>Bản đồ SLAM và các Waypoint của Robot được giữ nguyên 100%</strong>, không bị xáo trộn hay gộp sai lệch tọa độ.
+              </p>
+            </div>
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bàn Chính (Bàn Tiếp Nhận)
+                  Bàn Chính (Bàn Tiếp Nhận Giao Món)
                 </label>
                 <select
                   value={mergeTargetTableId}
@@ -1970,7 +2577,7 @@ export const StaffKdsPage: React.FC = () => {
                     .filter((t) => t.status !== 'merged')
                     .map((t) => (
                       <option key={t.id} value={t.id}>
-                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+                        {t.name} {t.stationName ? `(Trạm: ${t.stationName})` : ''} ({t.zone || 'Khu Bàn Ăn'})
                       </option>
                     ))}
                 </select>

@@ -158,14 +158,21 @@ export interface PendingOrderDto {
 export interface DiningTableDto {
   id: string;
   tableNo: string;
+  tableName?: string;
   zone: string;
   capacity: number;
-  status: 'occupied' | 'serving' | 'empty' | 'waiting';
+  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
   assignedRobotCode: string | null;
+  stationId?: string | null;
+  stationName?: string | null;
+  mergedIntoTableId?: string | null;
+  qrCodeUrl?: string | null;
   currentOrders: string[];
   orderTime: string | null;
   worldX?: number;
   worldY?: number;
+  xCoord?: number;
+  yCoord?: number;
 }
 
 export interface ZaloConversation {
@@ -481,23 +488,28 @@ export const tableService = {
     try {
       const res = await portalClient.get(`/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ''}`);
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        const valid = res.data
-          .filter((t: any) => typeof t.worldX === 'number' || typeof t.xCoord === 'number')
-          .map((t: any) => ({
-            id: t.id?.toString() || t.tableNo || 'Table',
-            tableNo: t.tableNo || t.name || 'Bàn',
-            zone: t.zone || 'Khu Trong Nhà',
-            capacity: t.capacity || 4,
-            status: t.status || 'empty',
-            assignedRobotCode: t.assignedRobotCode || null,
-            currentOrders: t.currentOrders || [],
-            orderTime: t.orderTime || null,
-            worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
-            worldY: typeof t.worldY === 'number' ? t.worldY : t.yCoord,
-          }));
-        if (valid.length > 0) {
-          return valid;
-        }
+        return res.data.map((t: any) => ({
+          id: t.id?.toString() || t.tableNo || 'Table',
+          tableNo: t.tableNo || t.name || 'Bàn',
+          tableName: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : 'Bàn'),
+          zone: t.zone || 'Khu Trong Nhà',
+          capacity: t.capacity || 4,
+          status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
+            : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
+            : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
+            : t.status === 'Served' || t.status === 'serving' ? 'serving'
+            : t.status === 'Merged' || t.status === 'merged' ? 'merged'
+            : 'empty') as DiningTableDto['status'],
+          assignedRobotCode: t.assignedRobotCode || null,
+          stationId: t.stationId || null,
+          stationName: t.stationName || null,
+          mergedIntoTableId: t.mergedIntoTableId || null,
+          qrCodeUrl: t.qrCodeUrl || null,
+          currentOrders: t.currentOrders || [],
+          orderTime: t.orderTime || null,
+          worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
+          worldY: typeof t.worldY === 'number' ? t.worldY : t.yCoord,
+        }));
       }
     } catch {
       // Backend /tables chưa có hoặc offline
@@ -516,12 +528,99 @@ export const tableService = {
     return [];
   },
 
-  createTable: async (data: { tableNo: string; zone: string; capacity: number; storeId?: string }): Promise<boolean> => {
+  createTable: async (data: { storeId?: string; tableNo: string; tableName?: string; capacity?: number; stationId?: string | null; zone?: string }): Promise<{ success: boolean; data?: any; message?: string }> => {
     try {
-      await portalClient.post('/tables', data);
-      return true;
-    } catch {
-      return false;
+      const res = await portalClient.post('/tables', {
+        storeId: data.storeId || '00000000-0000-0000-0000-000000000000',
+        tableNo: data.tableNo,
+        tableName: data.tableName || `Bàn ${data.tableNo}`,
+        capacity: data.capacity || 4,
+        stationId: data.stationId || null,
+      });
+      return { success: true, data: res.data };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi tạo bàn ăn' };
+    }
+  },
+
+  importCsv: async (storeId: string, csvContent: string): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
+    try {
+      const res = await portalClient.post('/tables/import-csv', {
+        storeId: storeId || '00000000-0000-0000-0000-000000000000',
+        csvContent,
+      });
+      return {
+        success: true,
+        totalProcessed: res.data?.totalProcessed ?? 0,
+        totalCreated: res.data?.totalCreated ?? 0,
+        totalSkipped: res.data?.totalSkipped ?? 0,
+        messages: res.data?.messages || [],
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        totalProcessed: 0,
+        totalCreated: 0,
+        totalSkipped: 0,
+        messages: [err?.response?.data?.message || err.message || 'Lỗi nhập dữ liệu CSV'],
+      };
+    }
+  },
+
+  uploadCsv: async (storeId: string, file: File): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
+    try {
+      const formData = new FormData();
+      formData.append('storeId', storeId || '00000000-0000-0000-0000-000000000000');
+      formData.append('file', file);
+      const res = await portalClient.post('/tables/upload-csv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return {
+        success: true,
+        totalProcessed: res.data?.totalProcessed ?? 0,
+        totalCreated: res.data?.totalCreated ?? 0,
+        totalSkipped: res.data?.totalSkipped ?? 0,
+        messages: res.data?.messages || [],
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        totalProcessed: 0,
+        totalCreated: 0,
+        totalSkipped: 0,
+        messages: [err?.response?.data?.message || err.message || 'Lỗi tải lên file CSV'],
+      };
+    }
+  },
+
+  assignStation: async (tableId: string, stationId: string | null): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await portalClient.post(`/tables/${tableId}/assign-station`, { stationId });
+      return { success: true, message: res.data?.message || 'Cập nhật trạm thành công' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi gán trạm' };
+    }
+  },
+
+  batchAssignStations: async (storeId: string, assignments: { tableId?: string; tableNo?: string; stationId?: string; stationName?: string }[]): Promise<{ success: boolean; totalSuccess: number; totalFailed: number; messages: string[] }> => {
+    try {
+      const res = await portalClient.post('/tables/batch-assign-stations', {
+        storeId: storeId || '00000000-0000-0000-0000-000000000000',
+        assignments,
+      });
+      return {
+        success: true,
+        totalSuccess: res.data?.totalSuccess ?? 0,
+        totalFailed: res.data?.totalFailed ?? 0,
+        messages: res.data?.messages || [],
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        totalSuccess: 0,
+        totalFailed: assignments.length,
+        messages: [err?.response?.data?.message || err.message || 'Lỗi gán trạm hàng loạt'],
+      };
     }
   },
 
