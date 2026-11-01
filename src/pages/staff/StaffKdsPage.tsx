@@ -1,2643 +1,5286 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  UtensilsCrossed,
-  Sparkles,
-  CheckCircle2,
-  Clock,
-  BatteryCharging,
-  RotateCcw,
-  Store,
-  Send,
-  Map as MapIcon,
-  LayoutGrid,
-  LogOut,
-  AlertTriangle,
-  Database,
-  Hash,
-  MapPin,
-  ArrowRight,
-  Layers,
-  Cpu,
-  Navigation,
-  Radio,
-  Plus,
-  FileSpreadsheet,
-  Download,
-  Upload,
-  X,
-  Target,
-} from 'lucide-react';
-import type { Station } from '@/types/robot';
-import { fleetService, tableService, orderService, type PendingOrderDto } from '@/services/portalApi';
-import { robotService } from '@/services/robot';
-import { sqliteService } from '@/services/sqliteService';
-import { fixMojibake } from '@/utils/textUtils';
-import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/common/Pagination';
-import { SlamFloorMapViewer } from '@/components/map/SlamFloorMapViewer';
-
-interface TableNode {
-  id: string;
-  tableNo?: string;
-  name: string;
-  zone: string;
-  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
-  currentOrders?: string[];
-  guestsCount?: number;
-  assignedRobot?: string | null;
-  worldX?: number;
-  worldY?: number;
-  stationId?: string | null;
-  stationName?: string | null;
-  mergedIntoTableId?: string | null;
-  qrCodeUrl?: string | null;
-}
-
-export interface TrayItem {
-  dishName: string;
-  qty: number;
-  note?: string;
-}
-
-interface RobotFleetItem {
-  id: string;
-  code: string;
-  name: string;
-  status: 'idle' | 'delivering' | 'charging' | 'offline';
-  battery: number;
-  currentZone: string;
-  dockNumber?: number;
-}
-
-export const StaffKdsPage: React.FC = () => {
-  // Store context
-  const [storeName, setStoreName] = useState<string>('Nhà Hàng VORA');
-  const [_subdomain, setSubdomain] = useState<string>('launuong-saigon');
-  const [_isLoading, setIsLoading] = useState<boolean>(true);
-
-  const [selectedTableId, setSelectedTableId] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
-
-  // Staff Move Request Form (Order ID & Destination Table)
-  const [orderInputId, setOrderInputId] = useState<string>('ORD-101');
-  const [destinationInput, setDestinationInput] = useState<string>('Bàn 01');
-
-  // Mode: Single Table vs 2-Tray Sequence (DS-07 Multi-Table)
-  const [dispatchMode, setDispatchMode] = useState<'sequence' | 'single'>('sequence');
-
-  // 2-Tray Multi-Table Sequence Setup (Khay 1 & Khay 2)
-  const [tray1Table, setTray1Table] = useState<string>('Bàn 11');
-  const [tray1OrderId, setTray1OrderId] = useState<string>('ORD-101');
-  const [tray2Table, setTray2Table] = useState<string>('Bàn 12');
-  const [tray2OrderId, setTray2OrderId] = useState<string>('ORD-102');
-
-  // Active Multi-Table Sequence Mission (Realtime Tracking & Dual Confirmation)
-  const [activeSequence, setActiveSequence] = useState<{
-    sequenceId: string;
-    robotCode: string;
-    robotName: string;
-    currentLegIndex: number; // 0 = Leg 1, 1 = Leg 2, 2 = Completed/Returning
-    legs: Array<{
-      cargoLevel: number;
-      tableNo: string;
-      orderId: string;
-      status: 'pending' | 'delivering' | 'completed';
-      taskId: string;
-    }>;
-    status: 'in_progress' | 'completed';
-    startTime: string;
-  } | null>(null);
-
-  const [isConfirmingTable, setIsConfirmingTable] = useState<boolean>(false);
-
-  // Mid-Transit Table Reroute Modal State
-  const [isRerouteModalOpen, setIsRerouteModalOpen] = useState<boolean>(false);
-  const [rerouteLegIndex, setRerouteLegIndex] = useState<number>(0);
-  const [rerouteNewTable, setRerouteNewTable] = useState<string>('');
-  const [rerouteReason, setRerouteReason] = useState<string>('Khách đổi bàn ăn');
-  const [isSubmittingReroute, setIsSubmittingReroute] = useState<boolean>(false);
-
-  // Physical Stations from ROS SLAM map
-  const [stations, setStations] = useState<Station[]>([]);
-
-  // Create Table Modal State
-  const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState<boolean>(false);
-  const [newTableNo, setNewTableNo] = useState<string>('');
-  const [newTableName, setNewTableName] = useState<string>('');
-  const [newTableCapacity, setNewTableCapacity] = useState<number>(4);
-  const [newTableStationId, setNewTableStationId] = useState<string>('');
-  const [isSubmittingCreateTable, setIsSubmittingCreateTable] = useState<boolean>(false);
-
-  // Import CSV Modal State
-  const [isImportCsvModalOpen, setIsImportCsvModalOpen] = useState<boolean>(false);
-  const [importCsvMode, setImportCsvMode] = useState<'upload' | 'text'>('upload');
-  const [importCsvFile, setImportCsvFile] = useState<File | null>(null);
-  const [importCsvContent, setImportCsvContent] = useState<string>(
-    'TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn 04,2,'
-  );
-  const [isSubmittingImportCsv, setIsSubmittingImportCsv] = useState<boolean>(false);
-  const [importResult, setImportResult] = useState<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] } | null>(null);
-
-  // Assign Station Modal State
-  const [isAssignStationModalOpen, setIsAssignStationModalOpen] = useState<boolean>(false);
-  const [assignStationTableId, setAssignStationTableId] = useState<string>('');
-  const [assignStationTargetStationId, setAssignStationTargetStationId] = useState<string>('');
-  const [isSubmittingAssignStation, setIsSubmittingAssignStation] = useState<boolean>(false);
-
-  // Table Merge & Split State
-  // Flow 3: Table Grouping under Primary Anchor Station Modal State
-  const [isGroupingModalOpen, setIsGroupingModalOpen] = useState<boolean>(false);
-  const [primaryAnchorTableId, setPrimaryAnchorTableId] = useState<string>('');
-  const [memberTableId, setMemberTableId] = useState<string>('');
-  const [groupReason, setGroupReason] = useState<string>('Gộp nhóm bàn');
-  const [isSubmittingGroup, setIsSubmittingGroup] = useState<boolean>(false);
-  const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
-    taskId: string;
-    orderId: string;
-    destination: string;
-    robotCode: string;
-    status: string;
-    time: string;
-  }>>([
-    {
-      taskId: 'TSK-1001',
-      orderId: 'ORD-103',
-      destination: 'Bàn 05',
-      robotCode: 'AMR-01',
-      status: 'Delivering',
-      time: '11:45',
-    },
-    {
-      taskId: 'TSK-1000',
-      orderId: 'ORD-098',
-      destination: 'Bàn 02',
-      robotCode: 'AMR-02',
-      status: 'Completed',
-      time: '11:15',
-    },
-  ]);
-
-  // Pending Orders from Ordering Microservice
-  const [pendingOrders, setPendingOrders] = useState<PendingOrderDto[]>([]);
-  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-
-  // Mode: Auto-Select AMR vs Manual Select
-  const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(true);
-  const [manualSelectedRobot, setManualSelectedRobot] = useState<string>('');
-
-  // Dispatch Confirmation State
-  const [isDispatching, setIsDispatching] = useState<boolean>(false);
-  const [lastDispatchedMission, setLastDispatchedMission] = useState<{
-    missionId: string;
-    table: string;
-    robot: string;
-    time: string;
-  } | null>(null);
-
-  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
-
-  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
-  };
-
-  // Robot Fleet State - Loaded from RobotService API
-  const [robots, setRobots] = useState<RobotFleetItem[]>([]);
-
-  // Tables State - Loaded from tableService API
-  const [tables, setTables] = useState<TableNode[]>([]);
-
-  // Load Real Data on Mount
-  useEffect(() => {
-    const initKds = async () => {
-      setIsLoading(true);
-      try {
-        let sub = 'launuong-saigon';
-        let currentStore = 'Nhà Hàng Lẩu Nướng VORA Sài Gòn';
-        const stored = localStorage.getItem('user');
-        if (stored) {
-          const u = JSON.parse(stored);
-          if (u.subdomain) sub = u.subdomain;
-          if (u.restaurantName || u.storeName) currentStore = fixMojibake(u.restaurantName || u.storeName);
-        }
-        setSubdomain(sub);
-        setStoreName(currentStore);
-
-        // 1. Fetch real robots for this tenant
-        const robotList = await fleetService.getRobotsByTenant(sub);
-        const mappedRobots: RobotFleetItem[] = robotList.map((r) => ({
-          id: r.id,
-          code: r.code,
-          name: r.name,
-          status: r.status === 'delivering' || r.status === 'returning' ? 'delivering' : r.status === 'charging' ? 'charging' : 'idle',
-          battery: r.battery,
-          currentZone: r.currentLocation,
-        }));
-        setRobots(mappedRobots);
-        if (mappedRobots.length > 0) {
-          setManualSelectedRobot(mappedRobots[0].code);
-        }
-
-        // Fetch physical stations from ROS SLAM map
-        try {
-          const stList = await robotService.getStations();
-          if (stList && stList.length > 0) {
-            setStations(stList);
-          }
-        } catch (e) {
-          console.warn('[StaffKdsPage] Lỗi tải stations:', e);
-        }
-
-        // 2. Fetch real tables for this store
-        const tableList = await tableService.getTables(sub);
-        if (tableList.length > 0) {
-          const mappedTables: TableNode[] = tableList.map((t) => ({
-            id: t.tableNo || t.id,
-            tableNo: t.tableNo || t.id,
-            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
-            zone: t.zone || '',
-            status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : t.status === 'merged' ? 'merged' : 'empty',
-            guestsCount: t.capacity || 4,
-            currentOrders: t.currentOrders || [],
-            assignedRobot: t.assignedRobotCode || null,
-            stationId: t.stationId,
-            stationName: t.stationName,
-            mergedIntoTableId: t.mergedIntoTableId,
-            qrCodeUrl: t.qrCodeUrl,
-            worldX: t.worldX,
-            worldY: t.worldY,
-          }));
-          setTables(mappedTables);
-          setSelectedTableId(mappedTables[0].id);
-        }
-
-        // 3. Fetch real pending orders for KDS
-        const pOrders = await orderService.getPendingOrders();
-        setPendingOrders(pOrders);
-        if (pOrders.length > 0) {
-          const first = pOrders[0];
-          setActiveOrderId(first.id);
-          setOrderInputId(first.orderNumber);
-          if (first.tableNo) {
-            setDestinationInput(first.tableNo);
-            setSelectedTableId(first.tableNo.replace(/^Bàn\s*/i, ''));
-          }
-        }
-
-        // 4. Load recent SQLite dispatch tasks
-        try {
-          const recent = await sqliteService.getRecentDispatchTasks(5);
-          if (recent && recent.length > 0) {
-            setRecentSqliteTasks(
-              recent.map((r) => ({
-                taskId: r.taskId,
-                orderId: r.orderId,
-                destination: r.destination,
-                robotCode: r.robotCode,
-                status: r.status,
-                time: new Date(r.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-              }))
-            );
-          }
-        } catch {
-          // ignore
-        }
-      } catch (err) {
-        console.warn('Lỗi khi nạp dữ liệu KDS:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initKds();
-  }, []);
-
-  // Sync destinationInput whenever selectedTableId or tables change
-  useEffect(() => {
-    if (selectedTableId && tables.length > 0) {
-      const matched = tables.find((t) => t.id === selectedTableId);
-      if (matched) {
-        setDestinationInput(matched.name);
-      } else {
-        setDestinationInput(`Bàn ${selectedTableId}`);
-      }
-    }
-  }, [selectedTableId, tables]);
-
-  // Selected Table Object
-  const currentSelectedTable: TableNode = tables.find((t) => t.id === selectedTableId) || tables[0] || {
-    id: 'Chưa có',
-    name: 'Chưa chọn bàn',
-    zone: '',
-    status: 'empty'
-  };
-
-  // SMART AUTO-SELECT ALGORITHM:
-  // 1. Filter robots with status 'idle' and battery >= 30%
-  // 2. Prioritize robot with highest battery
-  const autoSelectedRobot = useMemo(() => {
-    const idleRobots = robots.filter((r) => r.status === 'idle' && r.battery >= 30);
-    if (idleRobots.length === 0) {
-      return null;
-    }
-    return [...idleRobots].sort((a, b) => b.battery - a.battery)[0];
-  }, [robots]);
-
-  // Active chosen robot (Auto or Manual)
-  const effectiveRobot = isAutoSelectMode
-    ? autoSelectedRobot
-    : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot;
-
-  const {
-    currentPage: tablePage,
-    pageSize: tablePageSize,
-    totalPages: tableTotalPages,
-    totalItems: tableTotalItems,
-    paginatedItems: paginatedTables,
-    setPage: setTablePage,
-    setPageSize: setTablePageSize,
-  } = usePagination(tables, 12);
-
-  // Action: Select Pending Order -> Autofill Order ID & Destination Table in Form
-  const handleSelectPendingOrder = (order: PendingOrderDto) => {
-    setActiveOrderId(order.id);
-    setOrderInputId(order.orderNumber);
-    if (order.tableNo) {
-      setDestinationInput(order.tableNo);
-      setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ''));
-    }
-    showToast(`Đã nạp đơn ${order.orderNumber} vào form điều phối.`);
-  };
-
-  // Dispatch Action via real API & SQLite
-  const handleDispatchOrder = async () => {
-    const finalOrderId = orderInputId.trim();
-    const finalDestination = destinationInput.trim() || currentSelectedTable.name;
-
-    if (!finalOrderId) {
-      showToast('Vui lòng nhập Mã Đơn (Order ID)!', 'info');
-      return;
-    }
-
-    if (!finalDestination) {
-      showToast('Vui lòng chọn hoặc nhập Bàn Đích (Destination)!', 'info');
-      return;
-    }
-
-    if (!effectiveRobot) {
-      showToast('Không có robot nào sẵn sàng nhận lệnh!', 'info');
-      return;
-    }
-
-    setIsDispatching(true);
-
-    try {
-      const missionCode = `TSK-${Date.now().toString().slice(-4)}`;
-      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-
-      // 1. Ghi nhận trực tiếp vào CSDL SQLite của Tenant qua Backend API
-      await orderService.dispatchToSqlite(_subdomain, finalOrderId, finalDestination, effectiveRobot.code);
-
-      // 2. Ghi nhận vào SQLite WebAssembly / IndexedDB nếu chạy offline
-      try {
-        await sqliteService.recordDispatchTask(finalOrderId, finalDestination, effectiveRobot.code);
-      } catch {
-        // Safe ignore
-      }
-
-      // 3. Dispatch through real backend API if active order
-      if (activeOrderId && effectiveRobot.id) {
-        await orderService.dispatchToRobot(effectiveRobot.id, activeOrderId, currentSelectedTable.id);
-        await orderService.confirmOrder(activeOrderId);
-      }
-
-      // 4. Update robot status
-      await fleetService.updateRobotStatus(effectiveRobot.id, {
-        status: 'delivering',
-        targetTable: finalDestination,
-      });
-
-      // Update local robot status
-      setRobots((prev) =>
-        prev.map((r) =>
-          r.code === effectiveRobot.code ? { ...r, status: 'delivering', currentZone: `Đang đến ${finalDestination}` } : r
-        )
-      );
-
-      // Update local table status
-      setTables((prev) =>
-        prev.map((t) =>
-          t.name === finalDestination || t.id === currentSelectedTable.id
-            ? { ...t, status: 'serving', assignedRobot: effectiveRobot.code }
-            : t
-        )
-      );
-
-      // Append to recent SQLite tasks list
-      setRecentSqliteTasks((prev) => [
-        {
-          taskId: missionCode,
-          orderId: finalOrderId,
-          destination: finalDestination,
-          robotCode: effectiveRobot.code,
-          status: 'Delivering',
-          time: timeStr,
-        },
-        ...prev.slice(0, 4),
-      ]);
-
-      // Remove dispatched order from pending
-      if (activeOrderId) {
-        setPendingOrders((prev) => prev.filter((o) => o.id !== activeOrderId));
-      }
-
-      setLastDispatchedMission({
-        missionId: missionCode,
-        table: finalDestination,
-        robot: effectiveRobot.code,
-        time: timeStr,
-      });
-
-      showToast(`Đã xuất lệnh ${missionCode}: ${effectiveRobot.code} đang giao đơn ${finalOrderId} tới ${finalDestination} (Đã lưu SQLite)!`, 'success');
-
-      // Tự động gợi ý mã đơn tiếp theo
-      const numMatch = finalOrderId.match(/\d+/);
-      const nextNum = numMatch ? parseInt(numMatch[0], 10) + 1 : 101;
-      setOrderInputId(`ORD-${nextNum}`);
-    } catch (err) {
-      console.warn('Lỗi điều phối KDS:', err);
-      showToast(`Đã phát lệnh điều phối ${effectiveRobot.code} giao ra ${finalDestination}!`, 'success');
-    } finally {
-      setIsDispatching(false);
-    }
-  };
-
-  // Dispatch Multi-Table 2-Tray Sequence (DS-07 / WF-04)
-  const handleDispatchSequence = async () => {
-    const table1 = tray1Table.trim();
-    const table2 = tray2Table.trim();
-    const order1 = tray1OrderId.trim();
-    const order2 = tray2OrderId.trim();
-
-    if (!table1 || !table2) {
-      showToast('Vui lòng chọn bàn đích cho cả Khay 1 và Khay 2!', 'info');
-      return;
-    }
-
-    if (!effectiveRobot) {
-      showToast('Không có robot nào sẵn sàng nhận lệnh chuỗi!', 'info');
-      return;
-    }
-
-    setIsDispatching(true);
-    try {
-      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      const seqCode = `SEQ-${Date.now().toString().slice(-4)}`;
-
-      // 1. Gọi Backend API /v1/tasks/sequence/start qua robotService
-      const result = await robotService.startServiceSequence({
-        robotId: effectiveRobot.id,
-        trayAssignments: [
-          { cargoLevel: 1, destinationTableNo: table1, orderReference: order1, priority: 1 },
-          { cargoLevel: 2, destinationTableNo: table2, orderReference: order2, priority: 2 }
-        ]
-      });
-
-      const taskLeg1 = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
-      const taskLeg2 = result.createdTasks?.[1]?.id || `TSK-${Date.now()}-2`;
-
-      // 2. Ghi nhận vào SQLite cho cả 2 chặng
-      try {
-        await orderService.dispatchToSqlite(_subdomain, order1, table1, effectiveRobot.code);
-        await orderService.dispatchToSqlite(_subdomain, order2, table2, effectiveRobot.code);
-        await sqliteService.recordDispatchTask(order1, table1, effectiveRobot.code);
-        await sqliteService.recordDispatchTask(order2, table2, effectiveRobot.code);
-      } catch {
-        // Safe ignore
-      }
-
-      // 3. Khởi tạo State chuỗi đang hoạt động
-      setActiveSequence({
-        sequenceId: seqCode,
-        robotCode: effectiveRobot.code,
-        robotName: effectiveRobot.name,
-        currentLegIndex: 0,
-        legs: [
-          { cargoLevel: 1, tableNo: table1, orderId: order1, status: 'delivering', taskId: taskLeg1 },
-          { cargoLevel: 2, tableNo: table2, orderId: order2, status: 'pending', taskId: taskLeg2 }
-        ],
-        status: 'in_progress',
-        startTime: timeStr
-      });
-
-      // 4. Cập nhật trạng thái Robot & Bàn
-      setRobots((prev) =>
-        prev.map((r) =>
-          r.code === effectiveRobot.code
-            ? { ...r, status: 'delivering', currentZone: `Đang đến ${table1}` }
-            : r
-        )
-      );
-
-      setTables((prev) =>
-        prev.map((t) =>
-          t.name === table1 || t.name === table2
-            ? { ...t, status: 'serving', assignedRobot: effectiveRobot.code }
-            : t
-        )
-      );
-
-      // Thêm vào nhật ký SQLite gần đây
-      setRecentSqliteTasks((prev) => [
-        {
-          taskId: `${seqCode}-L1`,
-          orderId: order1,
-          destination: table1,
-          robotCode: effectiveRobot.code,
-          status: 'Delivering',
-          time: timeStr,
-        },
-        {
-          taskId: `${seqCode}-L2`,
-          orderId: order2,
-          destination: table2,
-          robotCode: effectiveRobot.code,
-          status: 'Pending',
-          time: timeStr,
-        },
-        ...prev.slice(0, 3),
-      ]);
-
-      setLastDispatchedMission({
-        missionId: seqCode,
-        table: `${table1} ➔ ${table2}`,
-        robot: effectiveRobot.code,
-        time: timeStr,
-      });
-
-      showToast(`Đã xuất lệnh chuỗi 2 khay ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, sau đó giao tiếp Khay 2 tới ${table2}!`, 'success');
-    } catch (err) {
-      console.warn('Lỗi xuất lệnh chuỗi đa bàn:', err);
-      showToast('Đã phát lệnh chuỗi phục vụ 2 khay!', 'success');
-    } finally {
-      setIsDispatching(false);
-    }
-  };
-
-  // Dual Confirmation Handler: Physical Button (ESP32) OR Web Console
-  const handleConfirmNextTable = async (viaHardwareButton: boolean = false) => {
-    if (!activeSequence) return;
-    setIsConfirmingTable(true);
-    try {
-      const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
-      await robotService.confirmNextTable(
-        currentLeg.taskId,
-        viaHardwareButton ? 'Nút Bấm Phần Cứng ESP32' : 'Nhân Viên Bếp (Web KDS)',
-        viaHardwareButton
-      );
-
-      if (activeSequence.currentLegIndex === 0) {
-        // Chuyển sang Chặng 2 (Đi tiếp Bàn 12)
-        showToast(
-          viaHardwareButton
-            ? `[ESP32 Nút Bấm] Khách ${currentLeg.tableNo} đã nhận Khay 1! Robot tiếp tục di chuyển tới ${activeSequence.legs[1].tableNo}`
-            : `Đã xác nhận lấy món Khay 1 tại ${currentLeg.tableNo}! Robot tiếp tục di chuyển tới ${activeSequence.legs[1].tableNo}`,
-          'success'
-        );
-
-        setActiveSequence((prev) => {
-          if (!prev) return null;
-          const updatedLegs = [...prev.legs];
-          updatedLegs[0] = { ...updatedLegs[0], status: 'completed' };
-          updatedLegs[1] = { ...updatedLegs[1], status: 'delivering' };
-          return {
-            ...prev,
-            currentLegIndex: 1,
-            legs: updatedLegs
-          };
-        });
-
-        setRobots((prev) =>
-          prev.map((r) =>
-            r.code === activeSequence.robotCode
-              ? { ...r, status: 'delivering', currentZone: `Đang đến ${activeSequence.legs[1].tableNo}` }
-              : r
-          )
-        );
-      } else {
-        // Hoàn tất Chặng 2, Robot quay về Bếp
-        showToast(
-          viaHardwareButton
-            ? `[ESP32 Nút Bấm] Khách ${currentLeg.tableNo} đã nhận Khay 2! Toàn bộ 2 khay đã giao xong, robot đang quay về Bếp.`
-            : `Đã xác nhận lấy món Khay 2 tại ${currentLeg.tableNo}! Toàn bộ 2 khay đã giao xong, robot đang quay về Bếp.`,
-          'success'
-        );
-
-        setActiveSequence((prev) => {
-          if (!prev) return null;
-          const updatedLegs = [...prev.legs];
-          updatedLegs[1] = { ...updatedLegs[1], status: 'completed' };
-          return {
-            ...prev,
-            currentLegIndex: 2,
-            legs: updatedLegs,
-            status: 'completed'
-          };
-        });
-
-        setRobots((prev) =>
-          prev.map((r) =>
-            r.code === activeSequence.robotCode
-              ? { ...r, status: 'idle', currentZone: 'Bếp Trung Tâm' }
-              : r
-          )
-        );
-      }
-    } catch (err) {
-      console.warn('Lỗi xác nhận món bàn tiếp theo:', err);
-      showToast('Đã xác nhận lấy món thành công!', 'success');
-    } finally {
-      setIsConfirmingTable(false);
-    }
-  };
-
-  // Open Mid-Transit Reroute Modal
-  const handleOpenRerouteModal = (legIndex: number) => {
-    if (!activeSequence) return;
-    setRerouteLegIndex(legIndex);
-    const currentTableNo = activeSequence.legs[legIndex]?.tableNo;
-    const defaultTarget = tables.find((t) => t.name !== currentTableNo && t.status !== 'merged');
-    setRerouteNewTable(defaultTarget?.name || 'Bàn 08');
-    setIsRerouteModalOpen(true);
-  };
-
-  // Confirm Mid-Transit Reroute
-  const handleConfirmReroute = async () => {
-    if (!activeSequence) return;
-    const leg = activeSequence.legs[rerouteLegIndex];
-    if (!leg || !rerouteNewTable) return;
-    setIsSubmittingReroute(true);
-    try {
-      const targetNode = tables.find((t) => t.name.toLowerCase() === rerouteNewTable.toLowerCase() || t.id === rerouteNewTable);
-      const targetStationId = targetNode?.stationId || targetNode?.id || '55555555-5555-5555-5555-555555555555';
-      await robotService.rerouteTask(leg.taskId, targetStationId, rerouteNewTable, rerouteReason);
-
-      setActiveSequence((prev) => {
-        if (!prev) return null;
-        const updatedLegs = [...prev.legs];
-        updatedLegs[rerouteLegIndex] = {
-          ...updatedLegs[rerouteLegIndex],
-          tableNo: rerouteNewTable
-        };
-        return { ...prev, legs: updatedLegs };
-      });
-
-      if (activeSequence.currentLegIndex === rerouteLegIndex) {
-        setRobots((prev) =>
-          prev.map((r) =>
-            r.code === activeSequence.robotCode
-              ? { ...r, currentZone: `Bẻ lái sang ${rerouteNewTable}` }
-              : r
-          )
-        );
-      }
-
-      showToast(`Đã chuyển hướng Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`, 'success');
-      setIsRerouteModalOpen(false);
-    } catch {
-      showToast('Lỗi khi chuyển hướng bàn, vui lòng thử lại.', 'info');
-    } finally {
-      setIsSubmittingReroute(false);
-    }
-  };
-
-  // Create Table Manually
-  const handleCreateTable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTableNo.trim()) {
-      showToast('Vui lòng nhập số hiệu bàn', 'info');
-      return;
-    }
-    setIsSubmittingCreateTable(true);
-    try {
-      const res = await tableService.createTable({
-        tableNo: newTableNo.trim(),
-        tableName: newTableName.trim() || `Bàn ${newTableNo.trim()}`,
-        capacity: newTableCapacity,
-        stationId: newTableStationId || null,
-      });
-      if (res.success) {
-        showToast(`Tạo thành công bàn ${newTableNo}`, 'success');
-        setIsCreateTableModalOpen(false);
-        // Refresh tables list
-        const updatedList = await tableService.getTables(_subdomain);
-        if (updatedList.length > 0) {
-          setTables(updatedList.map((t) => ({
-            id: t.tableNo || t.id,
-            tableNo: t.tableNo || t.id,
-            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
-            zone: t.zone || '',
-            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
-            guestsCount: t.capacity || 4,
-            currentOrders: t.currentOrders || [],
-            assignedRobot: t.assignedRobotCode || null,
-            stationId: t.stationId,
-            stationName: t.stationName,
-            mergedIntoTableId: t.mergedIntoTableId,
-            qrCodeUrl: t.qrCodeUrl,
-            worldX: t.worldX,
-            worldY: t.worldY,
-          })));
-          setSelectedTableId(newTableNo.trim());
-        }
-      } else {
-        showToast(res.message || 'Không thể tạo bàn ăn', 'info');
-      }
-    } catch (err: any) {
-      showToast(err?.message || 'Lỗi tạo bàn ăn', 'info');
-    } finally {
-      setIsSubmittingCreateTable(false);
-    }
-  };
-
-  // Import Tables via CSV / Excel
-  const handleImportCsv = async () => {
-    setIsSubmittingImportCsv(true);
-    try {
-      let res;
-      if (importCsvMode === 'upload' && importCsvFile) {
-        res = await tableService.uploadCsv('00000000-0000-0000-0000-000000000000', importCsvFile);
-      } else {
-        res = await tableService.importCsv('00000000-0000-0000-0000-000000000000', importCsvContent);
-      }
-      setImportResult(res);
-      if (res.success) {
-        showToast(`Nhập thành công ${res.totalCreated} bàn ăn!`, 'success');
-        // Refresh tables list
-        const updatedList = await tableService.getTables(_subdomain);
-        if (updatedList.length > 0) {
-          setTables(updatedList.map((t) => ({
-            id: t.tableNo || t.id,
-            tableNo: t.tableNo || t.id,
-            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
-            zone: t.zone || '',
-            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
-            guestsCount: t.capacity || 4,
-            currentOrders: t.currentOrders || [],
-            assignedRobot: t.assignedRobotCode || null,
-            stationId: t.stationId,
-            stationName: t.stationName,
-            mergedIntoTableId: t.mergedIntoTableId,
-            qrCodeUrl: t.qrCodeUrl,
-            worldX: t.worldX,
-            worldY: t.worldY,
-          })));
-        }
-      } else {
-        showToast('Có lỗi xảy ra khi nhập file CSV', 'info');
-      }
-    } catch (err: any) {
-      showToast(err?.message || 'Lỗi xử lý file CSV', 'info');
-    } finally {
-      setIsSubmittingImportCsv(false);
-    }
-  };
-
-  // Download Sample CSV Template
-  const handleDownloadSampleCsv = () => {
-    const csvHeader = 'TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn Ban Công 04,2,\nT05,Bàn Ban Công 05,4,';
-    const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'VORA_DiningTables_Template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Đã tải xuống file CSV mẫu', 'info');
-  };
-
-  // Assign Station to Table
-  const handleAssignStation = async () => {
-    if (!assignStationTableId) {
-      showToast('Vui lòng chọn bàn cần gán', 'info');
-      return;
-    }
-    setIsSubmittingAssignStation(true);
-    try {
-      const res = await tableService.assignStation(assignStationTableId, assignStationTargetStationId || null);
-      if (res.success) {
-        const stationObj = stations.find((s) => s.id === assignStationTargetStationId);
-        setTables((prev) =>
-          prev.map((t) =>
-            t.id === assignStationTableId
-              ? {
-                  ...t,
-                  stationId: assignStationTargetStationId || null,
-                  stationName: stationObj ? stationObj.name : null,
-                  worldX: stationObj ? stationObj.xCoord : t.worldX,
-                  worldY: stationObj ? stationObj.yCoord : t.worldY,
-                }
-              : t
-          )
-        );
-        showToast(res.message || 'Gán trạm thành công', 'success');
-        setIsAssignStationModalOpen(false);
-      } else {
-        showToast(res.message || 'Lỗi gán trạm', 'info');
-      }
-    } catch (err: any) {
-      showToast(err?.message || 'Lỗi gán trạm', 'info');
-    } finally {
-      setIsSubmittingAssignStation(false);
-    }
-  };
-
-  // Flow 3: Confirm Table Grouping
-  const handleConfirmGroup = async () => {
-    if (!primaryAnchorTableId || !memberTableId || primaryAnchorTableId === memberTableId) {
-      showToast('Vui lòng chọn 2 bàn khác nhau để gộp!', 'info');
-      return;
-    }
-    setIsSubmittingGroup(true);
-    try {
-      await robotService.groupTables(primaryAnchorTableId, [memberTableId], '00000000-0000-0000-0000-000000000000', groupReason);
-      setTables((prev) =>
-        prev.map((t) => {
-          if (t.id === memberTableId) {
-            return { ...t, status: 'merged' as const, mergedIntoTableId: primaryAnchorTableId };
-          }
-          return t;
-        })
-      );
-      const targetName = tables.find((t) => t.id === primaryAnchorTableId)?.name || primaryAnchorTableId;
-      const sourceName = tables.find((t) => t.id === memberTableId)?.name || memberTableId;
-      showToast(`Đã gộp nhóm ${sourceName} vào ${targetName} thành công (Giao tại Trạm Bàn Chính)!`, 'success');
-      setIsGroupingModalOpen(false);
-    } catch {
-      showToast('Lỗi khi gộp bàn.', 'info');
-    } finally {
-      setIsSubmittingGroup(false);
-    }
-  };
-
-  // Flow 3: Ungroup Table
-  const handleUngroupTable = async (tableId: string) => {
-    try {
-      await robotService.ungroupTable(tableId);
-      setTables((prev) =>
-        prev.map((t) => (t.id === tableId ? { ...t, status: 'empty' as const, mergedIntoTableId: null } : t))
-      );
-      const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
-      showToast(`Đã hủy nhóm ${tableName}, khôi phục bàn độc lập thành công!`, 'success');
-    } catch {
-      showToast('Lỗi khi hủy nhóm bàn.', 'info');
-    }
-  };
-
-  return (
-    <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
-      {/* Toast notifications */}
-      <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`pointer-events-auto px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-right duration-200 border ${toast.type === 'success'
-                ? 'bg-emerald-600 text-white border-emerald-500'
-                : 'bg-blue-600 text-white border-blue-500'
-              }`}
-          >
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-white" />
-            <span>{toast.message}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Staff Touch Header */}
-      <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white border-b border-slate-200 shadow-2xs flex items-center justify-between shrink-0 sticky top-0 z-30">
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          <Link to="/staff" className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group hover:border-[#0062FF]/60 hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0" title="VORA Staff KDS">
-            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
-          </Link>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm sm:text-base font-black text-[#0A192F] tracking-tight font-heading">VORA KDS</span>
-              <span className="text-[9px] sm:text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
-                STAFF WEB
-              </span>
-            </div>
-            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-              <Store className="w-3 h-3 text-emerald-600 shrink-0" />
-              <span className="truncate max-w-[140px] sm:max-w-none">{storeName} • Bếp Trung Tâm</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Switcher & Quick Stats */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden md:flex items-center gap-3 text-xs">
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {robots.filter((r) => r.status === 'idle').length} Robot Sẵn Sàng
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
-              {tables.filter((t) => t.status === 'waiting').length} Bàn Chờ Ra Món
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              to="/login"
-              onClick={() => {
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('refreshToken');
-                localStorage.removeItem('user');
-              }}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
-              title="Đăng xuất khỏi hệ thống"
-            >
-              <LogOut className="w-3.5 h-3.5 text-rose-500" />
-              <span className="hidden sm:inline">Đăng Xuất</span>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Staff Operational Canvas */}
-      <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
-        {/* LEFT / CENTER COLUMN: TABLE FLOOR MAP (7 COLS) */}
-        <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Interactive Table Section */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
-                <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
-                <span className="text-[11px] font-mono font-normal text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
-                  {tables.length} Bàn
-                </span>
-              </h2>
-
-              {/* Actions & View Switcher */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewTableNo(`T${(tables.length + 1).toString().padStart(2, '0')}`);
-                    setNewTableName(`Bàn ${(tables.length + 1).toString().padStart(2, '0')}`);
-                    setNewTableCapacity(4);
-                    setNewTableStationId('');
-                    setIsCreateTableModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 shadow-xs transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Thêm Bàn</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportResult(null);
-                    setImportCsvFile(null);
-                    setIsImportCsvModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Nhập Excel / CSV</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssignStationTableId(currentSelectedTable.id);
-                    setAssignStationTargetStationId(currentSelectedTable.stationId || '');
-                    setIsAssignStationModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
-                >
-                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Gán Trạm Robot</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPrimaryAnchorTableId(tables[0]?.id || '');
-                    setMemberTableId(tables[1]?.id || '');
-                    setIsGroupingModalOpen(true);
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
-                >
-                  Gộp Nhóm Bàn
-                </button>
-                {currentSelectedTable.status === 'merged' && (
-                  <button
-                    type="button"
-                    onClick={() => handleUngroupTable(currentSelectedTable.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
-                  >
-                    Hủy Nhóm Bàn
-                  </button>
-                )}
-                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('slam-map')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      viewMode === 'slam-map'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <MapIcon className="w-3.5 h-3.5" />
-                    <span>Bản Đồ SLAM (ROS 2)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('grid')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      viewMode === 'grid'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span>Dạng Thẻ Bàn</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
-            {viewMode === 'slam-map' ? (
-              <SlamFloorMapViewer
-                tables={tables}
-                selectedTableId={selectedTableId}
-                onSelectTable={(id) => {
-                  setSelectedTableId(id);
-                  const matched = tables.find((t) => t.id === id);
-                  showToast(`Đã chọn ${matched?.name || id} trên sơ đồ`, 'info');
-                }}
-                robots={robots}
-                mode="simplified"
-                className="flex-1 min-h-[440px]"
-              />
-            ) : tables.length === 0 ? (
-              <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">
-                <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto" />
-                <h4 className="text-sm font-bold text-slate-700">Chưa có danh mục bàn ăn nào</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Danh sách bàn ăn được trích xuất từ Waypoint nhận qua MQTT (ROS 2 Nav2). Do chưa nhận được waypoint từ MQTT, hệ thống tuân thủ quy tắc không tự ý xếp bàn giả.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Status Legend */}
-                <div className="flex items-center gap-3 text-[11px] text-slate-600 mb-3">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /> Chờ món
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Đang phục vụ
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Có khách
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-200" /> Bàn trống
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Đã gộp
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
-                  {paginatedTables.map((table) => {
-                    const isSelected = table.id === selectedTableId;
-                    const isWaiting = table.status === 'waiting';
-                    const isServing = table.status === 'serving';
-                    const isOccupied = table.status === 'occupied';
-
-                    return (
-                      <button
-                        key={table.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedTableId(table.id);
-                          showToast(`Đã chọn ${table.name}`, 'info');
-                        }}
-                        className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group active:scale-[0.98] h-[145px] cursor-pointer ${isSelected
-                            ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20'
-                            : isWaiting
-                              ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
-                              : isServing
-                                ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300'
-                                : isOccupied
-                                  ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300'
-                                  : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
-                          }`}
-                      >
-                        {/* Top Row: Name & Tag */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
-                              {table.name}
-                            </span>
-                            {table.status === 'merged' && (
-                              <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.5 rounded">
-                                Đã Gộp
-                              </span>
-                            )}
-                          </div>
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${isWaiting
-                                ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
-                                : isServing
-                                  ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
-                                  : isOccupied
-                                    ? 'bg-emerald-500'
-                                    : table.status === 'merged'
-                                      ? 'bg-purple-500'
-                                      : 'bg-slate-300'
-                              }`}
-                          />
-                        </div>
-
-                        {/* Middle Info */}
-                        <div className="my-2.5 space-y-1">
-                          {table.zone ? <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div> : null}
-                          <div className="text-[10px] font-mono">
-                            {isServing ? (
-                              <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
-                                {table.assignedRobot} Đang Đến
-                              </span>
-                            ) : isWaiting ? (
-                              <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded">
-                                Cần Ra Món Ngay
-                              </span>
-                            ) : isOccupied ? (
-                              <span className="text-emerald-700 font-medium">
-                                {table.guestsCount} Khách
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">Bàn Trống</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Footer selection pill */}
-                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500 text-[10px]">
-                            {table.currentOrders ? `${table.currentOrders.length} Món` : 'Chưa gọi'}
-                          </span>
-                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400 group-hover:text-blue-600 transition-colors'}`}>
-                            {isSelected ? 'Đang chọn' : 'Click để chọn'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  <Pagination
-                    currentPage={tablePage}
-                    totalPages={tableTotalPages}
-                    totalItems={tableTotalItems}
-                    pageSize={tablePageSize}
-                    onPageChange={setTablePage}
-                    onPageSizeChange={setTablePageSize}
-                    pageSizeOptions={[8, 12, 16, 24]}
-                    itemLabel="bàn"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Quick Dispatch Log Notification if any */}
-            {lastDispatchedMission && (
-              <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>
-                    Chuyến giao gần nhất: <strong>{lastDispatchedMission.robot}</strong> đang giao tới{' '}
-                    <strong>{lastDispatchedMission.table}</strong> ({lastDispatchedMission.time})
-                  </span>
-                </div>
-                <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
-                  {lastDispatchedMission.missionId}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: TRAY SETUP & AUTO-SELECT ROBOT DISPATCH (5 COLS) */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          {/* Target Table Header Banner */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-base shadow-2xs">
-                {currentSelectedTable.id}
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                  <span>{currentSelectedTable.name}</span>
-                  {currentSelectedTable.zone && currentSelectedTable.zone !== 'Toàn quán' && (
-                    <span className="text-[10px] font-mono font-normal text-slate-500">
-                      ({currentSelectedTable.zone})
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : currentSelectedTable.status === 'merged' ? 'Đã gộp nhóm (Giao tại Bàn Chính)' : 'Đang đón khách'}</strong>
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-[11px]">
-                  <span className="text-slate-500 font-semibold">Trạm Robot:</span>
-                  {currentSelectedTable.stationName || currentSelectedTable.stationId ? (
-                    <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-purple-600" />
-                      <span>{currentSelectedTable.stationName || currentSelectedTable.stationId}</span>
-                    </span>
-                  ) : (
-                    <span className="text-amber-600 font-mono text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                      Chưa gán trạm
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAssignStationTableId(currentSelectedTable.id);
-                      setAssignStationTargetStationId(currentSelectedTable.stationId || '');
-                      setIsAssignStationModalOpen(true);
-                    }}
-                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
-                  >
-                    [Gán/Đổi Trạm]
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <span className="text-[11px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-lg border border-blue-200">
-              Điểm Đích Đến
-            </span>
-          </div>
-
-          {/* Pending Orders Selector Bar */}
-          {pendingOrders.length > 0 ? (
-            <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/90 space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-amber-900">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Đơn Món Chờ Ra Bếp ({pendingOrders.length})</span>
-                </span>
-                <span className="text-[10px] font-mono text-amber-700">Click đơn để nạp khay</span>
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {pendingOrders.map((ord) => (
-                  <button
-                    key={ord.id}
-                    type="button"
-                    onClick={() => handleSelectPendingOrder(ord)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border cursor-pointer ${activeOrderId === ord.id
-                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                        : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
-                      }`}
-                  >
-                    <span className="font-bold">{ord.orderNumber}</span> • {ord.tableNo} ({ord.items.length} món)
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span>Chưa có đơn món chờ ra từ POS/QR</span>
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">Tự động đồng bộ</span>
-            </div>
-          )}
-
-          {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR (DS-07 REALTIME DUAL CONFIRMATION) */}
-          {activeSequence && (
-            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-blue-500/80 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-              {/* Top Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/40 flex items-center justify-center">
-                    <Navigation className="w-4 h-4 text-cyan-300 animate-spin-slow" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black tracking-tight flex items-center gap-2">
-                      <span>CHUỖI ĐA BÀN 2 KHAY ĐANG THỰC HIỆN</span>
-                      <span className="font-mono text-[10px] bg-blue-500/30 text-cyan-300 px-2 py-0.5 rounded border border-blue-400/30">
-                        {activeSequence.sequenceId}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-300">
-                      Robot: <strong>{activeSequence.robotCode}</strong> ({activeSequence.robotName}) • Bắt đầu: {activeSequence.startTime}
-                    </div>
-                  </div>
-                </div>
-
-                <span
-                  className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${
-                    activeSequence.status === 'completed'
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse'
-                  }`}
-                >
-                  {activeSequence.status === 'completed' ? 'Hoàn tất chuỗi' : `Đang chạy Chặng ${activeSequence.currentLegIndex + 1}/2`}
-                </span>
-              </div>
-
-              {/* 4-Step Visual Sequence Stepper */}
-              <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-white/5 border border-white/10 text-center">
-                {/* Step 1: Kitchen */}
-                <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40">
-                  <div className="text-[10px] text-slate-400 font-mono">Trạm 1</div>
-                  <div className="text-xs font-bold text-emerald-300">Bếp Trung Tâm</div>
-                  <div className="text-[9px] text-emerald-400 font-mono mt-0.5">Đã xuất phát ✓</div>
-                </div>
-
-                {/* Step 2: Tray 1 -> Table 1 */}
-                <div
-                  className={`p-2 rounded-lg border transition-all ${
-                    activeSequence.legs[0].status === 'completed'
-                      ? 'bg-emerald-500/20 border-emerald-500/40'
-                      : activeSequence.currentLegIndex === 0
-                        ? 'bg-blue-600/40 border-blue-400 ring-2 ring-blue-400/30 animate-pulse'
-                        : 'bg-white/5 border-white/10 opacity-60'
-                  }`}
-                >
-                  <div className="text-[10px] text-slate-400 font-mono">Khay 1 (Tầng 1)</div>
-                  <div className="text-xs font-bold text-white">{activeSequence.legs[0].tableNo}</div>
-                  <div
-                    className={`text-[9px] font-mono mt-0.5 ${
-                      activeSequence.legs[0].status === 'completed' ? 'text-emerald-400' : 'text-cyan-300 font-bold'
-                    }`}
-                  >
-                    {activeSequence.legs[0].status === 'completed' ? 'Đã lấy món ✓' : 'Đang tới bàn...'}
-                  </div>
-                  {activeSequence.legs[0].status !== 'completed' && activeSequence.status === 'in_progress' && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenRerouteModal(0);
-                      }}
-                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
-                    >
-                      Đổi Bàn
-                    </button>
-                  )}
-                </div>
-
-                {/* Step 3: Tray 2 -> Table 2 */}
-                <div
-                  className={`p-2 rounded-lg border transition-all ${
-                    activeSequence.legs[1].status === 'completed'
-                      ? 'bg-emerald-500/20 border-emerald-500/40'
-                      : activeSequence.currentLegIndex === 1
-                        ? 'bg-blue-600/40 border-blue-400 ring-2 ring-blue-400/30 animate-pulse'
-                        : 'bg-white/5 border-white/10 opacity-60'
-                  }`}
-                >
-                  <div className="text-[10px] text-slate-400 font-mono">Khay 2 (Tầng 2)</div>
-                  <div className="text-xs font-bold text-white">{activeSequence.legs[1].tableNo}</div>
-                  <div
-                    className={`text-[9px] font-mono mt-0.5 ${
-                      activeSequence.legs[1].status === 'completed'
-                        ? 'text-emerald-400'
-                        : activeSequence.currentLegIndex === 1
-                          ? 'text-cyan-300 font-bold'
-                          : 'text-slate-400'
-                    }`}
-                  >
-                    {activeSequence.legs[1].status === 'completed'
-                      ? 'Đã lấy món ✓'
-                      : activeSequence.currentLegIndex === 1
-                        ? 'Đang tới bàn...'
-                        : 'Chờ chặng 1'}
-                  </div>
-                  {activeSequence.legs[1].status !== 'completed' && activeSequence.status === 'in_progress' && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenRerouteModal(1);
-                      }}
-                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
-                    >
-                      Đổi Bàn
-                    </button>
-                  )}
-                </div>
-
-                {/* Step 4: Back to Kitchen */}
-                <div
-                  className={`p-2 rounded-lg border transition-all ${
-                    activeSequence.status === 'completed'
-                      ? 'bg-emerald-500/20 border-emerald-500/40'
-                      : 'bg-white/5 border-white/10 opacity-60'
-                  }`}
-                >
-                  <div className="text-[10px] text-slate-400 font-mono">Trạm Cuối</div>
-                  <div className="text-xs font-bold text-white">Về Bếp</div>
-                  <div className="text-[9px] font-mono mt-0.5 text-slate-400">
-                    {activeSequence.status === 'completed' ? 'Đã về bãi ✓' : 'Tự động quay về'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Dual Confirmation Actions Panel */}
-              {activeSequence.status === 'in_progress' ? (
-                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-400/30 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
-                      <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                      <span>Xác Nhận Kép (Dual Confirmation: Nút Bấm ESP32 / Web)</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      Đang ở {activeSequence.legs[activeSequence.currentLegIndex].tableNo}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] text-slate-300 leading-relaxed">
-                    Robot đang dừng phục vụ tại <strong>{activeSequence.legs[activeSequence.currentLegIndex].tableNo}</strong>. Khách hàng lấy đồ ăn và bấm <strong>Nút bấm ESP32</strong> trên xe HOẶC nhân viên xác nhận tại Web:
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {/* Button 1: Web KDS Confirmation */}
-                    <button
-                      type="button"
-                      disabled={isConfirmingTable}
-                      onClick={() => handleConfirmNextTable(false)}
-                      className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-blue-400/40"
-                    >
-                      {isConfirmingTable ? (
-                        <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-                      )}
-                      <span>
-                        {activeSequence.currentLegIndex === 0
-                          ? `Xác Nhận (Web): Đến ${activeSequence.legs[1].tableNo}`
-                          : 'Xác Nhận (Web): Xe Quay Về Bếp'}
-                      </span>
-                    </button>
-
-                    {/* Button 2: Simulate Physical ESP32 Hardware Button Push */}
-                    <button
-                      type="button"
-                      disabled={isConfirmingTable}
-                      onClick={() => handleConfirmNextTable(true)}
-                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-emerald-500/40"
-                      title="Mô phỏng nhân viên phục vụ nhấn nút vật lý ESP32 gắn trên thân robot"
-                    >
-                      <Cpu className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Mô Phỏng Nút Bấm ESP32</span>
-                    </button>
-                  </div>
-
-                  {/* Mid-Transit Table Transfer Action Button */}
-                  <div className="pt-1 border-t border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenRerouteModal(activeSequence.currentLegIndex)}
-                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 text-xs font-semibold border border-cyan-500/30 transition-all cursor-pointer text-center"
-                    >
-                      Đổi Bàn Giữa Chặng Cho Khay {activeSequence.currentLegIndex + 1}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-xs text-emerald-300 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Toàn bộ chuỗi 2 khay đã phục vụ thành công! Xe đã quay về trạm.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSequence(null)}
-                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold border border-white/20 transition-all cursor-pointer"
-                  >
-                    Đóng / Tạo Lượt Mới
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* STAFF MOVE REQUEST FORM (YÊU CẦU ROBOT DI CHUYỂN) */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Send className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight font-heading">
-                  ĐIỀU PHỐI GIAO MÓN (DISPATCH CONSOLE)
-                </h3>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
-                <Database className="w-3 h-3 text-emerald-600" />
-                <span>SQLite Shard</span>
-              </span>
-            </div>
-
-            {/* Mode Selector Segmented Tabs: 2-Tray Sequence vs Single Table */}
-            <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setDispatchMode('sequence')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  dispatchMode === 'sequence'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Chuỗi 2 Khay Đa Bàn (DS-07)</span>
-                <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                    dispatchMode === 'sequence' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  Chuẩn
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDispatchMode('single')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  dispatchMode === 'single'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Đơn Bàn Lẻ (Single)</span>
-              </button>
-            </div>
-
-            {dispatchMode === 'sequence' ? (
-              /* MODE A: 2-TRAY MULTI-TABLE SEQUENCE CONFIGURATION */
-              <div className="space-y-3.5">
-                {/* TRAY 1 (LEVEL 1 - TẦNG DƯỚI) */}
-                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-black text-blue-900">
-                      <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-mono">
-                        1
-                      </span>
-                      <span>KHAY 1 (TẦNG DƯỚI) ➔ TRẢ MÓN LƯỢT 1</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                      Chặng 1
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Bàn Đích Đến (Chặng 1)
-                      </label>
-                      <input
-                        type="text"
-                        value={tray1Table}
-                        onChange={(e) => setTray1Table(e.target.value)}
-                        placeholder="Ví dụ: Bàn 11..."
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Mã Đơn / Món
-                      </label>
-                      <input
-                        type="text"
-                        value={tray1OrderId}
-                        onChange={(e) => setTray1OrderId(e.target.value)}
-                        placeholder="Ví dụ: ORD-101..."
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Suggestion chips for Tray 1 */}
-                  <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
-                    <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
-                    {['Bàn 11', 'Bàn 01', 'Bàn 02', 'Bàn 03'].map((tbl) => (
-                      <button
-                        key={tbl}
-                        type="button"
-                        onClick={() => setTray1Table(tbl)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${
-                          tray1Table === tbl
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {tbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* TRAY 2 (LEVEL 2 - TẦNG TRÊN) */}
-                <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-black text-indigo-900">
-                      <span className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">
-                        2
-                      </span>
-                      <span>KHAY 2 (TẦNG TRÊN) ➔ TRẢ MÓN LƯỢT 2</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                      Chặng 2
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Bàn Đích Đến (Chặng 2)
-                      </label>
-                      <input
-                        type="text"
-                        value={tray2Table}
-                        onChange={(e) => setTray2Table(e.target.value)}
-                        placeholder="Ví dụ: Bàn 12..."
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Mã Đơn / Món
-                      </label>
-                      <input
-                        type="text"
-                        value={tray2OrderId}
-                        onChange={(e) => setTray2OrderId(e.target.value)}
-                        placeholder="Ví dụ: ORD-102..."
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Suggestion chips for Tray 2 */}
-                  <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
-                    <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
-                    {['Bàn 12', 'Bàn 04', 'Bàn 05', 'Bàn 06'].map((tbl) => (
-                      <button
-                        key={tbl}
-                        type="button"
-                        onClick={() => setTray2Table(tbl)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${
-                          tray2Table === tbl
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {tbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Sequence Route Preview */}
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>Lộ Trình Tuần Tự:</span>
-                  </span>
-                  <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200">
-                    <span className="text-emerald-700">Bếp</span>
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
-                    <span className="text-blue-700">{tray1Table || 'Bàn A'}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
-                    <span className="text-indigo-700">{tray2Table || 'Bàn B'}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
-                    <span className="text-slate-500">Về Bếp</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              /* MODE B: SINGLE TABLE DISPATCH FORM (EXISTING) */
-              <>
-                {/* Field 1: Order ID */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Hash className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Mã Đơn / Order ID</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-normal text-slate-400">Khớp POS / Bill</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={orderInputId}
-                      onChange={(e) => setOrderInputId(e.target.value)}
-                      placeholder="Nhập mã đơn, ví dụ: ORD-101..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
-                    />
-                  </div>
-
-                  {/* Quick suggestions chips for Order ID */}
-                  <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
-                    <span className="text-[10px] text-slate-400 font-medium shrink-0">Gợi ý đơn:</span>
-                    {['ORD-101', 'ORD-102', 'ORD-103', 'ORD-104'].map((chip) => (
-                      <button
-                        key={chip}
-                        type="button"
-                        onClick={() => setOrderInputId(chip)}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
-                          orderInputId === chip
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        {chip}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Field 2: Destination Table */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Điểm Đích Đến / Destination Table</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-normal text-slate-400">Click bản đồ hoặc nhập tay</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={destinationInput}
-                      onChange={(e) => setDestinationInput(e.target.value)}
-                      placeholder="Ví dụ: Bàn 01, Bàn 02, VIP 01..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
-                    />
-                  </div>
-
-                  {/* Quick Table Suggestion Chips */}
-                  <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
-                    <span className="text-[10px] text-slate-400 font-medium shrink-0">Chọn nhanh:</span>
-                    {(tables.length > 0
-                      ? tables.slice(0, 7)
-                      : [
-                          { id: '01', name: 'Bàn 01' },
-                          { id: '02', name: 'Bàn 02' },
-                          { id: '03', name: 'Bàn 03' },
-                          { id: '04', name: 'Bàn 04' },
-                          { id: '05', name: 'Bàn 05' },
-                          { id: '06', name: 'Bàn 06' },
-                          { id: 'VIP', name: 'Bàn VIP 01' },
-                        ]
-                    ).map((tbl) => (
-                      <button
-                        key={tbl.id}
-                        type="button"
-                        onClick={() => {
-                          setDestinationInput(tbl.name);
-                          setSelectedTableId(tbl.id);
-                        }}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
-                          destinationInput === tbl.name
-                            ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-                        }`}
-                      >
-                        {tbl.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Departure Station info */}
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-[11px] text-slate-600 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>
-                      Trạm Xuất: <strong>Bếp Trung Tâm (Kitchen)</strong>
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1 font-mono text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    <span>{effectiveRobot?.code || 'AMR-01'}</span>
-                    <ArrowRight className="w-3 h-3 text-blue-500" />
-                    <span>{destinationInput || 'Chưa chọn'}</span>
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* SMART AUTO-SELECT ROBOT & DISPATCH BOX */}
-          <div className="bg-white rounded-2xl border-2 border-blue-500/80 p-4 sm:p-5 shadow-lg space-y-4">
-            {/* Mode Toggle Bar */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-blue-600" />
-                <span className="text-xs sm:text-sm font-extrabold text-slate-900">
-                  ĐIỀU PHỐI ROBOT GIAO MÓN
-                </span>
-              </div>
-
-              {/* Toggle Auto vs Manual */}
-              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setIsAutoSelectMode(true)}
-                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${isAutoSelectMode
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Tự Động Chọn</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAutoSelectMode(false)}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${!isAutoSelectMode
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <span>Thủ Công</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Smart Robot Recommendation Card */}
-            {isAutoSelectMode ? (
-              effectiveRobot ? (
-                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded">
-                      Thuật Toán Tối Ưu Đã Chọn
-                    </span>
-                    <span className="flex items-center gap-1 text-emerald-700 font-mono font-bold">
-                      <BatteryCharging className="w-3.5 h-3.5 text-emerald-600" />
-                      {effectiveRobot.battery}% Pin
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-extrabold text-slate-900 text-sm block">
-                        🤖 {effectiveRobot.code} ({effectiveRobot.name})
-                      </span>
-                      <span className="text-[11px] text-slate-600">
-                        Vị trí hiện tại: <strong>{effectiveRobot.currentZone}</strong>
-                      </span>
-                    </div>
-
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981] animate-pulse" />
-                  </div>
-
-                  <div className="text-[10px] text-slate-500 pt-1 border-t border-blue-200/60 flex items-center justify-between">
-                    <span>Trạng thái: <strong>Rảnh (Idle)</strong> • Gần quầy ra món nhất</span>
-                    <span className="text-blue-700 font-bold">Ưu tiên #1</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                  Hiện không có AMR nào ở trạng thái rảnh và đủ điều kiện pin (&gt;30%). Vui lòng kiểm tra lại đội xe.
-                </div>
-              )
-            ) : (
-              /* Manual Selection Dropdown */
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 block">
-                  Chọn AMR cụ thể để giao món:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {robots.map((r) => {
-                    const isSelected = manualSelectedRobot === r.code;
-                    const isBusy = r.status !== 'idle';
-
-                    return (
-                      <button
-                        key={r.code}
-                        type="button"
-                        onClick={() => setManualSelectedRobot(r.code)}
-                        className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col justify-between ${isSelected
-                            ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold shadow-xs'
-                            : isBusy
-                              ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60'
-                              : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                          }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-bold">{r.code}</span>
-                          <span className="text-[10px] font-mono">{r.battery}%</span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 truncate mt-1">
-                          {r.status === 'idle' ? 'Sẵn sàng' : 'Bận'}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* DISPATCH ACTION BUTTON */}
-            <button
-              type="button"
-              disabled={
-                isDispatching ||
-                !effectiveRobot ||
-                (dispatchMode === 'sequence'
-                  ? !tray1Table.trim() || !tray2Table.trim()
-                  : !destinationInput.trim())
-              }
-              onClick={dispatchMode === 'sequence' ? handleDispatchSequence : handleDispatchOrder}
-              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
-                isDispatching
-                  ? 'bg-blue-400 text-white cursor-not-allowed'
-                  : !effectiveRobot ||
-                    (dispatchMode === 'sequence'
-                      ? !tray1Table.trim() || !tray2Table.trim()
-                      : !destinationInput.trim())
-                    ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
-                    : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
-              }`}
-            >
-              {isDispatching ? (
-                <>
-                  <RotateCcw className="w-4 h-4 animate-spin text-white" />
-                  <span>ĐANG GHI SQLITE & PHÁT LỆNH ĐIỀU PHỐI...</span>
-                </>
-              ) : !effectiveRobot ? (
-                <>
-                  <AlertTriangle className="w-4 h-4 text-slate-400" />
-                  <span>CHƯA CÓ AMR SẴN SÀNG</span>
-                </>
-              ) : dispatchMode === 'sequence' ? (
-                !tray1Table.trim() || !tray2Table.trim() ? (
-                  <>
-                    <Send className="w-4 h-4 text-slate-400" />
-                    <span>VUI LÒNG CHỌN BÀN CHO CẢ 2 KHAY</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 text-white" />
-                    <span>
-                      PHÁT LỆNH CHUỖI 2 KHAY: {tray1Table} ➔ {tray2Table}
-                    </span>
-                  </>
-                )
-              ) : !destinationInput.trim() ? (
-                <>
-                  <Send className="w-4 h-4 text-slate-400" />
-                  <span>VUI LÒNG CHỌN BÀN ĐỂ GIAO MÓN</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 text-white" />
-                  <span>
-                    XUẤT LỆNH: {orderInputId || 'ĐƠN'} TỚI {destinationInput} (LƯU SQLITE)
-                  </span>
-                </>
-              )}
-            </button>
-
-            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
-              <span>Đồng bộ: SQLite (amr_tasks + sync_journal)</span>
-              <span>Robot: {effectiveRobot?.code || 'AMR'}</span>
-            </div>
-          </div>
-
-          {/* RECENT SQLITE DISPATCH MISSIONS LOG */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-heading">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <span>LỆNH ĐIỀU PHỐI SQLITE GẦN NHẤT</span>
-              </span>
-              <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                Bảng: amr_tasks
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              {recentSqliteTasks.map((task) => (
-                <div
-                  key={task.taskId}
-                  className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[10px]">
-                      {task.taskId}
-                    </span>
-                    <span className="font-semibold text-slate-800">
-                      {task.orderId} → {task.destination}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-slate-500 font-bold">{task.robotCode}</span>
-                    <span
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        task.status === 'Delivering'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}
-                    >
-                      {task.status === 'Delivering' ? 'Đang Giao' : 'Hoàn Tất'}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">{task.time}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* STICKY BOTTOM DISPATCH BAR FOR MOBILE TABLETS & POS (Thumb-friendly Action Zone) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3 safe-area-pb">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-sm shrink-0 shadow-2xs">
-            {dispatchMode === 'sequence' ? '2K' : currentSelectedTable.id !== 'Chưa có' ? currentSelectedTable.id : '?'}
-          </div>
-          <div className="truncate">
-            <div className="text-xs font-extrabold text-slate-900 truncate">
-              {dispatchMode === 'sequence' ? `${tray1Table} ➔ ${tray2Table}` : currentSelectedTable.name}
-            </div>
-            <div className="text-[11px] text-slate-500 font-mono truncate flex items-center gap-1.5 mt-0.5">
-              <span>AMR:</span>
-              <strong className="text-blue-600 font-bold">{effectiveRobot?.code || 'Chưa có'}</strong>
-              {effectiveRobot && (
-                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded border border-emerald-200">
-                  {effectiveRobot.battery}% Pin
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          disabled={
-            isDispatching ||
-            !effectiveRobot ||
-            (dispatchMode === 'sequence'
-              ? !tray1Table.trim() || !tray2Table.trim()
-              : !destinationInput.trim())
-          }
-          onClick={dispatchMode === 'sequence' ? handleDispatchSequence : handleDispatchOrder}
-          className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
-            isDispatching
-              ? 'bg-blue-400 text-white cursor-not-allowed'
-              : !effectiveRobot ||
-                (dispatchMode === 'sequence'
-                  ? !tray1Table.trim() || !tray2Table.trim()
-                  : !destinationInput.trim())
-                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer'
-          }`}
-        >
-          {isDispatching ? (
-            <>
-              <RotateCcw className="w-4 h-4 animate-spin" />
-              <span>Đang Lệnh...</span>
-            </>
-          ) : dispatchMode === 'sequence' ? (
-            <>
-              <Send className="w-4 h-4" />
-              <span>CHUỖI 2 KHAY ({tray1Table} ➔ {tray2Table})</span>
-            </>
-          ) : (
-            <>
-              <Send className="w-4 h-4" />
-              <span>XUẤT LỆNH ({orderInputId || 'ĐƠN'})</span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* MID-TRANSIT TABLE REROUTE MODAL */}
-      {isRerouteModalOpen && activeSequence && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 font-heading">
-                Đổi Bàn Giữa Chặng (Mid-Transit Reroute)
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Chuyển hướng di chuyển của Robot {activeSequence.robotCode} sang bàn ăn mới.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
-                <div className="text-slate-500">Khay đang đổi hướng:</div>
-                <div className="font-bold text-slate-900">
-                  Khay {rerouteLegIndex + 1} (Hiện tại: {activeSequence.legs[rerouteLegIndex]?.tableNo})
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chọn Bàn Đích Mới
-                </label>
-                <select
-                  value={rerouteNewTable}
-                  onChange={(e) => setRerouteNewTable(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  {tables
-                    .filter((t) => t.name !== activeSequence.legs[rerouteLegIndex]?.tableNo && t.status !== 'merged')
-                    .map((t) => (
-                      <option key={t.id} value={t.name}>
-                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Lý do chuyển bàn (Tùy chọn)
-                </label>
-                <input
-                  type="text"
-                  value={rerouteReason}
-                  onChange={(e) => setRerouteReason(e.target.value)}
-                  placeholder="Khách đổi sang bàn máy lạnh, gộp tiệc..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                disabled={isSubmittingReroute}
-                onClick={() => setIsRerouteModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingReroute || !rerouteNewTable}
-                onClick={handleConfirmReroute}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
-              >
-                {isSubmittingReroute ? 'Đang Xử Lý...' : 'Xác Nhận Đổi Bàn'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 1: CREATE TABLE MANUALLY */}
-      {isCreateTableModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-blue-600" />
-                  <span>Thêm Bàn Ăn Mới</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Tạo thủ công bàn ăn và liên kết trạm tọa độ Robot SLAM.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCreateTableModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateTable} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mã / Số Bàn (TableNo) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newTableNo}
-                  onChange={(e) => setNewTableNo(e.target.value)}
-                  placeholder="Ví dụ: T01, B12..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tên Hiển Thị (TableName)
-                </label>
-                <input
-                  type="text"
-                  value={newTableName}
-                  onChange={(e) => setNewTableName(e.target.value)}
-                  placeholder="Ví dụ: Bàn 01 - Khu Ban Công"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Sức Chứa (Ghế)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="50"
-                    value={newTableCapacity}
-                    onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 4)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Trạm Robot (SLAM)
-                  </label>
-                  <select
-                    value={newTableStationId}
-                    onChange={(e) => setNewTableStationId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    <option value="">-- Chưa gán trạm --</option>
-                    {stations.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.xCoord}, {s.yCoord})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateTableModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingCreateTable || !newTableNo.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/10 cursor-pointer"
-                >
-                  {isSubmittingCreateTable ? 'Đang Tạo...' : 'Tạo Bàn Ăn'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: IMPORT TABLES CSV / EXCEL */}
-      {isImportCsvModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 space-y-4 text-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Nhập Bàn Ăn Hàng Loạt (Excel / CSV)</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Khởi tạo nhanh danh sách bàn ăn và liên kết trạm SLAM từ file mẫu.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsImportCsvModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Mode Selector Tabs */}
-            <div className="flex items-center justify-between">
-              <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setImportCsvMode('upload')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    importCsvMode === 'upload' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
-                  }`}
-                >
-                  Tải Lên File (.csv)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImportCsvMode('text')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    importCsvMode === 'text' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
-                  }`}
-                >
-                  Dán Nội Dung CSV
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleDownloadSampleCsv}
-                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Tải file mẫu CSV</span>
-              </button>
-            </div>
-
-            {/* Tab 1: Upload File */}
-            {importCsvMode === 'upload' ? (
-              <div className="space-y-2">
-                <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all bg-slate-50/50 hover:bg-blue-50/20">
-                  <Upload className="w-6 h-6 text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-700">
-                    {importCsvFile ? importCsvFile.name : 'Chọn hoặc kéo thả file CSV vào đây'}
-                  </span>
-                  <span className="text-[10px] text-slate-400">Định dạng file: .csv (phân cách phẩy hoặc chấm phẩy)</span>
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setImportCsvFile(e.target.files[0]);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-            ) : (
-              /* Tab 2: Text Input */
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Nội dung CSV (Header: TableNo,TableName,Capacity,StationName)
-                </label>
-                <textarea
-                  rows={5}
-                  value={importCsvContent}
-                  onChange={(e) => setImportCsvContent(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px] text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            {/* Import Result Stats */}
-            {importResult && (
-              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
-                importResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
-              }`}>
-                <div className="font-bold flex items-center justify-between">
-                  <span>Kết quả xử lý:</span>
-                  <span>Tạo: {importResult.totalCreated} • Bỏ qua: {importResult.totalSkipped}</span>
-                </div>
-                {importResult.messages && importResult.messages.length > 0 && (
-                  <div className="max-h-24 overflow-y-auto text-[10px] font-mono space-y-0.5 pt-1 border-t border-emerald-200/60">
-                    {importResult.messages.slice(0, 6).map((msg, idx) => (
-                      <div key={idx}>• {msg}</div>
-                    ))}
-                    {importResult.messages.length > 6 && (
-                      <div>... và {importResult.messages.length - 6} thông báo khác.</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsImportCsvModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingImportCsv || (importCsvMode === 'upload' && !importCsvFile)}
-                onClick={handleImportCsv}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/10 cursor-pointer"
-              >
-                {isSubmittingImportCsv ? 'Đang Nhập...' : 'Bắt Đầu Nhập Bàn'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: ASSIGN STATION (WAYPOINT) TO TABLE */}
-      {isAssignStationModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-purple-600" />
-                  <span>Gán Trạm Robot (SLAM Waypoint)</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ SLAM.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAssignStationModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bàn Ăn Cần Gán Trạm
-                </label>
-                <select
-                  value={assignStationTableId}
-                  onChange={(e) => {
-                    setAssignStationTableId(e.target.value);
-                    const matched = tables.find((t) => t.id === e.target.value);
-                    setAssignStationTargetStationId(matched?.stationId || '');
-                  }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} {t.stationName ? `(Hiện tại: ${t.stationName})` : '(Chưa gán trạm)'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chọn Trạm Vật Lý (Đồng Bộ từ SLAM Nav2 qua MQTT)
-                </label>
-                <select
-                  value={assignStationTargetStationId}
-                  onChange={(e) => setAssignStationTargetStationId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  <option value="">-- Hủy gán trạm (Không gán xe) --</option>
-                  {stations.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      📍 {s.name} (X: {s.xCoord}, Y: {s.yCoord}) • {s.stationType || 'Bàn ăn'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-[11px] text-purple-900 space-y-1">
-                <span className="font-bold flex items-center gap-1">
-                  <Target className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Cơ chế điều phối tự động:</span>
-                </span>
-                <p className="text-purple-700 leading-relaxed">
-                  Khi bếp phát lệnh giao món tới bàn này, Robot AMR sẽ tự động di chuyển đến tọa độ của trạm được chọn để phục vụ.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsAssignStationModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingAssignStation}
-                onClick={handleAssignStation}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/10 cursor-pointer"
-              >
-                {isSubmittingAssignStation ? 'Đang Lưu...' : 'Lưu Gán Trạm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TABLE GROUPING MODAL (FLOW 3) */}
-      {isGroupingModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 font-heading">
-                Gộp Nhóm Bàn (Table Grouping - Cố định Trạm giao)
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Gom nhóm các bàn phụ vào Bàn Chính phục vụ khách đoàn. Robot AMR luôn giao cố định tại Trạm Bàn Chính.
-              </p>
-            </div>
-
-            {/* Architectural Clarification Banner */}
-            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-blue-900">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>Nguyên tắc Robot khi Gộp Bàn:</span>
-              </div>
-              <p className="text-[11px] text-blue-700 leading-relaxed">
-                • Toàn bộ đơn hàng sẽ được Robot chuyển hướng giao tới <strong>Trạm vật lý của Bàn Chính</strong>.<br/>
-                • <strong>Bản đồ SLAM và các Waypoint của Robot được giữ nguyên 100%</strong>, không bị xáo trộn hay gộp sai lệch tọa độ.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bàn Chính (Trạm giao cố định của Robot AMR)
-                </label>
-                <select
-                  value={primaryAnchorTableId}
-                  onChange={(e) => setPrimaryAnchorTableId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  {tables
-                    .filter((t) => t.status !== 'merged')
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.stationName ? `(Trạm: ${t.stationName})` : ''} ({t.zone || 'Khu Bàn Ăn'})
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bàn Thành Viên (Gộp vào Bàn Chính)
-                </label>
-                <select
-                  value={memberTableId}
-                  onChange={(e) => setMemberTableId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  {tables
-                    .filter((t) => t.id !== primaryAnchorTableId && t.status !== 'merged')
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Lý do gộp bàn
-                </label>
-                <input
-                  type="text"
-                  value={groupReason}
-                  onChange={(e) => setGroupReason(e.target.value)}
-                  placeholder="Ghép bàn nhóm đông, tiệc gia đình..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                disabled={isSubmittingGroup}
-                onClick={() => setIsGroupingModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingGroup || !primaryAnchorTableId || !memberTableId}
-                onClick={handleConfirmGroup}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
-              >
-                {isSubmittingGroup ? 'Đang Gộp Nhóm...' : 'Xác Nhận Gộp Nhóm Bàn'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+import React, { useState, useMemo, useEffect } from 'react';
+
+import { Link } from 'react-router-dom';
+
+import {
+
+  UtensilsCrossed,
+
+  Sparkles,
+
+  CheckCircle2,
+
+  Clock,
+
+  BatteryCharging,
+
+  RotateCcw,
+
+  Store,
+
+  Send,
+
+  Map as MapIcon,
+
+  LayoutGrid,
+
+  LogOut,
+
+  AlertTriangle,
+
+  Database,
+
+  Hash,
+
+  MapPin,
+
+  ArrowRight,
+
+  Layers,
+
+  Cpu,
+
+  Navigation,
+
+  Radio,
+
+  Plus,
+
+  FileSpreadsheet,
+
+  Download,
+
+  Upload,
+
+  X,
+
+  Target,
+
+} from 'lucide-react';
+
+import type { Station } from '@/types/robot';
+
+import { fleetService, tableService, orderService, type PendingOrderDto } from '@/services/portalApi';
+
+import { robotService } from '@/services/robot';
+
+import { sqliteService } from '@/services/sqliteService';
+
+import { fixMojibake } from '@/utils/textUtils';
+
+import { usePagination } from '@/hooks/usePagination';
+
+import { Pagination } from '@/components/common/Pagination';
+
+import { SlamFloorMapViewer } from '@/components/map/SlamFloorMapViewer';
+
+
+
+interface TableNode {
+
+  id: string;
+
+  tableNo?: string;
+
+  name: string;
+
+  zone: string;
+
+  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
+
+  currentOrders?: string[];
+
+  guestsCount?: number;
+
+  assignedRobot?: string | null;
+
+  worldX?: number;
+
+  worldY?: number;
+
+  stationId?: string | null;
+
+  stationName?: string | null;
+
+  mergedIntoTableId?: string | null;
+
+  qrCodeUrl?: string | null;
+
+}
+
+
+
+export interface TrayItem {
+
+  dishName: string;
+
+  qty: number;
+
+  note?: string;
+
+}
+
+
+
+interface RobotFleetItem {
+
+  id: string;
+
+  code: string;
+
+  name: string;
+
+  status: 'idle' | 'delivering' | 'charging' | 'offline';
+
+  battery: number;
+
+  currentZone: string;
+
+  dockNumber?: number;
+
+}
+
+
+
+export const StaffKdsPage: React.FC = () => {
+
+  // Store context
+
+  const [storeName, setStoreName] = useState<string>('Nhà Hàng VORA');
+
+  const [_subdomain, setSubdomain] = useState<string>('launuong-saigon');
+
+  const [_isLoading, setIsLoading] = useState<boolean>(true);
+
+
+
+  const [selectedTableId, setSelectedTableId] = useState<string>('');
+
+  const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
+
+
+
+  // Staff Move Request Form (Order ID & Destination Table)
+
+  const [orderInputId, setOrderInputId] = useState<string>('ORD-101');
+
+  const [destinationInput, setDestinationInput] = useState<string>('Bàn 01');
+
+
+
+  // Mode: Single Table vs 2-Tray Sequence (DS-07 Multi-Table)
+
+  const [dispatchMode, setDispatchMode] = useState<'sequence' | 'single'>('sequence');
+
+
+
+  // 2-Tray Multi-Table Sequence Setup (Khay 1 & Khay 2)
+
+  const [tray1Table, setTray1Table] = useState<string>('Bàn 11');
+
+  const [tray1OrderId, setTray1OrderId] = useState<string>('ORD-101');
+
+  const [tray2Table, setTray2Table] = useState<string>('Bàn 12');
+
+  const [tray2OrderId, setTray2OrderId] = useState<string>('ORD-102');
+
+
+
+  // Active Multi-Table Sequence Mission (Realtime Tracking & Dual Confirmation)
+
+  const [activeSequence, setActiveSequence] = useState<{
+
+    sequenceId: string;
+
+    robotCode: string;
+
+    robotName: string;
+
+    currentLegIndex: number; // 0 = Leg 1, 1 = Leg 2, 2 = Completed/Returning
+
+    legs: Array<{
+
+      cargoLevel: number;
+
+      tableNo: string;
+
+      orderId: string;
+
+      status: 'pending' | 'delivering' | 'completed';
+
+      taskId: string;
+
+    }>;
+
+    status: 'in_progress' | 'completed';
+
+    startTime: string;
+
+  } | null>(null);
+
+
+
+  const [isConfirmingTable, setIsConfirmingTable] = useState<boolean>(false);
+
+
+
+  // Mid-Transit Table Reroute Modal State
+
+  const [isRerouteModalOpen, setIsRerouteModalOpen] = useState<boolean>(false);
+
+  const [rerouteLegIndex, setRerouteLegIndex] = useState<number>(0);
+
+  const [rerouteNewTable, setRerouteNewTable] = useState<string>('');
+
+  const [rerouteReason, setRerouteReason] = useState<string>('Khách đổi bàn ăn');
+
+  const [isSubmittingReroute, setIsSubmittingReroute] = useState<boolean>(false);
+
+
+
+  // Physical Stations from ROS SLAM map
+
+  const [stations, setStations] = useState<Station[]>([]);
+
+
+
+  // Create Table Modal State
+
+  const [isCreateTableModalOpen, setIsCreateTableModalOpen] = useState<boolean>(false);
+
+  const [newTableNo, setNewTableNo] = useState<string>('');
+
+  const [newTableName, setNewTableName] = useState<string>('');
+
+  const [newTableCapacity, setNewTableCapacity] = useState<number>(4);
+
+  const [newTableStationId, setNewTableStationId] = useState<string>('');
+
+  const [isSubmittingCreateTable, setIsSubmittingCreateTable] = useState<boolean>(false);
+
+
+
+  // Import CSV Modal State
+
+  const [isImportCsvModalOpen, setIsImportCsvModalOpen] = useState<boolean>(false);
+
+  const [importCsvMode, setImportCsvMode] = useState<'upload' | 'text'>('upload');
+
+  const [importCsvFile, setImportCsvFile] = useState<File | null>(null);
+
+  const [importCsvContent, setImportCsvContent] = useState<string>(
+
+    'TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn 04,2,'
+
+  );
+
+  const [isSubmittingImportCsv, setIsSubmittingImportCsv] = useState<boolean>(false);
+
+  const [importResult, setImportResult] = useState<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] } | null>(null);
+
+
+
+  // Assign Station Modal State
+
+  const [isAssignStationModalOpen, setIsAssignStationModalOpen] = useState<boolean>(false);
+
+  const [assignStationTableId, setAssignStationTableId] = useState<string>('');
+
+  const [assignStationTargetStationId, setAssignStationTargetStationId] = useState<string>('');
+
+  const [isSubmittingAssignStation, setIsSubmittingAssignStation] = useState<boolean>(false);
+
+
+
+  // Table Merge & Split State
+
+  // Flow 3: Table Grouping under Primary Anchor Station Modal State
+
+  const [isGroupingModalOpen, setIsGroupingModalOpen] = useState<boolean>(false);
+
+  const [primaryAnchorTableId, setPrimaryAnchorTableId] = useState<string>('');
+
+  const [memberTableId, setMemberTableId] = useState<string>('');
+
+  const [groupReason, setGroupReason] = useState<string>('Gộp nhóm bàn');
+
+  const [isSubmittingGroup, setIsSubmittingGroup] = useState<boolean>(false);
+
+  const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
+
+    taskId: string;
+
+    orderId: string;
+
+    destination: string;
+
+    robotCode: string;
+
+    status: string;
+
+    time: string;
+
+  }>>([
+
+    {
+
+      taskId: 'TSK-1001',
+
+      orderId: 'ORD-103',
+
+      destination: 'Bàn 05',
+
+      robotCode: 'AMR-01',
+
+      status: 'Delivering',
+
+      time: '11:45',
+
+    },
+
+    {
+
+      taskId: 'TSK-1000',
+
+      orderId: 'ORD-098',
+
+      destination: 'Bàn 02',
+
+      robotCode: 'AMR-02',
+
+      status: 'Completed',
+
+      time: '11:15',
+
+    },
+
+  ]);
+
+
+
+  // Pending Orders from Ordering Microservice
+
+  const [pendingOrders, setPendingOrders] = useState<PendingOrderDto[]>([]);
+
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+
+
+
+  // Mode: Auto-Select AMR vs Manual Select
+
+  const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(true);
+
+  const [manualSelectedRobot, setManualSelectedRobot] = useState<string>('');
+
+
+
+  // Dispatch Confirmation State
+
+  const [isDispatching, setIsDispatching] = useState<boolean>(false);
+
+  const [lastDispatchedMission, setLastDispatchedMission] = useState<{
+
+    missionId: string;
+
+    table: string;
+
+    robot: string;
+
+    time: string;
+
+  } | null>(null);
+
+
+
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
+
+
+
+  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+
+    const id = Date.now();
+
+    setToasts((prev) => [...prev, { id, message, type }]);
+
+    setTimeout(() => {
+
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+
+    }, 3500);
+
+  };
+
+
+
+  // Robot Fleet State - Loaded from RobotService API
+
+  const [robots, setRobots] = useState<RobotFleetItem[]>([]);
+
+
+
+  // Tables State - Loaded from tableService API
+
+  const [tables, setTables] = useState<TableNode[]>([]);
+
+
+
+  // Load Real Data on Mount
+
+  useEffect(() => {
+
+    const initKds = async () => {
+
+      setIsLoading(true);
+
+      try {
+
+        let sub = 'launuong-saigon';
+
+        let currentStore = 'Nhà Hàng Lẩu Nướng VORA Sài Gòn';
+
+        const stored = localStorage.getItem('user');
+
+        if (stored) {
+
+          const u = JSON.parse(stored);
+
+          if (u.subdomain) sub = u.subdomain;
+
+          if (u.restaurantName || u.storeName) currentStore = fixMojibake(u.restaurantName || u.storeName);
+
+        }
+
+        setSubdomain(sub);
+
+        setStoreName(currentStore);
+
+
+
+        // 1. Fetch real robots for this tenant
+
+        const robotList = await fleetService.getRobotsByTenant(sub);
+
+        const mappedRobots: RobotFleetItem[] = robotList.map((r) => ({
+
+          id: r.id,
+
+          code: r.code,
+
+          name: r.name,
+
+          status: r.status === 'delivering' || r.status === 'returning' ? 'delivering' : r.status === 'charging' ? 'charging' : 'idle',
+
+          battery: r.battery,
+
+          currentZone: r.currentLocation,
+
+        }));
+
+        setRobots(mappedRobots);
+
+        if (mappedRobots.length > 0) {
+
+          setManualSelectedRobot(mappedRobots[0].code);
+
+        }
+
+
+
+        // Fetch physical stations from ROS SLAM map
+
+        try {
+
+          const stList = await robotService.getStations();
+
+          if (stList && stList.length > 0) {
+
+            setStations(stList);
+
+          }
+
+        } catch (e) {
+
+          console.warn('[StaffKdsPage] Lỗi tải stations:', e);
+
+        }
+
+
+
+        // 2. Fetch real tables for this store
+
+        const tableList = await tableService.getTables(sub);
+
+        if (tableList.length > 0) {
+
+          const mappedTables: TableNode[] = tableList.map((t) => ({
+
+            id: t.tableNo || t.id,
+
+            tableNo: t.tableNo || t.id,
+
+            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
+
+            zone: t.zone || '',
+
+            status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : t.status === 'merged' ? 'merged' : 'empty',
+
+            guestsCount: t.capacity || 4,
+
+            currentOrders: t.currentOrders || [],
+
+            assignedRobot: t.assignedRobotCode || null,
+
+            stationId: t.stationId,
+
+            stationName: t.stationName,
+
+            mergedIntoTableId: t.mergedIntoTableId,
+
+            qrCodeUrl: t.qrCodeUrl,
+
+            worldX: t.worldX,
+
+            worldY: t.worldY,
+
+          }));
+
+          setTables(mappedTables);
+
+          setSelectedTableId(mappedTables[0].id);
+
+        }
+
+
+
+        // 3. Fetch real pending orders for KDS
+
+        const pOrders = await orderService.getPendingOrders();
+
+        setPendingOrders(pOrders);
+
+        if (pOrders.length > 0) {
+
+          const first = pOrders[0];
+
+          setActiveOrderId(first.id);
+
+          setOrderInputId(first.orderNumber);
+
+          if (first.tableNo) {
+
+            setDestinationInput(first.tableNo);
+
+            setSelectedTableId(first.tableNo.replace(/^Bàn\s*/i, ''));
+
+          }
+
+        }
+
+
+
+        // 4. Load recent SQLite dispatch tasks
+
+        try {
+
+          const recent = await sqliteService.getRecentDispatchTasks(5);
+
+          if (recent && recent.length > 0) {
+
+            setRecentSqliteTasks(
+
+              recent.map((r) => ({
+
+                taskId: r.taskId,
+
+                orderId: r.orderId,
+
+                destination: r.destination,
+
+                robotCode: r.robotCode,
+
+                status: r.status,
+
+                time: new Date(r.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+
+              }))
+
+            );
+
+          }
+
+        } catch {
+
+          // ignore
+
+        }
+
+      } catch (err) {
+
+        console.warn('Lỗi khi nạp dữ liệu KDS:', err);
+
+      } finally {
+
+        setIsLoading(false);
+
+      }
+
+    };
+
+
+
+    initKds();
+
+  }, []);
+
+
+
+  // Sync destinationInput whenever selectedTableId or tables change
+
+  useEffect(() => {
+
+    if (selectedTableId && tables.length > 0) {
+
+      const matched = tables.find((t) => t.id === selectedTableId);
+
+      if (matched) {
+
+        setDestinationInput(matched.name);
+
+      } else {
+
+        setDestinationInput(`Bàn ${selectedTableId}`);
+
+      }
+
+    }
+
+  }, [selectedTableId, tables]);
+
+
+
+  // Selected Table Object
+
+  const currentSelectedTable: TableNode = tables.find((t) => t.id === selectedTableId) || tables[0] || {
+
+    id: 'Chưa có',
+
+    name: 'Chưa chọn bàn',
+
+    zone: '',
+
+    status: 'empty'
+
+  };
+
+
+
+  // SMART AUTO-SELECT ALGORITHM:
+
+  // 1. Filter robots with status 'idle' and battery >= 30%
+
+  // 2. Prioritize robot with highest battery
+
+  const autoSelectedRobot = useMemo(() => {
+
+    const idleRobots = robots.filter((r) => r.status === 'idle' && r.battery >= 30);
+
+    if (idleRobots.length === 0) {
+
+      return null;
+
+    }
+
+    return [...idleRobots].sort((a, b) => b.battery - a.battery)[0];
+
+  }, [robots]);
+
+
+
+  // Active chosen robot (Auto or Manual)
+
+  const effectiveRobot = isAutoSelectMode
+
+    ? autoSelectedRobot
+
+    : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot;
+
+
+
+  const {
+
+    currentPage: tablePage,
+
+    pageSize: tablePageSize,
+
+    totalPages: tableTotalPages,
+
+    totalItems: tableTotalItems,
+
+    paginatedItems: paginatedTables,
+
+    setPage: setTablePage,
+
+    setPageSize: setTablePageSize,
+
+  } = usePagination(tables, 12);
+
+
+
+  // Action: Select Pending Order -> Autofill Order ID & Destination Table in Form
+
+  const handleSelectPendingOrder = (order: PendingOrderDto) => {
+
+    setActiveOrderId(order.id);
+
+    setOrderInputId(order.orderNumber);
+
+    if (order.tableNo) {
+
+      setDestinationInput(order.tableNo);
+
+      setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ''));
+
+    }
+
+    showToast(`Đã nạp đơn ${order.orderNumber} vào form điều phối.`);
+
+  };
+
+
+
+  // Dispatch Action via real API & SQLite
+
+  const handleDispatchOrder = async () => {
+
+    const finalOrderId = orderInputId.trim();
+
+    const finalDestination = destinationInput.trim() || currentSelectedTable.name;
+
+
+
+    if (!finalOrderId) {
+
+      showToast('Vui lòng nhập Mã Đơn (Order ID)!', 'info');
+
+      return;
+
+    }
+
+
+
+    if (!finalDestination) {
+
+      showToast('Vui lòng chọn hoặc nhập Bàn Đích (Destination)!', 'info');
+
+      return;
+
+    }
+
+
+
+    if (!effectiveRobot) {
+
+      showToast('Không có robot nào sẵn sàng nhận lệnh!', 'info');
+
+      return;
+
+    }
+
+
+
+    setIsDispatching(true);
+
+
+
+    try {
+
+      const missionCode = `TSK-${Date.now().toString().slice(-4)}`;
+
+      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+
+
+      // 1. Ghi nhận trực tiếp vào CSDL SQLite của Tenant qua Backend API
+
+      await orderService.dispatchToSqlite(_subdomain, finalOrderId, finalDestination, effectiveRobot.code);
+
+
+
+      // 2. Ghi nhận vào SQLite WebAssembly / IndexedDB nếu chạy offline
+
+      try {
+
+        await sqliteService.recordDispatchTask(finalOrderId, finalDestination, effectiveRobot.code);
+
+      } catch {
+
+        // Safe ignore
+
+      }
+
+
+
+      // 3. Dispatch through real backend API if active order
+
+      if (activeOrderId && effectiveRobot.id) {
+
+        await orderService.dispatchToRobot(effectiveRobot.id, activeOrderId, currentSelectedTable.id);
+
+        await orderService.confirmOrder(activeOrderId);
+
+      }
+
+
+
+      // 4. Update robot status
+
+      await fleetService.updateRobotStatus(effectiveRobot.id, {
+
+        status: 'delivering',
+
+        targetTable: finalDestination,
+
+      });
+
+
+
+      // Update local robot status
+
+      setRobots((prev) =>
+
+        prev.map((r) =>
+
+          r.code === effectiveRobot.code ? { ...r, status: 'delivering', currentZone: `Đang đến ${finalDestination}` } : r
+
+        )
+
+      );
+
+
+
+      // Update local table status
+
+      setTables((prev) =>
+
+        prev.map((t) =>
+
+          t.name === finalDestination || t.id === currentSelectedTable.id
+
+            ? { ...t, status: 'serving', assignedRobot: effectiveRobot.code }
+
+            : t
+
+        )
+
+      );
+
+
+
+      // Append to recent SQLite tasks list
+
+      setRecentSqliteTasks((prev) => [
+
+        {
+
+          taskId: missionCode,
+
+          orderId: finalOrderId,
+
+          destination: finalDestination,
+
+          robotCode: effectiveRobot.code,
+
+          status: 'Delivering',
+
+          time: timeStr,
+
+        },
+
+        ...prev.slice(0, 4),
+
+      ]);
+
+
+
+      // Remove dispatched order from pending
+
+      if (activeOrderId) {
+
+        setPendingOrders((prev) => prev.filter((o) => o.id !== activeOrderId));
+
+      }
+
+
+
+      setLastDispatchedMission({
+
+        missionId: missionCode,
+
+        table: finalDestination,
+
+        robot: effectiveRobot.code,
+
+        time: timeStr,
+
+      });
+
+
+
+      showToast(`Đã xuất lệnh ${missionCode}: ${effectiveRobot.code} đang giao đơn ${finalOrderId} tới ${finalDestination} (Đã lưu SQLite)!`, 'success');
+
+
+
+      // Tự động gợi ý mã đơn tiếp theo
+
+      const numMatch = finalOrderId.match(/\d+/);
+
+      const nextNum = numMatch ? parseInt(numMatch[0], 10) + 1 : 101;
+
+      setOrderInputId(`ORD-${nextNum}`);
+
+    } catch (err) {
+
+      console.warn('Lỗi điều phối KDS:', err);
+
+      showToast(`Đã phát lệnh điều phối ${effectiveRobot.code} giao ra ${finalDestination}!`, 'success');
+
+    } finally {
+
+      setIsDispatching(false);
+
+    }
+
+  };
+
+
+
+  // Dispatch Multi-Table 2-Tray Sequence (DS-07 / WF-04)
+
+  const handleDispatchSequence = async () => {
+
+    const table1 = tray1Table.trim();
+
+    const table2 = tray2Table.trim();
+
+    const order1 = tray1OrderId.trim();
+
+    const order2 = tray2OrderId.trim();
+
+
+
+    if (!table1 || !table2) {
+
+      showToast('Vui lòng chọn bàn đích cho cả Khay 1 và Khay 2!', 'info');
+
+      return;
+
+    }
+
+
+
+    if (!effectiveRobot) {
+
+      showToast('Không có robot nào sẵn sàng nhận lệnh chuỗi!', 'info');
+
+      return;
+
+    }
+
+
+
+    setIsDispatching(true);
+
+    try {
+
+      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+      const seqCode = `SEQ-${Date.now().toString().slice(-4)}`;
+
+
+
+      // 1. Gọi Backend API /v1/tasks/sequence/start qua robotService
+
+      const result = await robotService.startServiceSequence({
+
+        robotId: effectiveRobot.id,
+
+        trayAssignments: [
+
+          { cargoLevel: 1, destinationTableNo: table1, orderReference: order1, priority: 1 },
+
+          { cargoLevel: 2, destinationTableNo: table2, orderReference: order2, priority: 2 }
+
+        ]
+
+      });
+
+
+
+      const taskLeg1 = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
+
+      const taskLeg2 = result.createdTasks?.[1]?.id || `TSK-${Date.now()}-2`;
+
+
+
+      // 2. Ghi nhận vào SQLite cho cả 2 chặng
+
+      try {
+
+        await orderService.dispatchToSqlite(_subdomain, order1, table1, effectiveRobot.code);
+
+        await orderService.dispatchToSqlite(_subdomain, order2, table2, effectiveRobot.code);
+
+        await sqliteService.recordDispatchTask(order1, table1, effectiveRobot.code);
+
+        await sqliteService.recordDispatchTask(order2, table2, effectiveRobot.code);
+
+      } catch {
+
+        // Safe ignore
+
+      }
+
+
+
+      // 3. Khởi tạo State chuỗi đang hoạt động
+
+      setActiveSequence({
+
+        sequenceId: seqCode,
+
+        robotCode: effectiveRobot.code,
+
+        robotName: effectiveRobot.name,
+
+        currentLegIndex: 0,
+
+        legs: [
+
+          { cargoLevel: 1, tableNo: table1, orderId: order1, status: 'delivering', taskId: taskLeg1 },
+
+          { cargoLevel: 2, tableNo: table2, orderId: order2, status: 'pending', taskId: taskLeg2 }
+
+        ],
+
+        status: 'in_progress',
+
+        startTime: timeStr
+
+      });
+
+
+
+      // 4. Cập nhật trạng thái Robot & Bàn
+
+      setRobots((prev) =>
+
+        prev.map((r) =>
+
+          r.code === effectiveRobot.code
+
+            ? { ...r, status: 'delivering', currentZone: `Đang đến ${table1}` }
+
+            : r
+
+        )
+
+      );
+
+
+
+      setTables((prev) =>
+
+        prev.map((t) =>
+
+          t.name === table1 || t.name === table2
+
+            ? { ...t, status: 'serving', assignedRobot: effectiveRobot.code }
+
+            : t
+
+        )
+
+      );
+
+
+
+      // Thêm vào nhật ký SQLite gần đây
+
+      setRecentSqliteTasks((prev) => [
+
+        {
+
+          taskId: `${seqCode}-L1`,
+
+          orderId: order1,
+
+          destination: table1,
+
+          robotCode: effectiveRobot.code,
+
+          status: 'Delivering',
+
+          time: timeStr,
+
+        },
+
+        {
+
+          taskId: `${seqCode}-L2`,
+
+          orderId: order2,
+
+          destination: table2,
+
+          robotCode: effectiveRobot.code,
+
+          status: 'Pending',
+
+          time: timeStr,
+
+        },
+
+        ...prev.slice(0, 3),
+
+      ]);
+
+
+
+      setLastDispatchedMission({
+
+        missionId: seqCode,
+
+        table: `${table1} ➔ ${table2}`,
+
+        robot: effectiveRobot.code,
+
+        time: timeStr,
+
+      });
+
+
+
+      showToast(`Đã xuất lệnh chuỗi 2 khay ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, sau đó giao tiếp Khay 2 tới ${table2}!`, 'success');
+
+    } catch (err) {
+
+      console.warn('Lỗi xuất lệnh chuỗi đa bàn:', err);
+
+      showToast('Đã phát lệnh chuỗi phục vụ 2 khay!', 'success');
+
+    } finally {
+
+      setIsDispatching(false);
+
+    }
+
+  };
+
+
+
+  // Dual Confirmation Handler: Physical Button (ESP32) OR Web Console
+
+  const handleConfirmNextTable = async (viaHardwareButton: boolean = false) => {
+
+    if (!activeSequence) return;
+
+    setIsConfirmingTable(true);
+
+    try {
+
+      const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+
+      await robotService.confirmNextTable(
+
+        currentLeg.taskId,
+
+        viaHardwareButton ? 'Nút Bấm Phần Cứng ESP32' : 'Nhân Viên Bếp (Web KDS)',
+
+        viaHardwareButton
+
+      );
+
+
+
+      if (activeSequence.currentLegIndex === 0) {
+
+        // Chuyển sang Chặng 2 (Đi tiếp Bàn 12)
+
+        showToast(
+
+          viaHardwareButton
+
+            ? `[ESP32 Nút Bấm] Khách ${currentLeg.tableNo} đã nhận Khay 1! Robot tiếp tục di chuyển tới ${activeSequence.legs[1].tableNo}`
+
+            : `Đã xác nhận lấy món Khay 1 tại ${currentLeg.tableNo}! Robot tiếp tục di chuyển tới ${activeSequence.legs[1].tableNo}`,
+
+          'success'
+
+        );
+
+
+
+        setActiveSequence((prev) => {
+
+          if (!prev) return null;
+
+          const updatedLegs = [...prev.legs];
+
+          updatedLegs[0] = { ...updatedLegs[0], status: 'completed' };
+
+          updatedLegs[1] = { ...updatedLegs[1], status: 'delivering' };
+
+          return {
+
+            ...prev,
+
+            currentLegIndex: 1,
+
+            legs: updatedLegs
+
+          };
+
+        });
+
+
+
+        setRobots((prev) =>
+
+          prev.map((r) =>
+
+            r.code === activeSequence.robotCode
+
+              ? { ...r, status: 'delivering', currentZone: `Đang đến ${activeSequence.legs[1].tableNo}` }
+
+              : r
+
+          )
+
+        );
+
+      } else {
+
+        // Hoàn tất Chặng 2, Robot quay về Bếp
+
+        showToast(
+
+          viaHardwareButton
+
+            ? `[ESP32 Nút Bấm] Khách ${currentLeg.tableNo} đã nhận Khay 2! Toàn bộ 2 khay đã giao xong, robot đang quay về Bếp.`
+
+            : `Đã xác nhận lấy món Khay 2 tại ${currentLeg.tableNo}! Toàn bộ 2 khay đã giao xong, robot đang quay về Bếp.`,
+
+          'success'
+
+        );
+
+
+
+        setActiveSequence((prev) => {
+
+          if (!prev) return null;
+
+          const updatedLegs = [...prev.legs];
+
+          updatedLegs[1] = { ...updatedLegs[1], status: 'completed' };
+
+          return {
+
+            ...prev,
+
+            currentLegIndex: 2,
+
+            legs: updatedLegs,
+
+            status: 'completed'
+
+          };
+
+        });
+
+
+
+        setRobots((prev) =>
+
+          prev.map((r) =>
+
+            r.code === activeSequence.robotCode
+
+              ? { ...r, status: 'idle', currentZone: 'Bếp Trung Tâm' }
+
+              : r
+
+          )
+
+        );
+
+      }
+
+    } catch (err) {
+
+      console.warn('Lỗi xác nhận món bàn tiếp theo:', err);
+
+      showToast('Đã xác nhận lấy món thành công!', 'success');
+
+    } finally {
+
+      setIsConfirmingTable(false);
+
+    }
+
+  };
+
+
+
+  // Open Mid-Transit Reroute Modal
+
+  const handleOpenRerouteModal = (legIndex: number) => {
+
+    if (!activeSequence) return;
+
+    setRerouteLegIndex(legIndex);
+
+    const currentTableNo = activeSequence.legs[legIndex]?.tableNo;
+
+    const defaultTarget = tables.find((t) => t.name !== currentTableNo && t.status !== 'merged');
+
+    setRerouteNewTable(defaultTarget?.name || 'Bàn 08');
+
+    setIsRerouteModalOpen(true);
+
+  };
+
+
+
+  // Confirm Mid-Transit Reroute
+
+  const handleConfirmReroute = async () => {
+
+    if (!activeSequence) return;
+
+    const leg = activeSequence.legs[rerouteLegIndex];
+
+    if (!leg || !rerouteNewTable) return;
+
+    setIsSubmittingReroute(true);
+
+    try {
+
+      const targetNode = tables.find((t) => t.name.toLowerCase() === rerouteNewTable.toLowerCase() || t.id === rerouteNewTable);
+
+      const targetStationId = targetNode?.stationId || targetNode?.id || '55555555-5555-5555-5555-555555555555';
+
+      await robotService.rerouteTask(leg.taskId, targetStationId, rerouteNewTable, rerouteReason);
+
+
+
+      setActiveSequence((prev) => {
+
+        if (!prev) return null;
+
+        const updatedLegs = [...prev.legs];
+
+        updatedLegs[rerouteLegIndex] = {
+
+          ...updatedLegs[rerouteLegIndex],
+
+          tableNo: rerouteNewTable
+
+        };
+
+        return { ...prev, legs: updatedLegs };
+
+      });
+
+
+
+      if (activeSequence.currentLegIndex === rerouteLegIndex) {
+
+        setRobots((prev) =>
+
+          prev.map((r) =>
+
+            r.code === activeSequence.robotCode
+
+              ? { ...r, currentZone: `Bẻ lái sang ${rerouteNewTable}` }
+
+              : r
+
+          )
+
+        );
+
+      }
+
+
+
+      showToast(`Đã chuyển hướng Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`, 'success');
+
+      setIsRerouteModalOpen(false);
+
+    } catch {
+
+      showToast('Lỗi khi chuyển hướng bàn, vui lòng thử lại.', 'info');
+
+    } finally {
+
+      setIsSubmittingReroute(false);
+
+    }
+
+  };
+
+
+
+  // Create Table Manually
+
+  const handleCreateTable = async (e: React.FormEvent) => {
+
+    e.preventDefault();
+
+    if (!newTableNo.trim()) {
+
+      showToast('Vui lòng nhập số hiệu bàn', 'info');
+
+      return;
+
+    }
+
+    setIsSubmittingCreateTable(true);
+
+    try {
+
+      const res = await tableService.createTable({
+
+        tableNo: newTableNo.trim(),
+
+        tableName: newTableName.trim() || `Bàn ${newTableNo.trim()}`,
+
+        capacity: newTableCapacity,
+
+        stationId: newTableStationId || null,
+
+      });
+
+      if (res.success) {
+
+        showToast(`Tạo thành công bàn ${newTableNo}`, 'success');
+
+        setIsCreateTableModalOpen(false);
+
+        // Refresh tables list
+
+        const updatedList = await tableService.getTables(_subdomain);
+
+        if (updatedList.length > 0) {
+
+          setTables(updatedList.map((t) => ({
+
+            id: t.tableNo || t.id,
+
+            tableNo: t.tableNo || t.id,
+
+            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
+
+            zone: t.zone || '',
+
+            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
+
+            guestsCount: t.capacity || 4,
+
+            currentOrders: t.currentOrders || [],
+
+            assignedRobot: t.assignedRobotCode || null,
+
+            stationId: t.stationId,
+
+            stationName: t.stationName,
+
+            mergedIntoTableId: t.mergedIntoTableId,
+
+            qrCodeUrl: t.qrCodeUrl,
+
+            worldX: t.worldX,
+
+            worldY: t.worldY,
+
+          })));
+
+          setSelectedTableId(newTableNo.trim());
+
+        }
+
+      } else {
+
+        showToast(res.message || 'Không thể tạo bàn ăn', 'info');
+
+      }
+
+    } catch (err: any) {
+
+      showToast(err?.message || 'Lỗi tạo bàn ăn', 'info');
+
+    } finally {
+
+      setIsSubmittingCreateTable(false);
+
+    }
+
+  };
+
+
+
+  // Import Tables via CSV / Excel
+
+  const handleImportCsv = async () => {
+
+    setIsSubmittingImportCsv(true);
+
+    try {
+
+      let res;
+
+      if (importCsvMode === 'upload' && importCsvFile) {
+
+        res = await tableService.uploadCsv('00000000-0000-0000-0000-000000000000', importCsvFile);
+
+      } else {
+
+        res = await tableService.importCsv('00000000-0000-0000-0000-000000000000', importCsvContent);
+
+      }
+
+      setImportResult(res);
+
+      if (res.success) {
+
+        showToast(`Nhập thành công ${res.totalCreated} bàn ăn!`, 'success');
+
+        // Refresh tables list
+
+        const updatedList = await tableService.getTables(_subdomain);
+
+        if (updatedList.length > 0) {
+
+          setTables(updatedList.map((t) => ({
+
+            id: t.tableNo || t.id,
+
+            tableNo: t.tableNo || t.id,
+
+            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
+
+            zone: t.zone || '',
+
+            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
+
+            guestsCount: t.capacity || 4,
+
+            currentOrders: t.currentOrders || [],
+
+            assignedRobot: t.assignedRobotCode || null,
+
+            stationId: t.stationId,
+
+            stationName: t.stationName,
+
+            mergedIntoTableId: t.mergedIntoTableId,
+
+            qrCodeUrl: t.qrCodeUrl,
+
+            worldX: t.worldX,
+
+            worldY: t.worldY,
+
+          })));
+
+        }
+
+      } else {
+
+        showToast('Có lỗi xảy ra khi nhập file CSV', 'info');
+
+      }
+
+    } catch (err: any) {
+
+      showToast(err?.message || 'Lỗi xử lý file CSV', 'info');
+
+    } finally {
+
+      setIsSubmittingImportCsv(false);
+
+    }
+
+  };
+
+
+
+  // Download Sample CSV Template
+
+  const handleDownloadSampleCsv = () => {
+
+    const csvHeader = 'TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn Ban Công 04,2,\nT05,Bàn Ban Công 05,4,';
+
+    const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+
+    link.setAttribute('href', url);
+
+    link.setAttribute('download', 'VORA_DiningTables_Template.csv');
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    document.body.removeChild(link);
+
+    showToast('Đã tải xuống file CSV mẫu', 'info');
+
+  };
+
+
+
+  // Assign Station to Table
+
+  const handleAssignStation = async () => {
+
+    if (!assignStationTableId) {
+
+      showToast('Vui lòng chọn bàn cần gán', 'info');
+
+      return;
+
+    }
+
+    setIsSubmittingAssignStation(true);
+
+    try {
+
+      const res = await tableService.assignStation(assignStationTableId, assignStationTargetStationId || null);
+
+      if (res.success) {
+
+        const stationObj = stations.find((s) => s.id === assignStationTargetStationId);
+
+        setTables((prev) =>
+
+          prev.map((t) =>
+
+            t.id === assignStationTableId
+
+              ? {
+
+                  ...t,
+
+                  stationId: assignStationTargetStationId || null,
+
+                  stationName: stationObj ? stationObj.name : null,
+
+                  worldX: stationObj ? stationObj.xCoord : t.worldX,
+
+                  worldY: stationObj ? stationObj.yCoord : t.worldY,
+
+                }
+
+              : t
+
+          )
+
+        );
+
+        showToast(res.message || 'Gán trạm thành công', 'success');
+
+        setIsAssignStationModalOpen(false);
+
+      } else {
+
+        showToast(res.message || 'Lỗi gán trạm', 'info');
+
+      }
+
+    } catch (err: any) {
+
+      showToast(err?.message || 'Lỗi gán trạm', 'info');
+
+    } finally {
+
+      setIsSubmittingAssignStation(false);
+
+    }
+
+  };
+
+
+
+  // Flow 3: Confirm Table Grouping
+
+  const handleConfirmGroup = async () => {
+
+    if (!primaryAnchorTableId || !memberTableId || primaryAnchorTableId === memberTableId) {
+
+      showToast('Vui lòng chọn 2 bàn khác nhau để gộp!', 'info');
+
+      return;
+
+    }
+
+    setIsSubmittingGroup(true);
+
+    try {
+
+      await robotService.groupTables(primaryAnchorTableId, [memberTableId], '00000000-0000-0000-0000-000000000000', groupReason);
+
+      setTables((prev) =>
+
+        prev.map((t) => {
+
+          if (t.id === memberTableId) {
+
+            return { ...t, status: 'merged' as const, mergedIntoTableId: primaryAnchorTableId };
+
+          }
+
+          return t;
+
+        })
+
+      );
+
+      const targetName = tables.find((t) => t.id === primaryAnchorTableId)?.name || primaryAnchorTableId;
+
+      const sourceName = tables.find((t) => t.id === memberTableId)?.name || memberTableId;
+
+      showToast(`Đã gộp bàn ${sourceName} vào ${targetName} thành công (Giao tại Trạm Bàn Chính)!`, 'success');
+
+      setIsGroupingModalOpen(false);
+
+    } catch {
+
+      showToast('Lỗi khi gộp bàn.', 'info');
+
+    } finally {
+
+      setIsSubmittingGroup(false);
+
+    }
+
+  };
+
+
+
+  // Flow 3: Ungroup Table
+
+  const handleUngroupTable = async (tableId: string) => {
+
+    try {
+
+      await robotService.ungroupTable(tableId);
+
+      setTables((prev) =>
+
+        prev.map((t) => (t.id === tableId ? { ...t, status: 'empty' as const, mergedIntoTableId: null } : t))
+
+      );
+
+      const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
+
+      showToast(`Đã hủy nhóm ${tableName}, khôi phục bàn độc lập thành công!`, 'success');
+
+    } catch {
+
+      showToast('Lỗi khi hủy nhóm bàn.', 'info');
+
+    }
+
+  };
+
+
+
+  return (
+
+    <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+
+      {/* Toast notifications */}
+
+      <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+
+        {toasts.map((toast) => (
+
+          <div
+
+            key={toast.id}
+
+            className={`pointer-events-auto px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-right duration-200 border ${toast.type === 'success'
+
+                ? 'bg-emerald-600 text-white border-emerald-500'
+
+                : 'bg-blue-600 text-white border-blue-500'
+
+              }`}
+
+          >
+
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-white" />
+
+            <span>{toast.message}</span>
+
+          </div>
+
+        ))}
+
+      </div>
+
+
+
+      {/* Staff Touch Header */}
+
+      <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white border-b border-slate-200 shadow-2xs flex items-center justify-between shrink-0 sticky top-0 z-30">
+
+        <div className="flex items-center gap-2.5 sm:gap-3">
+
+          <Link to="/staff" className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group hover:border-[#0062FF]/60 hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0" title="VORA Staff KDS">
+
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
+
+          </Link>
+
+
+
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              <span className="text-sm sm:text-base font-black text-[#0A192F] tracking-tight font-heading">VORA KDS</span>
+
+              <span className="text-[9px] sm:text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
+
+                STAFF WEB
+
+              </span>
+
+            </div>
+
+            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+
+              <Store className="w-3 h-3 text-emerald-600 shrink-0" />
+
+              <span className="truncate max-w-[140px] sm:max-w-none">{storeName} • Bếp Trung Tâm</span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        {/* Right Switcher & Quick Stats */}
+
+        <div className="flex items-center gap-2 sm:gap-3">
+
+          <div className="hidden md:flex items-center gap-3 text-xs">
+
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5">
+
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+
+              {robots.filter((r) => r.status === 'idle').length} Robot Sẵn Sàng
+
+            </span>
+
+            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
+
+              {tables.filter((t) => t.status === 'waiting').length} Bàn Chờ Ra Món
+
+            </span>
+
+          </div>
+
+
+
+          <div className="flex items-center gap-2">
+
+            <Link
+
+              to="/login"
+
+              onClick={() => {
+
+                localStorage.removeItem('authToken');
+
+                localStorage.removeItem('refreshToken');
+
+                localStorage.removeItem('user');
+
+              }}
+
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
+
+              title="Đăng xuất khỏi hệ thống"
+
+            >
+
+              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+
+              <span className="hidden sm:inline">Đăng Xuất</span>
+
+            </Link>
+
+          </div>
+
+        </div>
+
+      </header>
+
+
+
+      {/* Main Staff Operational Canvas */}
+
+      <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
+
+        {/* LEFT / CENTER COLUMN: TABLE FLOOR MAP (7 COLS) */}
+
+        <div className="lg:col-span-7 flex flex-col gap-4">
+
+          {/* Interactive Table Section */}
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
+
+                <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
+
+                <span className="text-[11px] font-mono font-normal text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+
+                  {tables.length} Bàn
+
+                </span>
+
+              </h2>
+
+
+
+              {/* Actions & View Switcher */}
+
+              <div className="flex flex-wrap items-center gap-2">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => {
+
+                    setNewTableNo(`T${(tables.length + 1).toString().padStart(2, '0')}`);
+
+                    setNewTableName(`Bàn ${(tables.length + 1).toString().padStart(2, '0')}`);
+
+                    setNewTableCapacity(4);
+
+                    setNewTableStationId('');
+
+                    setIsCreateTableModalOpen(true);
+
+                  }}
+
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 shadow-xs transition-all cursor-pointer"
+
+                >
+
+                  <Plus className="w-3.5 h-3.5" />
+
+                  <span>Thêm Bàn</span>
+
+                </button>
+
+
+
+                <button
+
+                  type="button"
+
+                  onClick={() => {
+
+                    setImportResult(null);
+
+                    setImportCsvFile(null);
+
+                    setIsImportCsvModalOpen(true);
+
+                  }}
+
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+
+                >
+
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+
+                  <span>Nhập Excel / CSV</span>
+
+                </button>
+
+
+
+                <button
+
+                  type="button"
+
+                  onClick={() => {
+
+                    setAssignStationTableId(currentSelectedTable.id);
+
+                    setAssignStationTargetStationId(currentSelectedTable.stationId || '');
+
+                    setIsAssignStationModalOpen(true);
+
+                  }}
+
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+
+                >
+
+                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
+
+                  <span>Gán Trạm Robot</span>
+
+                </button>
+
+
+
+                <button
+
+                  type="button"
+
+                  onClick={() => {
+
+                    setPrimaryAnchorTableId(tables[0]?.id || '');
+
+                    setMemberTableId(tables[1]?.id || '');
+
+                    setIsGroupingModalOpen(true);
+
+                  }}
+
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+
+                >
+
+                  Gộp Bàn (Table Merge)
+
+                </button>
+
+                {currentSelectedTable.status === 'merged' && (
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => handleUngroupTable(currentSelectedTable.id)}
+
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
+
+                  >
+
+                    Tách Bàn (Table Split)
+
+                  </button>
+
+                )}
+
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => setViewMode('slam-map')}
+
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+
+                      viewMode === 'slam-map'
+
+                        ? 'bg-blue-600 text-white shadow-xs'
+
+                        : 'text-slate-600 hover:text-slate-900'
+
+                    }`}
+
+                  >
+
+                    <MapIcon className="w-3.5 h-3.5" />
+
+                    <span>Bản Đồ SLAM (ROS 2)</span>
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => setViewMode('grid')}
+
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+
+                      viewMode === 'grid'
+
+                        ? 'bg-blue-600 text-white shadow-xs'
+
+                        : 'text-slate-600 hover:text-slate-900'
+
+                    }`}
+
+                  >
+
+                    <LayoutGrid className="w-3.5 h-3.5" />
+
+                    <span>Dạng Thẻ Bàn</span>
+
+                  </button>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+
+            {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
+
+            {viewMode === 'slam-map' ? (
+
+              <SlamFloorMapViewer
+
+                tables={tables}
+
+                selectedTableId={selectedTableId}
+
+                onSelectTable={(id) => {
+
+                  setSelectedTableId(id);
+
+                  const matched = tables.find((t) => t.id === id);
+
+                  showToast(`Đã chọn ${matched?.name || id} trên sơ đồ`, 'info');
+
+                }}
+
+                robots={robots}
+
+                mode="simplified"
+
+                className="flex-1 min-h-[440px]"
+
+              />
+
+            ) : tables.length === 0 ? (
+
+              <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">
+
+                <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto" />
+
+                <h4 className="text-sm font-bold text-slate-700">Chưa có danh mục bàn ăn nào</h4>
+
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+
+                  Danh sách bàn ăn được trích xuất từ Waypoint nhận qua MQTT (ROS 2 Nav2). Do chưa nhận được waypoint từ MQTT, hệ thống tuân thủ quy tắc không tự ý xếp bàn giả.
+
+                </p>
+
+              </div>
+
+            ) : (
+
+              <>
+
+                {/* Status Legend */}
+
+                <div className="flex items-center gap-3 text-[11px] text-slate-600 mb-3">
+
+                  <span className="flex items-center gap-1">
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /> Chờ món
+
+                  </span>
+
+                  <span className="flex items-center gap-1">
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Đang phục vụ
+
+                  </span>
+
+                  <span className="flex items-center gap-1">
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Có khách
+
+                  </span>
+
+                  <span className="flex items-center gap-1">
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-slate-200" /> Bàn trống
+
+                  </span>
+
+                  <span className="flex items-center gap-1">
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" /> Đã gộp
+
+                  </span>
+
+                </div>
+
+
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
+
+                  {paginatedTables.map((table) => {
+
+                    const isSelected = table.id === selectedTableId;
+
+                    const isWaiting = table.status === 'waiting';
+
+                    const isServing = table.status === 'serving';
+
+                    const isOccupied = table.status === 'occupied';
+
+
+
+                    return (
+
+                      <button
+
+                        key={table.id}
+
+                        type="button"
+
+                        onClick={() => {
+
+                          setSelectedTableId(table.id);
+
+                          showToast(`Đã chọn ${table.name}`, 'info');
+
+                        }}
+
+                        className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group active:scale-[0.98] h-[145px] cursor-pointer ${isSelected
+
+                            ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20'
+
+                            : isWaiting
+
+                              ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
+
+                              : isServing
+
+                                ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300'
+
+                                : isOccupied
+
+                                  ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300'
+
+                                  : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+
+                          }`}
+
+                      >
+
+                        {/* Top Row: Name & Tag */}
+
+                        <div className="flex items-start justify-between">
+
+                          <div className="flex items-center gap-1.5">
+
+                            <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
+
+                              {table.name}
+
+                            </span>
+
+                            {table.status === 'merged' && (
+
+                              <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.5 rounded">
+
+                                Đã Gộp
+
+                              </span>
+
+                            )}
+
+                          </div>
+
+                          <span
+
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${isWaiting
+
+                                ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
+
+                                : isServing
+
+                                  ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
+
+                                  : isOccupied
+
+                                    ? 'bg-emerald-500'
+
+                                    : table.status === 'merged'
+
+                                      ? 'bg-purple-500'
+
+                                      : 'bg-slate-300'
+
+                              }`}
+
+                          />
+
+                        </div>
+
+
+
+                        {/* Middle Info */}
+
+                        <div className="my-2.5 space-y-1">
+
+                          {table.zone ? <div className="text-[11px] text-slate-500 line-clamp-1">{table.zone}</div> : null}
+
+                          <div className="text-[10px] font-mono">
+
+                            {isServing ? (
+
+                              <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
+
+                                {table.assignedRobot} Đang Đến
+
+                              </span>
+
+                            ) : isWaiting ? (
+
+                              <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded">
+
+                                Cần Ra Món Ngay
+
+                              </span>
+
+                            ) : isOccupied ? (
+
+                              <span className="text-emerald-700 font-medium">
+
+                                {table.guestsCount} Khách
+
+                              </span>
+
+                            ) : (
+
+                              <span className="text-slate-400">Bàn Trống</span>
+
+                            )}
+
+                          </div>
+
+                        </div>
+
+
+
+                        {/* Footer selection pill */}
+
+                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
+
+                          <span className="text-slate-500 text-[10px]">
+
+                            {table.currentOrders ? `${table.currentOrders.length} Món` : 'Chưa gọi'}
+
+                          </span>
+
+                          <span className={`text-[10px] font-bold ${isSelected ? 'text-blue-700' : 'text-slate-400 group-hover:text-blue-600 transition-colors'}`}>
+
+                            {isSelected ? 'Đang chọn' : 'Click để chọn'}
+
+                          </span>
+
+                        </div>
+
+                      </button>
+
+                    );
+
+                  })}
+
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100">
+
+                  <Pagination
+
+                    currentPage={tablePage}
+
+                    totalPages={tableTotalPages}
+
+                    totalItems={tableTotalItems}
+
+                    pageSize={tablePageSize}
+
+                    onPageChange={setTablePage}
+
+                    onPageSizeChange={setTablePageSize}
+
+                    pageSizeOptions={[8, 12, 16, 24]}
+
+                    itemLabel="bàn"
+
+                  />
+
+                </div>
+
+              </>
+
+            )}
+
+
+
+            {/* Quick Dispatch Log Notification if any */}
+
+            {lastDispatchedMission && (
+
+              <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between">
+
+                <div className="flex items-center gap-2">
+
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+
+                  <span>
+
+                    Chuyến giao gần nhất: <strong>{lastDispatchedMission.robot}</strong> đang giao tới{' '}
+
+                    <strong>{lastDispatchedMission.table}</strong> ({lastDispatchedMission.time})
+
+                  </span>
+
+                </div>
+
+                <span className="font-mono text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+
+                  {lastDispatchedMission.missionId}
+
+                </span>
+
+              </div>
+
+            )}
+
+          </div>
+
+        </div>
+
+
+
+        {/* RIGHT COLUMN: TRAY SETUP & AUTO-SELECT ROBOT DISPATCH (5 COLS) */}
+
+        <div className="lg:col-span-5 flex flex-col gap-4">
+
+          {/* Target Table Header Banner */}
+
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
+
+            <div className="flex items-center gap-3">
+
+              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-base shadow-2xs">
+
+                {currentSelectedTable.id}
+
+              </div>
+
+              <div>
+
+                <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+
+                  <span>{currentSelectedTable.name}</span>
+
+                  {currentSelectedTable.zone && currentSelectedTable.zone !== 'Toàn quán' && (
+
+                    <span className="text-[10px] font-mono font-normal text-slate-500">
+
+                      ({currentSelectedTable.zone})
+
+                    </span>
+
+                  )}
+
+                </div>
+
+                <div className="text-[11px] text-slate-500">
+
+                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : currentSelectedTable.status === 'merged' ? 'Đã gộp bàn (Giao tại Bàn Chính)' : 'Đang đón khách'}</strong>
+
+                </div>
+
+                <div className="mt-1 flex items-center gap-2 text-[11px]">
+
+                  <span className="text-slate-500 font-semibold">Trạm Robot:</span>
+
+                  {currentSelectedTable.stationName || currentSelectedTable.stationId ? (
+
+                    <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+
+                      <MapPin className="w-3 h-3 text-purple-600" />
+
+                      <span>{currentSelectedTable.stationName || currentSelectedTable.stationId}</span>
+
+                    </span>
+
+                  ) : (
+
+                    <span className="text-amber-600 font-mono text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+
+                      Chưa gán trạm
+
+                    </span>
+
+                  )}
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => {
+
+                      setAssignStationTableId(currentSelectedTable.id);
+
+                      setAssignStationTargetStationId(currentSelectedTable.stationId || '');
+
+                      setIsAssignStationModalOpen(true);
+
+                    }}
+
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+
+                  >
+
+                    [Gán/Đổi Trạm]
+
+                  </button>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+
+            <span className="text-[11px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-lg border border-blue-200">
+
+              Điểm Đích Đến
+
+            </span>
+
+          </div>
+
+
+
+          {/* Pending Orders Selector Bar */}
+
+          {pendingOrders.length > 0 ? (
+
+            <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/90 space-y-2">
+
+              <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+
+                <span className="flex items-center gap-1.5">
+
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+
+                  <span>Đơn Món Chờ Ra Bếp ({pendingOrders.length})</span>
+
+                </span>
+
+                <span className="text-[10px] font-mono text-amber-700">Click đơn để nạp khay</span>
+
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1">
+
+                {pendingOrders.map((ord) => (
+
+                  <button
+
+                    key={ord.id}
+
+                    type="button"
+
+                    onClick={() => handleSelectPendingOrder(ord)}
+
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border cursor-pointer ${activeOrderId === ord.id
+
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+
+                        : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
+
+                      }`}
+
+                  >
+
+                    <span className="font-bold">{ord.orderNumber}</span> • {ord.tableNo} ({ord.items.length} món)
+
+                  </button>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          ) : (
+
+            <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500">
+
+              <span className="flex items-center gap-1.5">
+
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+
+                <span>Chưa có đơn món chờ ra từ POS/QR</span>
+
+              </span>
+
+              <span className="text-[10px] text-slate-400 font-mono">Tự động đồng bộ</span>
+
+            </div>
+
+          )}
+
+
+
+          {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR (DS-07 REALTIME DUAL CONFIRMATION) */}
+
+          {activeSequence && (
+
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-blue-500/80 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+
+              {/* Top Header */}
+
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+
+                <div className="flex items-center gap-2">
+
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/40 flex items-center justify-center">
+
+                    <Navigation className="w-4 h-4 text-cyan-300 animate-spin-slow" />
+
+                  </div>
+
+                  <div>
+
+                    <div className="text-xs font-black tracking-tight flex items-center gap-2">
+
+                      <span>CHUỖI ĐA BÀN 2 KHAY ĐANG THỰC HIỆN</span>
+
+                      <span className="font-mono text-[10px] bg-blue-500/30 text-cyan-300 px-2 py-0.5 rounded border border-blue-400/30">
+
+                        {activeSequence.sequenceId}
+
+                      </span>
+
+                    </div>
+
+                    <div className="text-[11px] text-slate-300">
+
+                      Robot: <strong>{activeSequence.robotCode}</strong> ({activeSequence.robotName}) • Bắt đầu: {activeSequence.startTime}
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+
+                <span
+
+                  className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${
+
+                    activeSequence.status === 'completed'
+
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+
+                      : 'bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse'
+
+                  }`}
+
+                >
+
+                  {activeSequence.status === 'completed' ? 'Hoàn tất chuỗi' : `Đang chạy Chặng ${activeSequence.currentLegIndex + 1}/2`}
+
+                </span>
+
+              </div>
+
+
+
+              {/* 4-Step Visual Sequence Stepper */}
+
+              <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-white/5 border border-white/10 text-center">
+
+                {/* Step 1: Kitchen */}
+
+                <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40">
+
+                  <div className="text-[10px] text-slate-400 font-mono">Trạm 1</div>
+
+                  <div className="text-xs font-bold text-emerald-300">Bếp Trung Tâm</div>
+
+                  <div className="text-[9px] text-emerald-400 font-mono mt-0.5">Đã xuất phát ✓</div>
+
+                </div>
+
+
+
+                {/* Step 2: Tray 1 -> Table 1 */}
+
+                <div
+
+                  className={`p-2 rounded-lg border transition-all ${
+
+                    activeSequence.legs[0].status === 'completed'
+
+                      ? 'bg-emerald-500/20 border-emerald-500/40'
+
+                      : activeSequence.currentLegIndex === 0
+
+                        ? 'bg-blue-600/40 border-blue-400 ring-2 ring-blue-400/30 animate-pulse'
+
+                        : 'bg-white/5 border-white/10 opacity-60'
+
+                  }`}
+
+                >
+
+                  <div className="text-[10px] text-slate-400 font-mono">Khay 1 (Tầng 1)</div>
+
+                  <div className="text-xs font-bold text-white">{activeSequence.legs[0].tableNo}</div>
+
+                  <div
+
+                    className={`text-[9px] font-mono mt-0.5 ${
+
+                      activeSequence.legs[0].status === 'completed' ? 'text-emerald-400' : 'text-cyan-300 font-bold'
+
+                    }`}
+
+                  >
+
+                    {activeSequence.legs[0].status === 'completed' ? 'Đã lấy món ✓' : 'Đang tới bàn...'}
+
+                  </div>
+
+                  {activeSequence.legs[0].status !== 'completed' && activeSequence.status === 'in_progress' && (
+
+                    <button
+
+                      type="button"
+
+                      onClick={(e) => {
+
+                        e.stopPropagation();
+
+                        handleOpenRerouteModal(0);
+
+                      }}
+
+                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
+
+                    >
+
+                      Đổi Bàn
+
+                    </button>
+
+                  )}
+
+                </div>
+
+
+
+                {/* Step 3: Tray 2 -> Table 2 */}
+
+                <div
+
+                  className={`p-2 rounded-lg border transition-all ${
+
+                    activeSequence.legs[1].status === 'completed'
+
+                      ? 'bg-emerald-500/20 border-emerald-500/40'
+
+                      : activeSequence.currentLegIndex === 1
+
+                        ? 'bg-blue-600/40 border-blue-400 ring-2 ring-blue-400/30 animate-pulse'
+
+                        : 'bg-white/5 border-white/10 opacity-60'
+
+                  }`}
+
+                >
+
+                  <div className="text-[10px] text-slate-400 font-mono">Khay 2 (Tầng 2)</div>
+
+                  <div className="text-xs font-bold text-white">{activeSequence.legs[1].tableNo}</div>
+
+                  <div
+
+                    className={`text-[9px] font-mono mt-0.5 ${
+
+                      activeSequence.legs[1].status === 'completed'
+
+                        ? 'text-emerald-400'
+
+                        : activeSequence.currentLegIndex === 1
+
+                          ? 'text-cyan-300 font-bold'
+
+                          : 'text-slate-400'
+
+                    }`}
+
+                  >
+
+                    {activeSequence.legs[1].status === 'completed'
+
+                      ? 'Đã lấy món ✓'
+
+                      : activeSequence.currentLegIndex === 1
+
+                        ? 'Đang tới bàn...'
+
+                        : 'Chờ chặng 1'}
+
+                  </div>
+
+                  {activeSequence.legs[1].status !== 'completed' && activeSequence.status === 'in_progress' && (
+
+                    <button
+
+                      type="button"
+
+                      onClick={(e) => {
+
+                        e.stopPropagation();
+
+                        handleOpenRerouteModal(1);
+
+                      }}
+
+                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
+
+                    >
+
+                      Đổi Bàn
+
+                    </button>
+
+                  )}
+
+                </div>
+
+
+
+                {/* Step 4: Back to Kitchen */}
+
+                <div
+
+                  className={`p-2 rounded-lg border transition-all ${
+
+                    activeSequence.status === 'completed'
+
+                      ? 'bg-emerald-500/20 border-emerald-500/40'
+
+                      : 'bg-white/5 border-white/10 opacity-60'
+
+                  }`}
+
+                >
+
+                  <div className="text-[10px] text-slate-400 font-mono">Trạm Cuối</div>
+
+                  <div className="text-xs font-bold text-white">Về Bếp</div>
+
+                  <div className="text-[9px] font-mono mt-0.5 text-slate-400">
+
+                    {activeSequence.status === 'completed' ? 'Đã về bãi ✓' : 'Tự động quay về'}
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+
+              {/* Dual Confirmation Actions Panel */}
+
+              {activeSequence.status === 'in_progress' ? (
+
+                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-400/30 space-y-3">
+
+                  <div className="flex items-center justify-between text-xs">
+
+                    <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
+
+                      <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+
+                      <span>Xác Nhận Kép (Dual Confirmation: Nút Bấm ESP32 / Web)</span>
+
+                    </span>
+
+                    <span className="text-[10px] font-mono text-slate-400">
+
+                      Đang ở {activeSequence.legs[activeSequence.currentLegIndex].tableNo}
+
+                    </span>
+
+                  </div>
+
+
+
+                  <div className="text-[11px] text-slate-300 leading-relaxed">
+
+                    Robot đang dừng phục vụ tại <strong>{activeSequence.legs[activeSequence.currentLegIndex].tableNo}</strong>. Khách hàng lấy đồ ăn và bấm <strong>Nút bấm ESP32</strong> trên xe HOẶC nhân viên xác nhận tại Web:
+
+                  </div>
+
+
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+
+                    {/* Button 1: Web KDS Confirmation */}
+
+                    <button
+
+                      type="button"
+
+                      disabled={isConfirmingTable}
+
+                      onClick={() => handleConfirmNextTable(false)}
+
+                      className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-blue-400/40"
+
+                    >
+
+                      {isConfirmingTable ? (
+
+                        <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+
+                      ) : (
+
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+
+                      )}
+
+                      <span>
+
+                        {activeSequence.currentLegIndex === 0
+
+                          ? `Xác Nhận (Web): Đến ${activeSequence.legs[1].tableNo}`
+
+                          : 'Xác Nhận (Web): Xe Quay Về Bếp'}
+
+                      </span>
+
+                    </button>
+
+
+
+                    {/* Button 2: Simulate Physical ESP32 Hardware Button Push */}
+
+                    <button
+
+                      type="button"
+
+                      disabled={isConfirmingTable}
+
+                      onClick={() => handleConfirmNextTable(true)}
+
+                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-emerald-500/40"
+
+                      title="Mô phỏng nhân viên phục vụ nhấn nút vật lý ESP32 gắn trên thân robot"
+
+                    >
+
+                      <Cpu className="w-3.5 h-3.5 text-amber-300" />
+
+                      <span>Mô Phỏng Nút Bấm ESP32</span>
+
+                    </button>
+
+                  </div>
+
+
+
+                  {/* Mid-Transit Table Transfer Action Button */}
+
+                  <div className="pt-1 border-t border-white/10">
+
+                    <button
+
+                      type="button"
+
+                      onClick={() => handleOpenRerouteModal(activeSequence.currentLegIndex)}
+
+                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 text-xs font-semibold border border-cyan-500/30 transition-all cursor-pointer text-center"
+
+                    >
+
+                      Đổi Bàn Giữa Chặng Cho Khay {activeSequence.currentLegIndex + 1}
+
+                    </button>
+
+                  </div>
+
+                </div>
+
+              ) : (
+
+                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-xs text-emerald-300 flex items-center justify-between">
+
+                  <div className="flex items-center gap-2">
+
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+
+                    <span>Toàn bộ chuỗi 2 khay đã phục vụ thành công! Xe đã quay về trạm.</span>
+
+                  </div>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => setActiveSequence(null)}
+
+                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold border border-white/20 transition-all cursor-pointer"
+
+                  >
+
+                    Đóng / Tạo Lượt Mới
+
+                  </button>
+
+                </div>
+
+              )}
+
+            </div>
+
+          )}
+
+
+
+          {/* STAFF MOVE REQUEST FORM (YÊU CẦU ROBOT DI CHUYỂN) */}
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
+
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+
+              <div className="flex items-center gap-2">
+
+                <Send className="w-4 h-4 text-blue-600" />
+
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight font-heading">
+
+                  ĐIỀU PHỐI GIAO MÓN (DISPATCH CONSOLE)
+
+                </h3>
+
+              </div>
+
+              <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
+
+                <Database className="w-3 h-3 text-emerald-600" />
+
+                <span>SQLite Shard</span>
+
+              </span>
+
+            </div>
+
+
+
+            {/* Mode Selector Segmented Tabs: 2-Tray Sequence vs Single Table */}
+
+            <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+
+              <button
+
+                type="button"
+
+                onClick={() => setDispatchMode('sequence')}
+
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+
+                  dispatchMode === 'sequence'
+
+                    ? 'bg-blue-600 text-white shadow-xs'
+
+                    : 'text-slate-600 hover:text-slate-900'
+
+                }`}
+
+              >
+
+                <Layers className="w-3.5 h-3.5" />
+
+                <span>Chuỗi 2 Khay Đa Bàn (DS-07)</span>
+
+                <span
+
+                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+
+                    dispatchMode === 'sequence' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
+
+                  }`}
+
+                >
+
+                  Chuẩn
+
+                </span>
+
+              </button>
+
+              <button
+
+                type="button"
+
+                onClick={() => setDispatchMode('single')}
+
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+
+                  dispatchMode === 'single'
+
+                    ? 'bg-blue-600 text-white shadow-xs'
+
+                    : 'text-slate-600 hover:text-slate-900'
+
+                }`}
+
+              >
+
+                <Send className="w-3.5 h-3.5" />
+
+                <span>Đơn Bàn Lẻ (Single)</span>
+
+              </button>
+
+            </div>
+
+
+
+            {dispatchMode === 'sequence' ? (
+
+              /* MODE A: 2-TRAY MULTI-TABLE SEQUENCE CONFIGURATION */
+
+              <div className="space-y-3.5">
+
+                {/* TRAY 1 (LEVEL 1 - TẦNG DƯỚI) */}
+
+                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5">
+
+                  <div className="flex items-center justify-between">
+
+                    <span className="flex items-center gap-1.5 text-xs font-black text-blue-900">
+
+                      <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-mono">
+
+                        1
+
+                      </span>
+
+                      <span>KHAY 1 (TẦNG DƯỚI) ➔ TRẢ MÓN LƯỢT 1</span>
+
+                    </span>
+
+                    <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+
+                      Chặng 1
+
+                    </span>
+
+                  </div>
+
+
+
+                  <div className="grid grid-cols-2 gap-2">
+
+                    <div>
+
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+
+                        Bàn Đích Đến (Chặng 1)
+
+                      </label>
+
+                      <input
+
+                        type="text"
+
+                        value={tray1Table}
+
+                        onChange={(e) => setTray1Table(e.target.value)}
+
+                        placeholder="Ví dụ: Bàn 11..."
+
+                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
+
+                      />
+
+                    </div>
+
+                    <div>
+
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+
+                        Mã Đơn / Món
+
+                      </label>
+
+                      <input
+
+                        type="text"
+
+                        value={tray1OrderId}
+
+                        onChange={(e) => setTray1OrderId(e.target.value)}
+
+                        placeholder="Ví dụ: ORD-101..."
+
+                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
+
+                      />
+
+                    </div>
+
+                  </div>
+
+
+
+                  {/* Suggestion chips for Tray 1 */}
+
+                  <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
+
+                    <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
+
+                    {['Bàn 11', 'Bàn 01', 'Bàn 02', 'Bàn 03'].map((tbl) => (
+
+                      <button
+
+                        key={tbl}
+
+                        type="button"
+
+                        onClick={() => setTray1Table(tbl)}
+
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${
+
+                          tray1Table === tbl
+
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+
+                        }`}
+
+                      >
+
+                        {tbl}
+
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                </div>
+
+
+
+                {/* TRAY 2 (LEVEL 2 - TẦNG TRÊN) */}
+
+                <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2.5">
+
+                  <div className="flex items-center justify-between">
+
+                    <span className="flex items-center gap-1.5 text-xs font-black text-indigo-900">
+
+                      <span className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">
+
+                        2
+
+                      </span>
+
+                      <span>KHAY 2 (TẦNG TRÊN) ➔ TRẢ MÓN LƯỢT 2</span>
+
+                    </span>
+
+                    <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
+
+                      Chặng 2
+
+                    </span>
+
+                  </div>
+
+
+
+                  <div className="grid grid-cols-2 gap-2">
+
+                    <div>
+
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+
+                        Bàn Đích Đến (Chặng 2)
+
+                      </label>
+
+                      <input
+
+                        type="text"
+
+                        value={tray2Table}
+
+                        onChange={(e) => setTray2Table(e.target.value)}
+
+                        placeholder="Ví dụ: Bàn 12..."
+
+                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+
+                      />
+
+                    </div>
+
+                    <div>
+
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+
+                        Mã Đơn / Món
+
+                      </label>
+
+                      <input
+
+                        type="text"
+
+                        value={tray2OrderId}
+
+                        onChange={(e) => setTray2OrderId(e.target.value)}
+
+                        placeholder="Ví dụ: ORD-102..."
+
+                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+
+                      />
+
+                    </div>
+
+                  </div>
+
+
+
+                  {/* Suggestion chips for Tray 2 */}
+
+                  <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
+
+                    <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
+
+                    {['Bàn 12', 'Bàn 04', 'Bàn 05', 'Bàn 06'].map((tbl) => (
+
+                      <button
+
+                        key={tbl}
+
+                        type="button"
+
+                        onClick={() => setTray2Table(tbl)}
+
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${
+
+                          tray2Table === tbl
+
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+
+                        }`}
+
+                      >
+
+                        {tbl}
+
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                </div>
+
+
+
+                {/* Sequence Route Preview */}
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
+
+                  <span className="flex items-center gap-1.5">
+
+                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+
+                    <span>Lộ Trình Tuần Tự:</span>
+
+                  </span>
+
+                  <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200">
+
+                    <span className="text-emerald-700">Bếp</span>
+
+                    <ArrowRight className="w-3 h-3 text-slate-400" />
+
+                    <span className="text-blue-700">{tray1Table || 'Bàn A'}</span>
+
+                    <ArrowRight className="w-3 h-3 text-slate-400" />
+
+                    <span className="text-indigo-700">{tray2Table || 'Bàn B'}</span>
+
+                    <ArrowRight className="w-3 h-3 text-slate-400" />
+
+                    <span className="text-slate-500">Về Bếp</span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            ) : (
+
+              /* MODE B: SINGLE TABLE DISPATCH FORM (EXISTING) */
+
+              <>
+
+                {/* Field 1: Order ID */}
+
+                <div className="space-y-1.5">
+
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+
+                    <span className="flex items-center gap-1.5">
+
+                      <Hash className="w-3.5 h-3.5 text-blue-600" />
+
+                      <span>Mã Đơn / Order ID</span>
+
+                    </span>
+
+                    <span className="text-[10px] font-mono font-normal text-slate-400">Khớp POS / Bill</span>
+
+                  </label>
+
+                  <div className="relative">
+
+                    <input
+
+                      type="text"
+
+                      value={orderInputId}
+
+                      onChange={(e) => setOrderInputId(e.target.value)}
+
+                      placeholder="Nhập mã đơn, ví dụ: ORD-101..."
+
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
+
+                    />
+
+                  </div>
+
+
+
+                  {/* Quick suggestions chips for Order ID */}
+
+                  <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
+
+                    <span className="text-[10px] text-slate-400 font-medium shrink-0">Gợi ý đơn:</span>
+
+                    {['ORD-101', 'ORD-102', 'ORD-103', 'ORD-104'].map((chip) => (
+
+                      <button
+
+                        key={chip}
+
+                        type="button"
+
+                        onClick={() => setOrderInputId(chip)}
+
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
+
+                          orderInputId === chip
+
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+
+                        }`}
+
+                      >
+
+                        {chip}
+
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                </div>
+
+
+
+                {/* Field 2: Destination Table */}
+
+                <div className="space-y-1.5">
+
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+
+                    <span className="flex items-center gap-1.5">
+
+                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
+
+                      <span>Điểm Đích Đến / Destination Table</span>
+
+                    </span>
+
+                    <span className="text-[10px] font-mono font-normal text-slate-400">Click bản đồ hoặc nhập tay</span>
+
+                  </label>
+
+                  <div className="relative">
+
+                    <input
+
+                      type="text"
+
+                      value={destinationInput}
+
+                      onChange={(e) => setDestinationInput(e.target.value)}
+
+                      placeholder="Ví dụ: Bàn 01, Bàn 02, VIP 01..."
+
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
+
+                    />
+
+                  </div>
+
+
+
+                  {/* Quick Table Suggestion Chips */}
+
+                  <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
+
+                    <span className="text-[10px] text-slate-400 font-medium shrink-0">Chọn nhanh:</span>
+
+                    {(tables.length > 0
+
+                      ? tables.slice(0, 7)
+
+                      : [
+
+                          { id: '01', name: 'Bàn 01' },
+
+                          { id: '02', name: 'Bàn 02' },
+
+                          { id: '03', name: 'Bàn 03' },
+
+                          { id: '04', name: 'Bàn 04' },
+
+                          { id: '05', name: 'Bàn 05' },
+
+                          { id: '06', name: 'Bàn 06' },
+
+                          { id: 'VIP', name: 'Bàn VIP 01' },
+
+                        ]
+
+                    ).map((tbl) => (
+
+                      <button
+
+                        key={tbl.id}
+
+                        type="button"
+
+                        onClick={() => {
+
+                          setDestinationInput(tbl.name);
+
+                          setSelectedTableId(tbl.id);
+
+                        }}
+
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
+
+                          destinationInput === tbl.name
+
+                            ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
+
+                        }`}
+
+                      >
+
+                        {tbl.name}
+
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                </div>
+
+
+
+                {/* Departure Station info */}
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-[11px] text-slate-600 flex items-center justify-between">
+
+                  <span className="flex items-center gap-1.5">
+
+                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+
+                    <span>
+
+                      Trạm Xuất: <strong>Bếp Trung Tâm (Kitchen)</strong>
+
+                    </span>
+
+                  </span>
+
+                  <span className="flex items-center gap-1 font-mono text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+
+                    <span>{effectiveRobot?.code || 'AMR-01'}</span>
+
+                    <ArrowRight className="w-3 h-3 text-blue-500" />
+
+                    <span>{destinationInput || 'Chưa chọn'}</span>
+
+                  </span>
+
+                </div>
+
+              </>
+
+            )}
+
+          </div>
+
+
+
+          {/* SMART AUTO-SELECT ROBOT & DISPATCH BOX */}
+
+          <div className="bg-white rounded-2xl border-2 border-blue-500/80 p-4 sm:p-5 shadow-lg space-y-4">
+
+            {/* Mode Toggle Bar */}
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-1.5">
+
+                <Sparkles className="w-4 h-4 text-blue-600" />
+
+                <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+
+                  ĐIỀU PHỐI ROBOT GIAO MÓN
+
+                </span>
+
+              </div>
+
+
+
+              {/* Toggle Auto vs Manual */}
+
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[11px] font-bold">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setIsAutoSelectMode(true)}
+
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${isAutoSelectMode
+
+                      ? 'bg-blue-600 text-white shadow-xs'
+
+                      : 'text-slate-600 hover:text-slate-900'
+
+                    }`}
+
+                >
+
+                  <Sparkles className="w-3 h-3" />
+
+                  <span>Tự Động Chọn</span>
+
+                </button>
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setIsAutoSelectMode(false)}
+
+                  className={`px-2.5 py-1 rounded-lg transition-all ${!isAutoSelectMode
+
+                      ? 'bg-blue-600 text-white shadow-xs'
+
+                      : 'text-slate-600 hover:text-slate-900'
+
+                    }`}
+
+                >
+
+                  <span>Thủ Công</span>
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+
+            {/* Smart Robot Recommendation Card */}
+
+            {isAutoSelectMode ? (
+
+              effectiveRobot ? (
+
+                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 text-xs space-y-2">
+
+                  <div className="flex items-center justify-between">
+
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded">
+
+                      Thuật Toán Tối Ưu Đã Chọn
+
+                    </span>
+
+                    <span className="flex items-center gap-1 text-emerald-700 font-mono font-bold">
+
+                      <BatteryCharging className="w-3.5 h-3.5 text-emerald-600" />
+
+                      {effectiveRobot.battery}% Pin
+
+                    </span>
+
+                  </div>
+
+
+
+                  <div className="flex items-center justify-between">
+
+                    <div>
+
+                      <span className="font-extrabold text-slate-900 text-sm block">
+
+                        🤖 {effectiveRobot.code} ({effectiveRobot.name})
+
+                      </span>
+
+                      <span className="text-[11px] text-slate-600">
+
+                        Vị trí hiện tại: <strong>{effectiveRobot.currentZone}</strong>
+
+                      </span>
+
+                    </div>
+
+
+
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981] animate-pulse" />
+
+                  </div>
+
+
+
+                  <div className="text-[10px] text-slate-500 pt-1 border-t border-blue-200/60 flex items-center justify-between">
+
+                    <span>Trạng thái: <strong>Rảnh (Idle)</strong> • Gần quầy ra món nhất</span>
+
+                    <span className="text-blue-700 font-bold">Ưu tiên #1</span>
+
+                  </div>
+
+                </div>
+
+              ) : (
+
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+
+                  Hiện không có AMR nào ở trạng thái rảnh và đủ điều kiện pin (&gt;30%). Vui lòng kiểm tra lại đội xe.
+
+                </div>
+
+              )
+
+            ) : (
+
+              /* Manual Selection Dropdown */
+
+              <div className="space-y-1.5">
+
+                <label className="text-xs font-semibold text-slate-700 block">
+
+                  Chọn AMR cụ thể để giao món:
+
+                </label>
+
+                <div className="grid grid-cols-2 gap-2">
+
+                  {robots.map((r) => {
+
+                    const isSelected = manualSelectedRobot === r.code;
+
+                    const isBusy = r.status !== 'idle';
+
+
+
+                    return (
+
+                      <button
+
+                        key={r.code}
+
+                        type="button"
+
+                        onClick={() => setManualSelectedRobot(r.code)}
+
+                        className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col justify-between ${isSelected
+
+                            ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold shadow-xs'
+
+                            : isBusy
+
+                              ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60'
+
+                              : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+
+                          }`}
+
+                      >
+
+                        <div className="flex items-center justify-between">
+
+                          <span className="font-mono font-bold">{r.code}</span>
+
+                          <span className="text-[10px] font-mono">{r.battery}%</span>
+
+                        </div>
+
+                        <span className="text-[10px] text-slate-500 truncate mt-1">
+
+                          {r.status === 'idle' ? 'Sẵn sàng' : 'Bận'}
+
+                        </span>
+
+                      </button>
+
+                    );
+
+                  })}
+
+                </div>
+
+              </div>
+
+            )}
+
+
+
+            {/* DISPATCH ACTION BUTTON */}
+
+            <button
+
+              type="button"
+
+              disabled={
+
+                isDispatching ||
+
+                !effectiveRobot ||
+
+                (dispatchMode === 'sequence'
+
+                  ? !tray1Table.trim() || !tray2Table.trim()
+
+                  : !destinationInput.trim())
+
+              }
+
+              onClick={dispatchMode === 'sequence' ? handleDispatchSequence : handleDispatchOrder}
+
+              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+
+                isDispatching
+
+                  ? 'bg-blue-400 text-white cursor-not-allowed'
+
+                  : !effectiveRobot ||
+
+                    (dispatchMode === 'sequence'
+
+                      ? !tray1Table.trim() || !tray2Table.trim()
+
+                      : !destinationInput.trim())
+
+                    ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
+
+                    : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
+
+              }`}
+
+            >
+
+              {isDispatching ? (
+
+                <>
+
+                  <RotateCcw className="w-4 h-4 animate-spin text-white" />
+
+                  <span>ĐANG GHI SQLITE & PHÁT LỆNH ĐIỀU PHỐI...</span>
+
+                </>
+
+              ) : !effectiveRobot ? (
+
+                <>
+
+                  <AlertTriangle className="w-4 h-4 text-slate-400" />
+
+                  <span>CHƯA CÓ AMR SẴN SÀNG</span>
+
+                </>
+
+              ) : dispatchMode === 'sequence' ? (
+
+                !tray1Table.trim() || !tray2Table.trim() ? (
+
+                  <>
+
+                    <Send className="w-4 h-4 text-slate-400" />
+
+                    <span>VUI LÒNG CHỌN BÀN CHO CẢ 2 KHAY</span>
+
+                  </>
+
+                ) : (
+
+                  <>
+
+                    <Send className="w-4 h-4 text-white" />
+
+                    <span>
+
+                      PHÁT LỆNH CHUỖI 2 KHAY: {tray1Table} ➔ {tray2Table}
+
+                    </span>
+
+                  </>
+
+                )
+
+              ) : !destinationInput.trim() ? (
+
+                <>
+
+                  <Send className="w-4 h-4 text-slate-400" />
+
+                  <span>VUI LÒNG CHỌN BÀN ĐỂ GIAO MÓN</span>
+
+                </>
+
+              ) : (
+
+                <>
+
+                  <Send className="w-4 h-4 text-white" />
+
+                  <span>
+
+                    XUẤT LỆNH: {orderInputId || 'ĐƠN'} TỚI {destinationInput} (LƯU SQLITE)
+
+                  </span>
+
+                </>
+
+              )}
+
+            </button>
+
+
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
+
+              <span>Đồng bộ: SQLite (amr_tasks + sync_journal)</span>
+
+              <span>Robot: {effectiveRobot?.code || 'AMR'}</span>
+
+            </div>
+
+          </div>
+
+
+
+          {/* RECENT SQLITE DISPATCH MISSIONS LOG */}
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-heading">
+
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
+
+                <span>LỆNH ĐIỀU PHỐI SQLITE GẦN NHẤT</span>
+
+              </span>
+
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+
+                Bảng: amr_tasks
+
+              </span>
+
+            </div>
+
+
+
+            <div className="space-y-2">
+
+              {recentSqliteTasks.map((task) => (
+
+                <div
+
+                  key={task.taskId}
+
+                  className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
+
+                >
+
+                  <div className="flex items-center gap-2">
+
+                    <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[10px]">
+
+                      {task.taskId}
+
+                    </span>
+
+                    <span className="font-semibold text-slate-800">
+
+                      {task.orderId} → {task.destination}
+
+                    </span>
+
+                  </div>
+
+                  <div className="flex items-center gap-2">
+
+                    <span className="font-mono text-[10px] text-slate-500 font-bold">{task.robotCode}</span>
+
+                    <span
+
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+
+                        task.status === 'Delivering'
+
+                          ? 'bg-blue-100 text-blue-700'
+
+                          : 'bg-emerald-100 text-emerald-700'
+
+                      }`}
+
+                    >
+
+                      {task.status === 'Delivering' ? 'Đang Giao' : 'Hoàn Tất'}
+
+                    </span>
+
+                    <span className="text-[10px] text-slate-400 font-mono">{task.time}</span>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
+
+
+
+      {/* STICKY BOTTOM DISPATCH BAR FOR MOBILE TABLETS & POS (Thumb-friendly Action Zone) */}
+
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3 safe-area-pb">
+
+        <div className="flex items-center gap-2.5 min-w-0">
+
+          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-sm shrink-0 shadow-2xs">
+
+            {dispatchMode === 'sequence' ? '2K' : currentSelectedTable.id !== 'Chưa có' ? currentSelectedTable.id : '?'}
+
+          </div>
+
+          <div className="truncate">
+
+            <div className="text-xs font-extrabold text-slate-900 truncate">
+
+              {dispatchMode === 'sequence' ? `${tray1Table} ➔ ${tray2Table}` : currentSelectedTable.name}
+
+            </div>
+
+            <div className="text-[11px] text-slate-500 font-mono truncate flex items-center gap-1.5 mt-0.5">
+
+              <span>AMR:</span>
+
+              <strong className="text-blue-600 font-bold">{effectiveRobot?.code || 'Chưa có'}</strong>
+
+              {effectiveRobot && (
+
+                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded border border-emerald-200">
+
+                  {effectiveRobot.battery}% Pin
+
+                </span>
+
+              )}
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        <button
+
+          type="button"
+
+          disabled={
+
+            isDispatching ||
+
+            !effectiveRobot ||
+
+            (dispatchMode === 'sequence'
+
+              ? !tray1Table.trim() || !tray2Table.trim()
+
+              : !destinationInput.trim())
+
+          }
+
+          onClick={dispatchMode === 'sequence' ? handleDispatchSequence : handleDispatchOrder}
+
+          className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
+
+            isDispatching
+
+              ? 'bg-blue-400 text-white cursor-not-allowed'
+
+              : !effectiveRobot ||
+
+                (dispatchMode === 'sequence'
+
+                  ? !tray1Table.trim() || !tray2Table.trim()
+
+                  : !destinationInput.trim())
+
+                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
+
+                : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer'
+
+          }`}
+
+        >
+
+          {isDispatching ? (
+
+            <>
+
+              <RotateCcw className="w-4 h-4 animate-spin" />
+
+              <span>Đang Lệnh...</span>
+
+            </>
+
+          ) : dispatchMode === 'sequence' ? (
+
+            <>
+
+              <Send className="w-4 h-4" />
+
+              <span>CHUỖI 2 KHAY ({tray1Table} ➔ {tray2Table})</span>
+
+            </>
+
+          ) : (
+
+            <>
+
+              <Send className="w-4 h-4" />
+
+              <span>XUẤT LỆNH ({orderInputId || 'ĐƠN'})</span>
+
+            </>
+
+          )}
+
+        </button>
+
+      </div>
+
+
+
+      {/* MID-TRANSIT TABLE REROUTE MODAL */}
+
+      {isRerouteModalOpen && activeSequence && (
+
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+
+            <div className="border-b border-slate-100 pb-3">
+
+              <h3 className="text-sm font-bold text-slate-900 font-heading">
+
+                Đổi Bàn Giữa Chặng (Mid-Transit Reroute)
+
+              </h3>
+
+              <p className="text-xs text-slate-500 mt-1">
+
+                Chuyển hướng di chuyển của Robot {activeSequence.robotCode} sang bàn ăn mới.
+
+              </p>
+
+            </div>
+
+
+
+            <div className="space-y-3">
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+
+                <div className="text-slate-500">Khay đang đổi hướng:</div>
+
+                <div className="font-bold text-slate-900">
+
+                  Khay {rerouteLegIndex + 1} (Hiện tại: {activeSequence.legs[rerouteLegIndex]?.tableNo})
+
+                </div>
+
+              </div>
+
+
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Chọn Bàn Đích Mới
+
+                </label>
+
+                <select
+
+                  value={rerouteNewTable}
+
+                  onChange={(e) => setRerouteNewTable(e.target.value)}
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                >
+
+                  {tables
+
+                    .filter((t) => t.name !== activeSequence.legs[rerouteLegIndex]?.tableNo && t.status !== 'merged')
+
+                    .map((t) => (
+
+                      <option key={t.id} value={t.name}>
+
+                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+
+                      </option>
+
+                    ))}
+
+                </select>
+
+              </div>
+
+
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Lý do chuyển bàn (Tùy chọn)
+
+                </label>
+
+                <input
+
+                  type="text"
+
+                  value={rerouteReason}
+
+                  onChange={(e) => setRerouteReason(e.target.value)}
+
+                  placeholder="Khách đổi sang bàn máy lạnh, gộp tiệc..."
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                />
+
+              </div>
+
+            </div>
+
+
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+
+              <button
+
+                type="button"
+
+                disabled={isSubmittingReroute}
+
+                onClick={() => setIsRerouteModalOpen(false)}
+
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+
+              >
+
+                Hủy
+
+              </button>
+
+              <button
+
+                type="button"
+
+                disabled={isSubmittingReroute || !rerouteNewTable}
+
+                onClick={handleConfirmReroute}
+
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+
+              >
+
+                {isSubmittingReroute ? 'Đang Xử Lý...' : 'Xác Nhận Đổi Bàn'}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+
+      {/* MODAL 1: CREATE TABLE MANUALLY */}
+
+      {isCreateTableModalOpen && (
+
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+
+              <div>
+
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+
+                  <Plus className="w-4 h-4 text-blue-600" />
+
+                  <span>Thêm Bàn Ăn Mới</span>
+
+                </h3>
+
+                <p className="text-xs text-slate-500 mt-0.5">
+
+                  Tạo thủ công bàn ăn và liên kết trạm tọa độ Robot SLAM.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsCreateTableModalOpen(false)}
+
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+
+              >
+
+                <X className="w-4 h-4" />
+
+              </button>
+
+            </div>
+
+
+
+            <form onSubmit={handleCreateTable} className="space-y-3">
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Mã / Số Bàn (TableNo) <span className="text-rose-500">*</span>
+
+                </label>
+
+                <input
+
+                  type="text"
+
+                  required
+
+                  value={newTableNo}
+
+                  onChange={(e) => setNewTableNo(e.target.value)}
+
+                  placeholder="Ví dụ: T01, B12..."
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                />
+
+              </div>
+
+
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Tên Hiển Thị (TableName)
+
+                </label>
+
+                <input
+
+                  type="text"
+
+                  value={newTableName}
+
+                  onChange={(e) => setNewTableName(e.target.value)}
+
+                  placeholder="Ví dụ: Bàn 01 - Khu Ban Công"
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                />
+
+              </div>
+
+
+
+              <div className="grid grid-cols-2 gap-3">
+
+                <div>
+
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                    Sức Chứa (Ghế)
+
+                  </label>
+
+                  <input
+
+                    type="number"
+
+                    min="1"
+
+                    max="50"
+
+                    value={newTableCapacity}
+
+                    onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 4)}
+
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                  />
+
+                </div>
+
+
+
+                <div>
+
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                    Trạm Robot (SLAM)
+
+                  </label>
+
+                  <select
+
+                    value={newTableStationId}
+
+                    onChange={(e) => setNewTableStationId(e.target.value)}
+
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                  >
+
+                    <option value="">-- Chưa gán trạm --</option>
+
+                    {stations.map((s) => (
+
+                      <option key={s.id} value={s.id}>
+
+                        {s.name} ({s.xCoord}, {s.yCoord})
+
+                      </option>
+
+                    ))}
+
+                  </select>
+
+                </div>
+
+              </div>
+
+
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setIsCreateTableModalOpen(false)}
+
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+
+                >
+
+                  Hủy
+
+                </button>
+
+                <button
+
+                  type="submit"
+
+                  disabled={isSubmittingCreateTable || !newTableNo.trim()}
+
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/10 cursor-pointer"
+
+                >
+
+                  {isSubmittingCreateTable ? 'Đang Tạo...' : 'Tạo Bàn Ăn'}
+
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+
+      {/* MODAL 2: IMPORT TABLES CSV / EXCEL */}
+
+      {isImportCsvModalOpen && (
+
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 space-y-4 text-slate-800">
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+
+              <div>
+
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+
+                  <span>Nhập Bàn Ăn Hàng Loạt (Excel / CSV)</span>
+
+                </h3>
+
+                <p className="text-xs text-slate-500 mt-0.5">
+
+                  Khởi tạo nhanh danh sách bàn ăn và liên kết trạm SLAM từ file mẫu.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsImportCsvModalOpen(false)}
+
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+
+              >
+
+                <X className="w-4 h-4" />
+
+              </button>
+
+            </div>
+
+
+
+            {/* Mode Selector Tabs */}
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex gap-1 p-1 bg-slate-100 rounded-xl">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setImportCsvMode('upload')}
+
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+
+                    importCsvMode === 'upload' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
+
+                  }`}
+
+                >
+
+                  Tải Lên File (.csv)
+
+                </button>
+
+                <button
+
+                  type="button"
+
+                  onClick={() => setImportCsvMode('text')}
+
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+
+                    importCsvMode === 'text' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
+
+                  }`}
+
+                >
+
+                  Dán Nội Dung CSV
+
+                </button>
+
+              </div>
+
+
+
+              <button
+
+                type="button"
+
+                onClick={handleDownloadSampleCsv}
+
+                className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline"
+
+              >
+
+                <Download className="w-3.5 h-3.5" />
+
+                <span>Tải file mẫu CSV</span>
+
+              </button>
+
+            </div>
+
+
+
+            {/* Tab 1: Upload File */}
+
+            {importCsvMode === 'upload' ? (
+
+              <div className="space-y-2">
+
+                <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all bg-slate-50/50 hover:bg-blue-50/20">
+
+                  <Upload className="w-6 h-6 text-slate-400" />
+
+                  <span className="text-xs font-semibold text-slate-700">
+
+                    {importCsvFile ? importCsvFile.name : 'Chọn hoặc kéo thả file CSV vào đây'}
+
+                  </span>
+
+                  <span className="text-[10px] text-slate-400">Định dạng file: .csv (phân cách phẩy hoặc chấm phẩy)</span>
+
+                  <input
+
+                    type="file"
+
+                    accept=".csv,text/csv"
+
+                    className="hidden"
+
+                    onChange={(e) => {
+
+                      if (e.target.files && e.target.files[0]) {
+
+                        setImportCsvFile(e.target.files[0]);
+
+                      }
+
+                    }}
+
+                  />
+
+                </label>
+
+              </div>
+
+            ) : (
+
+              /* Tab 2: Text Input */
+
+              <div className="space-y-1">
+
+                <label className="block text-xs font-semibold text-slate-700">
+
+                  Nội dung CSV (Header: TableNo,TableName,Capacity,StationName)
+
+                </label>
+
+                <textarea
+
+                  rows={5}
+
+                  value={importCsvContent}
+
+                  onChange={(e) => setImportCsvContent(e.target.value)}
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px] text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                />
+
+              </div>
+
+            )}
+
+
+
+            {/* Import Result Stats */}
+
+            {importResult && (
+
+              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+
+                importResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
+
+              }`}>
+
+                <div className="font-bold flex items-center justify-between">
+
+                  <span>Kết quả xử lý:</span>
+
+                  <span>Tạo: {importResult.totalCreated} • Bỏ qua: {importResult.totalSkipped}</span>
+
+                </div>
+
+                {importResult.messages && importResult.messages.length > 0 && (
+
+                  <div className="max-h-24 overflow-y-auto text-[10px] font-mono space-y-0.5 pt-1 border-t border-emerald-200/60">
+
+                    {importResult.messages.slice(0, 6).map((msg, idx) => (
+
+                      <div key={idx}>• {msg}</div>
+
+                    ))}
+
+                    {importResult.messages.length > 6 && (
+
+                      <div>... và {importResult.messages.length - 6} thông báo khác.</div>
+
+                    )}
+
+                  </div>
+
+                )}
+
+              </div>
+
+            )}
+
+
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsImportCsvModalOpen(false)}
+
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+
+              >
+
+                Đóng
+
+              </button>
+
+              <button
+
+                type="button"
+
+                disabled={isSubmittingImportCsv || (importCsvMode === 'upload' && !importCsvFile)}
+
+                onClick={handleImportCsv}
+
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/10 cursor-pointer"
+
+              >
+
+                {isSubmittingImportCsv ? 'Đang Nhập...' : 'Bắt Đầu Nhập Bàn'}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+
+      {/* MODAL 3: ASSIGN STATION (WAYPOINT) TO TABLE */}
+
+      {isAssignStationModalOpen && (
+
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+
+              <div>
+
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+
+                  <MapPin className="w-4 h-4 text-purple-600" />
+
+                  <span>Gán Trạm Robot (SLAM Waypoint)</span>
+
+                </h3>
+
+                <p className="text-xs text-slate-500 mt-0.5">
+
+                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ SLAM.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsAssignStationModalOpen(false)}
+
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+
+              >
+
+                <X className="w-4 h-4" />
+
+              </button>
+
+            </div>
+
+
+
+            <div className="space-y-3">
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Bàn Ăn Cần Gán Trạm
+
+                </label>
+
+                <select
+
+                  value={assignStationTableId}
+
+                  onChange={(e) => {
+
+                    setAssignStationTableId(e.target.value);
+
+                    const matched = tables.find((t) => t.id === e.target.value);
+
+                    setAssignStationTargetStationId(matched?.stationId || '');
+
+                  }}
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                >
+
+                  {tables.map((t) => (
+
+                    <option key={t.id} value={t.id}>
+
+                      {t.name} {t.stationName ? `(Hiện tại: ${t.stationName})` : '(Chưa gán trạm)'}
+
+                    </option>
+
+                  ))}
+
+                </select>
+
+              </div>
+
+
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Chọn Trạm Vật Lý (Đồng Bộ từ SLAM Nav2 qua MQTT)
+
+                </label>
+
+                <select
+
+                  value={assignStationTargetStationId}
+
+                  onChange={(e) => setAssignStationTargetStationId(e.target.value)}
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                >
+
+                  <option value="">-- Hủy gán trạm (Không gán xe) --</option>
+
+                  {stations.map((s) => (
+
+                    <option key={s.id} value={s.id}>
+
+                      📍 {s.name} (X: {s.xCoord}, Y: {s.yCoord}) • {s.stationType || 'Bàn ăn'}
+
+                    </option>
+
+                  ))}
+
+                </select>
+
+              </div>
+
+
+
+              <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-[11px] text-purple-900 space-y-1">
+
+                <span className="font-bold flex items-center gap-1">
+
+                  <Target className="w-3.5 h-3.5 text-purple-600" />
+
+                  <span>Cơ chế điều phối tự động:</span>
+
+                </span>
+
+                <p className="text-purple-700 leading-relaxed">
+
+                  Khi bếp phát lệnh giao món tới bàn này, Robot AMR sẽ tự động di chuyển đến tọa độ của trạm được chọn để phục vụ.
+
+                </p>
+
+              </div>
+
+            </div>
+
+
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsAssignStationModalOpen(false)}
+
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+
+              >
+
+                Hủy
+
+              </button>
+
+              <button
+
+                type="button"
+
+                disabled={isSubmittingAssignStation}
+
+                onClick={handleAssignStation}
+
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/10 cursor-pointer"
+
+              >
+
+                {isSubmittingAssignStation ? 'Đang Lưu...' : 'Lưu Gán Trạm'}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+
+
+      {/* TABLE GROUPING MODAL (FLOW 3) */}
+
+      {isGroupingModalOpen && (
+
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+
+            <div className="border-b border-slate-100 pb-3">
+
+              <h3 className="text-sm font-bold text-slate-900 font-heading">
+
+                Gộp Bàn (Table Merge - Cố định Trạm Giao Bàn Chính)
+
+              </h3>
+
+              <p className="text-xs text-slate-500 mt-1">
+
+                Gom nhóm các bàn phụ vào Bàn Chính phục vụ khách đoàn. Robot AMR luôn giao cố định tại Trạm Bàn Chính.
+
+              </p>
+
+            </div>
+
+
+
+            {/* Architectural Clarification Banner */}
+
+            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5 text-xs">
+
+              <div className="flex items-center gap-1.5 font-bold text-blue-900">
+
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+
+                <span>Nguyên tắc Robot khi Gộp Bàn:</span>
+
+              </div>
+
+              <p className="text-[11px] text-blue-700 leading-relaxed">
+
+                • Toàn bộ đơn hàng sẽ được Robot chuyển hướng giao tới <strong>Trạm vật lý của Bàn Chính</strong>.<br/>
+
+                • <strong>Bản đồ SLAM và các Waypoint của Robot được giữ nguyên 100%</strong>, không bị xáo trộn hay gộp sai lệch tọa độ.
+
+              </p>
+
+            </div>
+
+
+
+            <div className="space-y-3">
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Bàn Chính (Trạm giao cố định của Robot AMR)
+
+                </label>
+
+                <select
+
+                  value={primaryAnchorTableId}
+
+                  onChange={(e) => setPrimaryAnchorTableId(e.target.value)}
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                >
+
+                  {tables
+
+                    .filter((t) => t.status !== 'merged')
+
+                    .map((t) => (
+
+                      <option key={t.id} value={t.id}>
+
+                        {t.name} {t.stationName ? `(Trạm: ${t.stationName})` : ''} ({t.zone || 'Khu Bàn Ăn'})
+
+                      </option>
+
+                    ))}
+
+                </select>
+
+              </div>
+
+
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Bàn Thành Viên (Gộp vào Bàn Chính)
+
+                </label>
+
+                <select
+
+                  value={memberTableId}
+
+                  onChange={(e) => setMemberTableId(e.target.value)}
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                >
+
+                  {tables
+
+                    .filter((t) => t.id !== primaryAnchorTableId && t.status !== 'merged')
+
+                    .map((t) => (
+
+                      <option key={t.id} value={t.id}>
+
+                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+
+                      </option>
+
+                    ))}
+
+                </select>
+
+              </div>
+
+
+
+              <div>
+
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+
+                  Lý do gộp bàn
+
+                </label>
+
+                <input
+
+                  type="text"
+
+                  value={groupReason}
+
+                  onChange={(e) => setGroupReason(e.target.value)}
+
+                  placeholder="Ghép bàn nhóm đông, tiệc gia đình..."
+
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+
+                />
+
+              </div>
+
+            </div>
+
+
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+
+              <button
+
+                type="button"
+
+                disabled={isSubmittingGroup}
+
+                onClick={() => setIsGroupingModalOpen(false)}
+
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+
+              >
+
+                Hủy
+
+              </button>
+
+              <button
+
+                type="button"
+
+                disabled={isSubmittingGroup || !primaryAnchorTableId || !memberTableId}
+
+                onClick={handleConfirmGroup}
+
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+
+              >
+
+                {isSubmittingGroup ? 'Đang Gộp Bàn...' : 'Xác Nhận Gộp Bàn (Table Merge)'}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
+
+    </div>
+
+  );
+
+};
+
