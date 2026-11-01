@@ -74,8 +74,6 @@ import { Pagination } from '@/components/common/Pagination';
 
 import { SlamFloorMapViewer } from '@/components/map/SlamFloorMapViewer';
 
-
-
 interface TableNode {
 
   id: string;
@@ -108,8 +106,6 @@ interface TableNode {
 
 }
 
-
-
 export interface TrayItem {
 
   dishName: string;
@@ -119,8 +115,6 @@ export interface TrayItem {
   note?: string;
 
 }
-
-
 
 interface RobotFleetItem {
 
@@ -140,8 +134,6 @@ interface RobotFleetItem {
 
 }
 
-
-
 export const StaffKdsPage: React.FC = () => {
 
   // Store context
@@ -152,13 +144,9 @@ export const StaffKdsPage: React.FC = () => {
 
   const [_isLoading, setIsLoading] = useState<boolean>(true);
 
-
-
   const [selectedTableId, setSelectedTableId] = useState<string>('');
 
   const [viewMode, setViewMode] = useState<'grid' | 'slam-map'>('slam-map');
-
-
 
   // Staff Move Request Form (Order ID & Destination Table)
 
@@ -166,13 +154,9 @@ export const StaffKdsPage: React.FC = () => {
 
   const [destinationInput, setDestinationInput] = useState<string>('Bàn 01');
 
-
-
   // Mode: Single Table vs 2-Tray Sequence (DS-07 Multi-Table)
 
   const [dispatchMode, setDispatchMode] = useState<'sequence' | 'single'>('sequence');
-
-
 
   // 2-Tray Multi-Table Sequence Setup (Khay 1 & Khay 2)
 
@@ -183,8 +167,6 @@ export const StaffKdsPage: React.FC = () => {
   const [tray2Table, setTray2Table] = useState<string>('Bàn 12');
 
   const [tray2OrderId, setTray2OrderId] = useState<string>('ORD-102');
-
-
 
   // Active Multi-Table Sequence Mission (Realtime Tracking & Dual Confirmation)
 
@@ -218,11 +200,7 @@ export const StaffKdsPage: React.FC = () => {
 
   } | null>(null);
 
-
-
   const [isConfirmingTable, setIsConfirmingTable] = useState<boolean>(false);
-
-
 
   // Mid-Transit Table Reroute Modal State
 
@@ -236,13 +214,9 @@ export const StaffKdsPage: React.FC = () => {
 
   const [isSubmittingReroute, setIsSubmittingReroute] = useState<boolean>(false);
 
-
-
   // Physical Stations from ROS SLAM map
 
   const [stations, setStations] = useState<Station[]>([]);
-
-
 
   // Create Table Modal State
 
@@ -257,8 +231,6 @@ export const StaffKdsPage: React.FC = () => {
   const [newTableStationId, setNewTableStationId] = useState<string>('');
 
   const [isSubmittingCreateTable, setIsSubmittingCreateTable] = useState<boolean>(false);
-
-
 
   // Import CSV Modal State
 
@@ -278,8 +250,6 @@ export const StaffKdsPage: React.FC = () => {
 
   const [importResult, setImportResult] = useState<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] } | null>(null);
 
-
-
   // Assign Station Modal State
 
   const [isAssignStationModalOpen, setIsAssignStationModalOpen] = useState<boolean>(false);
@@ -290,21 +260,19 @@ export const StaffKdsPage: React.FC = () => {
 
   const [isSubmittingAssignStation, setIsSubmittingAssignStation] = useState<boolean>(false);
 
-
-
   // Table Merge & Split State
 
   // Flow 3: Table Grouping under Primary Anchor Station Modal State
 
-  const [isGroupingModalOpen, setIsGroupingModalOpen] = useState<boolean>(false);
+  const [isMergeModalOpen, setIsGroupingModalOpen] = useState<boolean>(false);
 
   const [primaryAnchorTableId, setPrimaryAnchorTableId] = useState<string>('');
 
   const [memberTableId, setMemberTableId] = useState<string>('');
 
-  const [groupReason, setGroupReason] = useState<string>('Gộp nhóm bàn');
+  const [mergeReason, setGroupReason] = useState<string>('Gộp nhóm bàn');
 
-  const [isSubmittingGroup, setIsSubmittingGroup] = useState<boolean>(false);
+  const [isSubmittingMerge, setIsSubmittingGroup] = useState<boolean>(false);
 
   const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
 
@@ -356,23 +324,17 @@ export const StaffKdsPage: React.FC = () => {
 
   ]);
 
-
-
   // Pending Orders from Ordering Microservice
 
   const [pendingOrders, setPendingOrders] = useState<PendingOrderDto[]>([]);
 
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
 
-
-
   // Mode: Auto-Select AMR vs Manual Select
 
   const [isAutoSelectMode, setIsAutoSelectMode] = useState<boolean>(true);
 
   const [manualSelectedRobot, setManualSelectedRobot] = useState<string>('');
-
-
 
   // Dispatch Confirmation State
 
@@ -390,11 +352,7 @@ export const StaffKdsPage: React.FC = () => {
 
   } | null>(null);
 
-
-
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'info' }[]>([]);
-
-
 
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
 
@@ -410,19 +368,13 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Robot Fleet State - Loaded from RobotService API
 
   const [robots, setRobots] = useState<RobotFleetItem[]>([]);
 
-
-
   // Tables State - Loaded from tableService API
 
   const [tables, setTables] = useState<TableNode[]>([]);
-
-
 
   // Load Real Data on Mount
 
@@ -454,8 +406,6 @@ export const StaffKdsPage: React.FC = () => {
 
         setStoreName(currentStore);
 
-
-
         // 1. Fetch real robots for this tenant
 
         const robotList = await fleetService.getRobotsByTenant(sub);
@@ -484,8 +434,6 @@ export const StaffKdsPage: React.FC = () => {
 
         }
 
-
-
         // Fetch physical stations from ROS SLAM map
 
         try {
@@ -503,8 +451,6 @@ export const StaffKdsPage: React.FC = () => {
           console.warn('[StaffKdsPage] Lỗi tải stations:', e);
 
         }
-
-
 
         // 2. Fetch real tables for this store
 
@@ -550,8 +496,6 @@ export const StaffKdsPage: React.FC = () => {
 
         }
 
-
-
         // 3. Fetch real pending orders for KDS
 
         const pOrders = await orderService.getPendingOrders();
@@ -575,8 +519,6 @@ export const StaffKdsPage: React.FC = () => {
           }
 
         }
-
-
 
         // 4. Load recent SQLite dispatch tasks
 
@@ -626,13 +568,9 @@ export const StaffKdsPage: React.FC = () => {
 
     };
 
-
-
     initKds();
 
   }, []);
-
-
 
   // Sync destinationInput whenever selectedTableId or tables change
 
@@ -656,8 +594,6 @@ export const StaffKdsPage: React.FC = () => {
 
   }, [selectedTableId, tables]);
 
-
-
   // Selected Table Object
 
   const currentSelectedTable: TableNode = tables.find((t) => t.id === selectedTableId) || tables[0] || {
@@ -671,8 +607,6 @@ export const StaffKdsPage: React.FC = () => {
     status: 'empty'
 
   };
-
-
 
   // SMART AUTO-SELECT ALGORITHM:
 
@@ -694,8 +628,6 @@ export const StaffKdsPage: React.FC = () => {
 
   }, [robots]);
 
-
-
   // Active chosen robot (Auto or Manual)
 
   const effectiveRobot = isAutoSelectMode
@@ -703,8 +635,6 @@ export const StaffKdsPage: React.FC = () => {
     ? autoSelectedRobot
 
     : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot;
-
-
 
   const {
 
@@ -723,8 +653,6 @@ export const StaffKdsPage: React.FC = () => {
     setPageSize: setTablePageSize,
 
   } = usePagination(tables, 12);
-
-
 
   // Action: Select Pending Order -> Autofill Order ID & Destination Table in Form
 
@@ -746,8 +674,6 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Dispatch Action via real API & SQLite
 
   const handleDispatchOrder = async () => {
@@ -755,8 +681,6 @@ export const StaffKdsPage: React.FC = () => {
     const finalOrderId = orderInputId.trim();
 
     const finalDestination = destinationInput.trim() || currentSelectedTable.name;
-
-
 
     if (!finalOrderId) {
 
@@ -766,8 +690,6 @@ export const StaffKdsPage: React.FC = () => {
 
     }
 
-
-
     if (!finalDestination) {
 
       showToast('Vui lòng chọn hoặc nhập Bàn Đích (Destination)!', 'info');
@@ -775,8 +697,6 @@ export const StaffKdsPage: React.FC = () => {
       return;
 
     }
-
-
 
     if (!effectiveRobot) {
 
@@ -786,11 +706,7 @@ export const StaffKdsPage: React.FC = () => {
 
     }
 
-
-
     setIsDispatching(true);
-
-
 
     try {
 
@@ -798,13 +714,9 @@ export const StaffKdsPage: React.FC = () => {
 
       const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-
-
       // 1. Ghi nhận trực tiếp vào CSDL SQLite của Tenant qua Backend API
 
       await orderService.dispatchToSqlite(_subdomain, finalOrderId, finalDestination, effectiveRobot.code);
-
-
 
       // 2. Ghi nhận vào SQLite WebAssembly / IndexedDB nếu chạy offline
 
@@ -818,8 +730,6 @@ export const StaffKdsPage: React.FC = () => {
 
       }
 
-
-
       // 3. Dispatch through real backend API if active order
 
       if (activeOrderId && effectiveRobot.id) {
@@ -830,8 +740,6 @@ export const StaffKdsPage: React.FC = () => {
 
       }
 
-
-
       // 4. Update robot status
 
       await fleetService.updateRobotStatus(effectiveRobot.id, {
@@ -841,8 +749,6 @@ export const StaffKdsPage: React.FC = () => {
         targetTable: finalDestination,
 
       });
-
-
 
       // Update local robot status
 
@@ -855,8 +761,6 @@ export const StaffKdsPage: React.FC = () => {
         )
 
       );
-
-
 
       // Update local table status
 
@@ -873,8 +777,6 @@ export const StaffKdsPage: React.FC = () => {
         )
 
       );
-
-
 
       // Append to recent SQLite tasks list
 
@@ -900,8 +802,6 @@ export const StaffKdsPage: React.FC = () => {
 
       ]);
 
-
-
       // Remove dispatched order from pending
 
       if (activeOrderId) {
@@ -909,8 +809,6 @@ export const StaffKdsPage: React.FC = () => {
         setPendingOrders((prev) => prev.filter((o) => o.id !== activeOrderId));
 
       }
-
-
 
       setLastDispatchedMission({
 
@@ -924,11 +822,7 @@ export const StaffKdsPage: React.FC = () => {
 
       });
 
-
-
       showToast(`Đã xuất lệnh ${missionCode}: ${effectiveRobot.code} đang giao đơn ${finalOrderId} tới ${finalDestination} (Đã lưu SQLite)!`, 'success');
-
-
 
       // Tự động gợi ý mã đơn tiếp theo
 
@@ -952,8 +846,6 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Dispatch Multi-Table 2-Tray Sequence (DS-07 / WF-04)
 
   const handleDispatchSequence = async () => {
@@ -966,8 +858,6 @@ export const StaffKdsPage: React.FC = () => {
 
     const order2 = tray2OrderId.trim();
 
-
-
     if (!table1 || !table2) {
 
       showToast('Vui lòng chọn bàn đích cho cả Khay 1 và Khay 2!', 'info');
@@ -975,8 +865,6 @@ export const StaffKdsPage: React.FC = () => {
       return;
 
     }
-
-
 
     if (!effectiveRobot) {
 
@@ -986,8 +874,6 @@ export const StaffKdsPage: React.FC = () => {
 
     }
 
-
-
     setIsDispatching(true);
 
     try {
@@ -995,8 +881,6 @@ export const StaffKdsPage: React.FC = () => {
       const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
       const seqCode = `SEQ-${Date.now().toString().slice(-4)}`;
-
-
 
       // 1. Gọi Backend API /v1/tasks/sequence/start qua robotService
 
@@ -1014,13 +898,9 @@ export const StaffKdsPage: React.FC = () => {
 
       });
 
-
-
       const taskLeg1 = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
 
       const taskLeg2 = result.createdTasks?.[1]?.id || `TSK-${Date.now()}-2`;
-
-
 
       // 2. Ghi nhận vào SQLite cho cả 2 chặng
 
@@ -1039,8 +919,6 @@ export const StaffKdsPage: React.FC = () => {
         // Safe ignore
 
       }
-
-
 
       // 3. Khởi tạo State chuỗi đang hoạt động
 
@@ -1068,8 +946,6 @@ export const StaffKdsPage: React.FC = () => {
 
       });
 
-
-
       // 4. Cập nhật trạng thái Robot & Bàn
 
       setRobots((prev) =>
@@ -1086,8 +962,6 @@ export const StaffKdsPage: React.FC = () => {
 
       );
 
-
-
       setTables((prev) =>
 
         prev.map((t) =>
@@ -1101,8 +975,6 @@ export const StaffKdsPage: React.FC = () => {
         )
 
       );
-
-
 
       // Thêm vào nhật ký SQLite gần đây
 
@@ -1144,8 +1016,6 @@ export const StaffKdsPage: React.FC = () => {
 
       ]);
 
-
-
       setLastDispatchedMission({
 
         missionId: seqCode,
@@ -1157,8 +1027,6 @@ export const StaffKdsPage: React.FC = () => {
         time: timeStr,
 
       });
-
-
 
       showToast(`Đã xuất lệnh chuỗi 2 khay ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, sau đó giao tiếp Khay 2 tới ${table2}!`, 'success');
 
@@ -1175,8 +1043,6 @@ export const StaffKdsPage: React.FC = () => {
     }
 
   };
-
-
 
   // Dual Confirmation Handler: Physical Button (ESP32) OR Web Console
 
@@ -1200,8 +1066,6 @@ export const StaffKdsPage: React.FC = () => {
 
       );
 
-
-
       if (activeSequence.currentLegIndex === 0) {
 
         // Chuyển sang Chặng 2 (Đi tiếp Bàn 12)
@@ -1217,8 +1081,6 @@ export const StaffKdsPage: React.FC = () => {
           'success'
 
         );
-
-
 
         setActiveSequence((prev) => {
 
@@ -1241,8 +1103,6 @@ export const StaffKdsPage: React.FC = () => {
           };
 
         });
-
-
 
         setRobots((prev) =>
 
@@ -1274,8 +1134,6 @@ export const StaffKdsPage: React.FC = () => {
 
         );
 
-
-
         setActiveSequence((prev) => {
 
           if (!prev) return null;
@@ -1297,8 +1155,6 @@ export const StaffKdsPage: React.FC = () => {
           };
 
         });
-
-
 
         setRobots((prev) =>
 
@@ -1330,8 +1186,6 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Open Mid-Transit Reroute Modal
 
   const handleOpenRerouteModal = (legIndex: number) => {
@@ -1349,8 +1203,6 @@ export const StaffKdsPage: React.FC = () => {
     setIsRerouteModalOpen(true);
 
   };
-
-
 
   // Confirm Mid-Transit Reroute
 
@@ -1372,8 +1224,6 @@ export const StaffKdsPage: React.FC = () => {
 
       await robotService.rerouteTask(leg.taskId, targetStationId, rerouteNewTable, rerouteReason);
 
-
-
       setActiveSequence((prev) => {
 
         if (!prev) return null;
@@ -1391,8 +1241,6 @@ export const StaffKdsPage: React.FC = () => {
         return { ...prev, legs: updatedLegs };
 
       });
-
-
 
       if (activeSequence.currentLegIndex === rerouteLegIndex) {
 
@@ -1412,8 +1260,6 @@ export const StaffKdsPage: React.FC = () => {
 
       }
 
-
-
       showToast(`Đã chuyển hướng Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`, 'success');
 
       setIsRerouteModalOpen(false);
@@ -1429,8 +1275,6 @@ export const StaffKdsPage: React.FC = () => {
     }
 
   };
-
-
 
   // Create Table Manually
 
@@ -1528,8 +1372,6 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Import Tables via CSV / Excel
 
   const handleImportCsv = async () => {
@@ -1614,8 +1456,6 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Download Sample CSV Template
 
   const handleDownloadSampleCsv = () => {
@@ -1641,8 +1481,6 @@ export const StaffKdsPage: React.FC = () => {
     showToast('Đã tải xuống file CSV mẫu', 'info');
 
   };
-
-
 
   // Assign Station to Table
 
@@ -1714,11 +1552,9 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Flow 3: Confirm Table Grouping
 
-  const handleConfirmGroup = async () => {
+  const handleConfirmMerge = async () => {
 
     if (!primaryAnchorTableId || !memberTableId || primaryAnchorTableId === memberTableId) {
 
@@ -1732,7 +1568,7 @@ export const StaffKdsPage: React.FC = () => {
 
     try {
 
-      await robotService.groupTables(primaryAnchorTableId, [memberTableId], '00000000-0000-0000-0000-000000000000', groupReason);
+      await robotService.mergeTables(primaryAnchorTableId, [memberTableId], '00000000-0000-0000-0000-000000000000', mergeReason);
 
       setTables((prev) =>
 
@@ -1770,15 +1606,13 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-
-
   // Flow 3: Ungroup Table
 
-  const handleUngroupTable = async (tableId: string) => {
+  const handleSplitTable = async (tableId: string) => {
 
     try {
 
-      await robotService.ungroupTable(tableId);
+      await robotService.splitTable(tableId);
 
       setTables((prev) =>
 
@@ -1797,8 +1631,6 @@ export const StaffKdsPage: React.FC = () => {
     }
 
   };
-
-
 
   return (
 
@@ -1834,8 +1666,6 @@ export const StaffKdsPage: React.FC = () => {
 
       </div>
 
-
-
       {/* Staff Touch Header */}
 
       <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white border-b border-slate-200 shadow-2xs flex items-center justify-between shrink-0 sticky top-0 z-30">
@@ -1847,8 +1677,6 @@ export const StaffKdsPage: React.FC = () => {
             <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
 
           </Link>
-
-
 
           <div>
 
@@ -1876,8 +1704,6 @@ export const StaffKdsPage: React.FC = () => {
 
         </div>
 
-
-
         {/* Right Switcher & Quick Stats */}
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -1899,8 +1725,6 @@ export const StaffKdsPage: React.FC = () => {
             </span>
 
           </div>
-
-
 
           <div className="flex items-center gap-2">
 
@@ -1936,8 +1760,6 @@ export const StaffKdsPage: React.FC = () => {
 
       </header>
 
-
-
       {/* Main Staff Operational Canvas */}
 
       <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
@@ -1963,8 +1785,6 @@ export const StaffKdsPage: React.FC = () => {
                 </span>
 
               </h2>
-
-
 
               {/* Actions & View Switcher */}
 
@@ -1998,8 +1818,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </button>
 
-
-
                 <button
 
                   type="button"
@@ -2024,8 +1842,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </button>
 
-
-
                 <button
 
                   type="button"
@@ -2049,8 +1865,6 @@ export const StaffKdsPage: React.FC = () => {
                   <span>Gán Trạm Robot</span>
 
                 </button>
-
-
 
                 <button
 
@@ -2080,7 +1894,7 @@ export const StaffKdsPage: React.FC = () => {
 
                     type="button"
 
-                    onClick={() => handleUngroupTable(currentSelectedTable.id)}
+                    onClick={() => handleSplitTable(currentSelectedTable.id)}
 
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
 
@@ -2147,8 +1961,6 @@ export const StaffKdsPage: React.FC = () => {
               </div>
 
             </div>
-
-
 
             {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
 
@@ -2234,8 +2046,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-
-
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
 
                   {paginatedTables.map((table) => {
@@ -2247,8 +2057,6 @@ export const StaffKdsPage: React.FC = () => {
                     const isServing = table.status === 'serving';
 
                     const isOccupied = table.status === 'occupied';
-
-
 
                     return (
 
@@ -2338,8 +2146,6 @@ export const StaffKdsPage: React.FC = () => {
 
                         </div>
 
-
-
                         {/* Middle Info */}
 
                         <div className="my-2.5 space-y-1">
@@ -2381,8 +2187,6 @@ export const StaffKdsPage: React.FC = () => {
                           </div>
 
                         </div>
-
-
 
                         {/* Footer selection pill */}
 
@@ -2438,8 +2242,6 @@ export const StaffKdsPage: React.FC = () => {
 
             )}
 
-
-
             {/* Quick Dispatch Log Notification if any */}
 
             {lastDispatchedMission && (
@@ -2473,8 +2275,6 @@ export const StaffKdsPage: React.FC = () => {
           </div>
 
         </div>
-
-
 
         {/* RIGHT COLUMN: TRAY SETUP & AUTO-SELECT ROBOT DISPATCH (5 COLS) */}
 
@@ -2568,8 +2368,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             <span className="text-[11px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-lg border border-blue-200">
 
               Điểm Đích Đến
@@ -2577,8 +2375,6 @@ export const StaffKdsPage: React.FC = () => {
             </span>
 
           </div>
-
-
 
           {/* Pending Orders Selector Bar */}
 
@@ -2650,8 +2446,6 @@ export const StaffKdsPage: React.FC = () => {
 
           )}
 
-
-
           {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR (DS-07 REALTIME DUAL CONFIRMATION) */}
 
           {activeSequence && (
@@ -2694,8 +2488,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-
-
                 <span
 
                   className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${
@@ -2716,8 +2508,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               {/* 4-Step Visual Sequence Stepper */}
 
               <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-white/5 border border-white/10 text-center">
@@ -2733,8 +2523,6 @@ export const StaffKdsPage: React.FC = () => {
                   <div className="text-[9px] text-emerald-400 font-mono mt-0.5">Đã xuất phát ✓</div>
 
                 </div>
-
-
 
                 {/* Step 2: Tray 1 -> Table 1 */}
 
@@ -2799,8 +2587,6 @@ export const StaffKdsPage: React.FC = () => {
                   )}
 
                 </div>
-
-
 
                 {/* Step 3: Tray 2 -> Table 2 */}
 
@@ -2882,8 +2668,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-
-
                 {/* Step 4: Back to Kitchen */}
 
                 <div
@@ -2914,8 +2698,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               {/* Dual Confirmation Actions Panel */}
 
               {activeSequence.status === 'in_progress' ? (
@@ -2940,15 +2722,11 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-
-
                   <div className="text-[11px] text-slate-300 leading-relaxed">
 
                     Robot đang dừng phục vụ tại <strong>{activeSequence.legs[activeSequence.currentLegIndex].tableNo}</strong>. Khách hàng lấy đồ ăn và bấm <strong>Nút bấm ESP32</strong> trên xe HOẶC nhân viên xác nhận tại Web:
 
                   </div>
-
-
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
 
@@ -2988,8 +2766,6 @@ export const StaffKdsPage: React.FC = () => {
 
                     </button>
 
-
-
                     {/* Button 2: Simulate Physical ESP32 Hardware Button Push */}
 
                     <button
@@ -3013,8 +2789,6 @@ export const StaffKdsPage: React.FC = () => {
                     </button>
 
                   </div>
-
-
 
                   {/* Mid-Transit Table Transfer Action Button */}
 
@@ -3072,8 +2846,6 @@ export const StaffKdsPage: React.FC = () => {
 
           )}
 
-
-
           {/* STAFF MOVE REQUEST FORM (YÊU CẦU ROBOT DI CHUYỂN) */}
 
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
@@ -3101,8 +2873,6 @@ export const StaffKdsPage: React.FC = () => {
               </span>
 
             </div>
-
-
 
             {/* Mode Selector Segmented Tabs: 2-Tray Sequence vs Single Table */}
 
@@ -3172,8 +2942,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             {dispatchMode === 'sequence' ? (
 
               /* MODE A: 2-TRAY MULTI-TABLE SEQUENCE CONFIGURATION */
@@ -3205,8 +2973,6 @@ export const StaffKdsPage: React.FC = () => {
                     </span>
 
                   </div>
-
-
 
                   <div className="grid grid-cols-2 gap-2">
 
@@ -3260,8 +3026,6 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-
-
                   {/* Suggestion chips for Tray 1 */}
 
                   <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
@@ -3300,8 +3064,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-
-
                 {/* TRAY 2 (LEVEL 2 - TẦNG TRÊN) */}
 
                 <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2.5">
@@ -3327,8 +3089,6 @@ export const StaffKdsPage: React.FC = () => {
                     </span>
 
                   </div>
-
-
 
                   <div className="grid grid-cols-2 gap-2">
 
@@ -3382,8 +3142,6 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-
-
                   {/* Suggestion chips for Tray 2 */}
 
                   <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
@@ -3421,8 +3179,6 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
 
                 </div>
-
-
 
                 {/* Sequence Route Preview */}
 
@@ -3500,8 +3256,6 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-
-
                   {/* Quick suggestions chips for Order ID */}
 
                   <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
@@ -3540,8 +3294,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-
-
                 {/* Field 2: Destination Table */}
 
                 <div className="space-y-1.5">
@@ -3577,8 +3329,6 @@ export const StaffKdsPage: React.FC = () => {
                     />
 
                   </div>
-
-
 
                   {/* Quick Table Suggestion Chips */}
 
@@ -3646,8 +3396,6 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-
-
                 {/* Departure Station info */}
 
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-[11px] text-slate-600 flex items-center justify-between">
@@ -3682,8 +3430,6 @@ export const StaffKdsPage: React.FC = () => {
 
           </div>
 
-
-
           {/* SMART AUTO-SELECT ROBOT & DISPATCH BOX */}
 
           <div className="bg-white rounded-2xl border-2 border-blue-500/80 p-4 sm:p-5 shadow-lg space-y-4">
@@ -3703,8 +3449,6 @@ export const StaffKdsPage: React.FC = () => {
                 </span>
 
               </div>
-
-
 
               {/* Toggle Auto vs Manual */}
 
@@ -3756,8 +3500,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             {/* Smart Robot Recommendation Card */}
 
             {isAutoSelectMode ? (
@@ -3784,8 +3526,6 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-
-
                   <div className="flex items-center justify-between">
 
                     <div>
@@ -3804,13 +3544,9 @@ export const StaffKdsPage: React.FC = () => {
 
                     </div>
 
-
-
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981] animate-pulse" />
 
                   </div>
-
-
 
                   <div className="text-[10px] text-slate-500 pt-1 border-t border-blue-200/60 flex items-center justify-between">
 
@@ -3851,8 +3587,6 @@ export const StaffKdsPage: React.FC = () => {
                     const isSelected = manualSelectedRobot === r.code;
 
                     const isBusy = r.status !== 'idle';
-
-
 
                     return (
 
@@ -3903,8 +3637,6 @@ export const StaffKdsPage: React.FC = () => {
               </div>
 
             )}
-
-
 
             {/* DISPATCH ACTION BUTTON */}
 
@@ -4026,8 +3758,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </button>
 
-
-
             <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
 
               <span>Đồng bộ: SQLite (amr_tasks + sync_journal)</span>
@@ -4037,8 +3767,6 @@ export const StaffKdsPage: React.FC = () => {
             </div>
 
           </div>
-
-
 
           {/* RECENT SQLITE DISPATCH MISSIONS LOG */}
 
@@ -4061,8 +3789,6 @@ export const StaffKdsPage: React.FC = () => {
               </span>
 
             </div>
-
-
 
             <div className="space-y-2">
 
@@ -4130,8 +3856,6 @@ export const StaffKdsPage: React.FC = () => {
 
       </main>
 
-
-
       {/* STICKY BOTTOM DISPATCH BAR FOR MOBILE TABLETS & POS (Thumb-friendly Action Zone) */}
 
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3 safe-area-pb">
@@ -4173,8 +3897,6 @@ export const StaffKdsPage: React.FC = () => {
           </div>
 
         </div>
-
-
 
         <button
 
@@ -4254,8 +3976,6 @@ export const StaffKdsPage: React.FC = () => {
 
       </div>
 
-
-
       {/* MID-TRANSIT TABLE REROUTE MODAL */}
 
       {isRerouteModalOpen && activeSequence && (
@@ -4280,8 +4000,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             <div className="space-y-3">
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
@@ -4295,8 +4013,6 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
 
               </div>
-
-
 
               <div>
 
@@ -4334,8 +4050,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -4361,8 +4075,6 @@ export const StaffKdsPage: React.FC = () => {
               </div>
 
             </div>
-
-
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
 
@@ -4405,8 +4117,6 @@ export const StaffKdsPage: React.FC = () => {
         </div>
 
       )}
-
-
 
       {/* MODAL 1: CREATE TABLE MANUALLY */}
 
@@ -4452,8 +4162,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             <form onSubmit={handleCreateTable} className="space-y-3">
 
               <div>
@@ -4482,8 +4190,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -4507,8 +4213,6 @@ export const StaffKdsPage: React.FC = () => {
                 />
 
               </div>
-
-
 
               <div className="grid grid-cols-2 gap-3">
 
@@ -4537,8 +4241,6 @@ export const StaffKdsPage: React.FC = () => {
                   />
 
                 </div>
-
-
 
                 <div>
 
@@ -4575,8 +4277,6 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
 
               </div>
-
-
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
 
@@ -4617,8 +4317,6 @@ export const StaffKdsPage: React.FC = () => {
         </div>
 
       )}
-
-
 
       {/* MODAL 2: IMPORT TABLES CSV / EXCEL */}
 
@@ -4664,8 +4362,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             {/* Mode Selector Tabs */}
 
             <div className="flex items-center justify-between">
@@ -4710,8 +4406,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <button
 
                 type="button"
@@ -4729,8 +4423,6 @@ export const StaffKdsPage: React.FC = () => {
               </button>
 
             </div>
-
-
 
             {/* Tab 1: Upload File */}
 
@@ -4802,8 +4494,6 @@ export const StaffKdsPage: React.FC = () => {
 
             )}
 
-
-
             {/* Import Result Stats */}
 
             {importResult && (
@@ -4846,8 +4536,6 @@ export const StaffKdsPage: React.FC = () => {
 
             )}
 
-
-
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
 
               <button
@@ -4887,8 +4575,6 @@ export const StaffKdsPage: React.FC = () => {
         </div>
 
       )}
-
-
 
       {/* MODAL 3: ASSIGN STATION (WAYPOINT) TO TABLE */}
 
@@ -4934,8 +4620,6 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             <div className="space-y-3">
 
               <div>
@@ -4978,8 +4662,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -5014,8 +4696,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-[11px] text-purple-900 space-y-1">
 
                 <span className="font-bold flex items-center gap-1">
@@ -5035,8 +4715,6 @@ export const StaffKdsPage: React.FC = () => {
               </div>
 
             </div>
-
-
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
 
@@ -5078,11 +4756,9 @@ export const StaffKdsPage: React.FC = () => {
 
       )}
 
+      {/* TABLE MERGE MODAL (FLOW 3) */}
 
-
-      {/* TABLE GROUPING MODAL (FLOW 3) */}
-
-      {isGroupingModalOpen && (
+      {isMergeModalOpen && (
 
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
 
@@ -5103,8 +4779,6 @@ export const StaffKdsPage: React.FC = () => {
               </p>
 
             </div>
-
-
 
             {/* Architectural Clarification Banner */}
 
@@ -5127,8 +4801,6 @@ export const StaffKdsPage: React.FC = () => {
               </p>
 
             </div>
-
-
 
             <div className="space-y-3">
 
@@ -5168,8 +4840,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -5206,8 +4876,6 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-
-
               <div>
 
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -5220,7 +4888,7 @@ export const StaffKdsPage: React.FC = () => {
 
                   type="text"
 
-                  value={groupReason}
+                  value={mergeReason}
 
                   onChange={(e) => setGroupReason(e.target.value)}
 
@@ -5234,15 +4902,13 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-
-
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
 
               <button
 
                 type="button"
 
-                disabled={isSubmittingGroup}
+                disabled={isSubmittingMerge}
 
                 onClick={() => setIsGroupingModalOpen(false)}
 
@@ -5258,15 +4924,15 @@ export const StaffKdsPage: React.FC = () => {
 
                 type="button"
 
-                disabled={isSubmittingGroup || !primaryAnchorTableId || !memberTableId}
+                disabled={isSubmittingMerge || !primaryAnchorTableId || !memberTableId}
 
-                onClick={handleConfirmGroup}
+                onClick={handleConfirmMerge}
 
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
 
               >
 
-                {isSubmittingGroup ? 'Đang Gộp Bàn...' : 'Xác Nhận Gộp Bàn (Table Merge)'}
+                {isSubmittingMerge ? 'Đang Gộp Bàn...' : 'Xác Nhận Gộp Bàn (Table Merge)'}
 
               </button>
 
