@@ -241,6 +241,34 @@ export const robotService = {
     }
   },
 
+  // Flow 3: Group member tables into a primary anchor table (Fixed delivery waypoint)
+  async groupTables(primaryAnchorTableId: string, memberTableIds: string[], storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Gộp nhóm bàn'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${primaryAnchorTableId}/group`, {
+        storeId,
+        memberTableIds,
+        reason
+      });
+      return response.data;
+    } catch {
+      // Fallback to legacy endpoint if needed
+      return await this.mergeTables(primaryAnchorTableId, memberTableIds, storeId, reason);
+    }
+  },
+
+  // Flow 3: Ungroup member table back to standalone available state
+  async ungroupTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Hủy nhóm bàn'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${tableId}/ungroup`, {
+        storeId,
+        reason
+      });
+      return response.data;
+    } catch {
+      return await this.splitTable(tableId, storeId, reason);
+    }
+  },
+
   // Merge source tables into a target table
   async mergeTables(targetTableId: string, sourceTableIds: string[], storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
     try {

@@ -864,7 +864,7 @@ export const StaffKdsPage: React.FC = () => {
     }
     setIsSubmittingMerge(true);
     try {
-      await robotService.mergeTables(mergeTargetTableId, [mergeSourceTableId], '00000000-0000-0000-0000-000000000000', mergeReason);
+      await robotService.groupTables(mergeTargetTableId, [mergeSourceTableId], '00000000-0000-0000-0000-000000000000', mergeReason);
       setTables((prev) =>
         prev.map((t) => {
           if (t.id === mergeSourceTableId) {
@@ -875,7 +875,7 @@ export const StaffKdsPage: React.FC = () => {
       );
       const targetName = tables.find((t) => t.id === mergeTargetTableId)?.name || mergeTargetTableId;
       const sourceName = tables.find((t) => t.id === mergeSourceTableId)?.name || mergeSourceTableId;
-      showToast(`Đã gộp ${sourceName} vào ${targetName} thành công!`, 'success');
+      showToast(`Đã gộp nhóm ${sourceName} vào ${targetName} thành công (Giao tại Trạm Bàn Chính)!`, 'success');
       setIsMergeModalOpen(false);
     } catch {
       showToast('Lỗi khi gộp bàn.', 'info');
@@ -887,12 +887,12 @@ export const StaffKdsPage: React.FC = () => {
   // Split Table
   const handleSplitTable = async (tableId: string) => {
     try {
-      await robotService.splitTable(tableId);
+      await robotService.ungroupTable(tableId);
       setTables((prev) =>
         prev.map((t) => (t.id === tableId ? { ...t, status: 'empty' as const, mergedIntoTableId: null } : t))
       );
       const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
-      showToast(`Đã tách ${tableName} về trạng thái trống thành công!`, 'success');
+      showToast(`Đã hủy nhóm ${tableName}, khôi phục bàn độc lập thành công!`, 'success');
     } catch {
       showToast('Lỗi khi tách bàn.', 'info');
     }
@@ -1033,7 +1033,7 @@ export const StaffKdsPage: React.FC = () => {
                   }}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
                 >
-                  Gộp Bàn
+                  Gộp Nhóm Bàn
                 </button>
                 {currentSelectedTable.status === 'merged' && (
                   <button
@@ -1041,7 +1041,7 @@ export const StaffKdsPage: React.FC = () => {
                     onClick={() => handleSplitTable(currentSelectedTable.id)}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
                   >
-                    Tách Bàn
+                    Hủy Nhóm Bàn
                   </button>
                 )}
                 <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
@@ -1254,7 +1254,7 @@ export const StaffKdsPage: React.FC = () => {
                   )}
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : currentSelectedTable.status === 'merged' ? 'Đã gộp bàn' : 'Đang đón khách'}</strong>
+                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : currentSelectedTable.status === 'merged' ? 'Đã gộp nhóm (Giao tại Bàn Chính)' : 'Đang đón khách'}</strong>
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-[11px]">
                   <span className="text-slate-500 font-semibold">Trạm Robot:</span>
@@ -2544,10 +2544,10 @@ export const StaffKdsPage: React.FC = () => {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
             <div className="border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-900 font-heading">
-                Gộp Bàn Ăn (Table Merge)
+                Gộp Nhóm Bàn (Table Grouping - Cố định Trạm giao)
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Hợp nhất 2 bàn ăn liền kề thành một bàn chính để phục vụ đoàn khách đông.
+                Gom nhóm các bàn phụ vào Bàn Chính phục vụ khách đoàn. Robot AMR luôn giao cố định tại Trạm Bàn Chính.
               </p>
             </div>
 
@@ -2566,7 +2566,7 @@ export const StaffKdsPage: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bàn Chính (Bàn Tiếp Nhận Giao Món)
+                  Bàn Chính (Trạm giao cố định của Robot AMR)
                 </label>
                 <select
                   value={mergeTargetTableId}
@@ -2585,7 +2585,7 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bàn Cần Gộp Vào (Bàn Phụ)
+                  Bàn Thành Viên (Gộp vào Bàn Chính)
                 </label>
                 <select
                   value={mergeSourceTableId}
@@ -2631,7 +2631,7 @@ export const StaffKdsPage: React.FC = () => {
                 onClick={handleConfirmMerge}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
               >
-                {isSubmittingMerge ? 'Đang Gộp...' : 'Xác Nhận Gộp Bàn'}
+                {isSubmittingMerge ? 'Đang Gộp Nhóm...' : 'Xác Nhận Gộp Nhóm Bàn'}
               </button>
             </div>
           </div>
