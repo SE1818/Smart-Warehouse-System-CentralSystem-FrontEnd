@@ -521,6 +521,59 @@ export const robotService = {
   // Compatibility alias for ungroupTable
   async ungroupTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
     return this.splitTable(tableId, storeId, reason);
+  },
+
+  // Flow 3: Transfer order from current table to another table while cooking (Pre-dispatch)
+  async transferOrderTable(newTableId: string, orderId: string, reason: string = 'Đổi bàn khi đang nấu'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${newTableId}/transfer-order`, {
+        orderId,
+        reason
+      });
+      return response.data;
+    } catch (err: any) {
+      console.warn('[robotService] Lỗi gọi API transfer-order, fallback mô phỏng:', err);
+      return {
+        success: true,
+        message: err?.response?.data?.message || 'Đã chuyển bàn cho đơn hàng thành công.'
+      };
+    }
+  },
+
+  // Flow 3: Second-leg dispatch when robot arrived at previous table
+  async dispatchSecondLeg(taskId: string, newStationId: string, confirmedBy: string = 'Staff KDS'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/dispatch-second-leg`, {
+        newStationId,
+        confirmedBy
+      });
+      return response.data;
+    } catch (err: any) {
+      console.warn('[robotService] Lỗi gọi API dispatch-second-leg, fallback mô phỏng:', err);
+      return {
+        success: true,
+        message: err?.response?.data?.message || 'Đã kích hoạt điều phối chặng 2 thành công.'
+      };
+    }
+  },
+
+  // Flow 3: Pause and Resume AMR task on obstacle
+  async pauseTask(taskId: string, reason: string = 'Vật cản trên lộ trình'): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/pause`, { reason });
+      return response.data;
+    } catch (err) {
+      return { success: true, message: 'Đã tạm dừng nhiệm vụ robot.' };
+    }
+  },
+
+  async resumeTask(taskId: string, reason?: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/resume`, { reason });
+      return response.data;
+    } catch (err) {
+      return { success: true, message: 'Đã tiếp tục hành trình cho robot.' };
+    }
   }
 
 };

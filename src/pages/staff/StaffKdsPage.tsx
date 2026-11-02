@@ -35,6 +35,7 @@ import {
   MapPin,
 
   ArrowRight,
+  ArrowRightLeft,
 
   Layers,
 
@@ -270,9 +271,30 @@ export const StaffKdsPage: React.FC = () => {
 
   const [memberTableId, setMemberTableId] = useState<string>('');
 
+  const [memberTableIds, setMemberTableIds] = useState<string[]>([]);
+
   const [mergeReason, setGroupReason] = useState<string>('Gộp nhóm bàn');
 
   const [isSubmittingMerge, setIsSubmittingGroup] = useState<boolean>(false);
+
+  // Flow 3: HC-04 Pre-Dispatch Table Transfer Modal State
+  const [transferOrderModal, setTransferOrderModal] = useState<{
+    orderId: string;
+    orderNumber: string;
+    currentTableNo: string;
+  } | null>(null);
+  const [transferOrderTargetId, setTransferOrderTargetId] = useState<string>('');
+  const [isSubmittingTransferOrder, setIsSubmittingTransferOrder] = useState<boolean>(false);
+
+  // Flow 3: HC-06 & UC-06 Arrival Race Condition & Second-Leg Dispatch State
+  const [rerouteConflictModal, setRerouteConflictModal] = useState<{
+    isOpen: boolean;
+    taskId: string;
+    oldTableNo: string;
+    newTableNo: string;
+    newStationId: string;
+  } | null>(null);
+  const [isSubmittingSecondLeg, setIsSubmittingSecondLeg] = useState<boolean>(false);
 
   const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
 
@@ -680,7 +702,25 @@ export const StaffKdsPage: React.FC = () => {
 
     const finalOrderId = orderInputId.trim();
 
-    const finalDestination = destinationInput.trim() || currentSelectedTable.name;
+    const rawDestination = destinationInput.trim() || currentSelectedTable.name;
+
+    // Flow 3: Auto-redirect merged table orders to Primary Anchor Table (HC-01 & HC-03)
+    const destTable = tables.find(
+      (t) => t.name.toLowerCase() === rawDestination.toLowerCase() || t.id === currentSelectedTable.id
+    );
+    let finalDestination = rawDestination;
+    let resolvedTableId = currentSelectedTable.id;
+    if (destTable && destTable.status === 'merged' && destTable.mergedIntoTableId) {
+      const mainTable = tables.find((t) => t.id === destTable.mergedIntoTableId);
+      if (mainTable) {
+        finalDestination = mainTable.name;
+        resolvedTableId = mainTable.id;
+        showToast(
+          `Bàn ${destTable.name} đã gộp vào ${mainTable.name}. Robot tự động điều hướng đến Trạm Bàn Chính (${mainTable.name})!`,
+          'info'
+        );
+      }
+    }
 
     if (!finalOrderId) {
 
@@ -734,7 +774,7 @@ export const StaffKdsPage: React.FC = () => {
 
       if (activeOrderId && effectiveRobot.id) {
 
-        await orderService.dispatchToRobot(effectiveRobot.id, activeOrderId, currentSelectedTable.id);
+        await orderService.dispatchToRobot(effectiveRobot.id, activeOrderId, resolvedTableId);
 
         await orderService.confirmOrder(activeOrderId);
 
@@ -850,9 +890,28 @@ export const StaffKdsPage: React.FC = () => {
 
   const handleDispatchSequence = async () => {
 
-    const table1 = tray1Table.trim();
+    let table1 = tray1Table.trim();
 
-    const table2 = tray2Table.trim();
+    let table2 = tray2Table.trim();
+
+    // Flow 3: Auto-redirect merged table orders to Primary Anchor Table (HC-01 & HC-03)
+    const t1 = tables.find((t) => t.name.toLowerCase() === table1.toLowerCase());
+    if (t1 && t1.status === 'merged' && t1.mergedIntoTableId) {
+      const main1 = tables.find((t) => t.id === t1.mergedIntoTableId);
+      if (main1) {
+        table1 = main1.name;
+        showToast(`Khay 1: Bàn ${t1.name} đã gộp vào ${main1.name} -> Đích đến chuyển sang ${main1.name}!`, 'info');
+      }
+    }
+
+    const t2 = tables.find((t) => t.name.toLowerCase() === table2.toLowerCase());
+    if (t2 && t2.status === 'merged' && t2.mergedIntoTableId) {
+      const main2 = tables.find((t) => t.id === t2.mergedIntoTableId);
+      if (main2) {
+        table2 = main2.name;
+        showToast(`Khay 2: Bàn ${t2.name} đã gộp vào ${main2.name} -> Đích đến chuyển sang ${main2.name}!`, 'info');
+      }
+    }
 
     const order1 = tray1OrderId.trim();
 
@@ -1222,7 +1281,22 @@ export const StaffKdsPage: React.FC = () => {
 
       const targetStationId = targetNode?.stationId || targetNode?.id || '55555555-5555-5555-5555-555555555555';
 
-      await robotService.rerouteTask(leg.taskId, targetStationId, rerouteNewTable, rerouteReason);
+      const res = await robotService.rerouteTask(leg.taskId, targetStationId, rerouteNewTable, rerouteReason);
+
+      if (res && res.success === false) {
+        const msg = res.message || '';
+        if (msg.toLowerCase().includes('arrived') || msg.toLowerCase().includes('trạm giao cũ')) {
+          setRerouteConflictModal({
+            isOpen: true,
+            taskId: leg.taskId,
+            oldTableNo: leg.tableNo,
+            newTableNo: rerouteNewTable,
+            newStationId: targetStationId
+          });
+          setIsRerouteModalOpen(false);
+          return;
+        }
+      }
 
       setActiveSequence((prev) => {
 
@@ -1264,9 +1338,23 @@ export const StaffKdsPage: React.FC = () => {
 
       setIsRerouteModalOpen(false);
 
-    } catch {
+    } catch (err: any) {
 
-      showToast('Lỗi khi chuyển hướng bàn, vui lòng thử lại.', 'info');
+      const msg = err?.response?.data?.message || err?.message || '';
+      if (msg.toLowerCase().includes('arrived') || msg.toLowerCase().includes('trạm giao cũ') || err?.response?.data?.taskId) {
+        const targetNode = tables.find((t) => t.name.toLowerCase() === rerouteNewTable.toLowerCase() || t.id === rerouteNewTable);
+        const targetStationId = targetNode?.stationId || targetNode?.id || '55555555-5555-5555-5555-555555555555';
+        setRerouteConflictModal({
+          isOpen: true,
+          taskId: leg.taskId,
+          oldTableNo: leg.tableNo,
+          newTableNo: rerouteNewTable,
+          newStationId: targetStationId
+        });
+        setIsRerouteModalOpen(false);
+        return;
+      }
+      showToast(msg || 'Lỗi khi chuyển hướng bàn, vui lòng thử lại.', 'info');
 
     } finally {
 
@@ -1552,13 +1640,23 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-  // Flow 3: Confirm Table Grouping
+  // Flow 3: Confirm Table Merge (Supports multi-table selection HC-02)
 
   const handleConfirmMerge = async () => {
 
-    if (!primaryAnchorTableId || !memberTableId || primaryAnchorTableId === memberTableId) {
+    const targets = memberTableIds.length > 0 ? memberTableIds : memberTableId ? [memberTableId] : [];
 
-      showToast('Vui lòng chọn 2 bàn khác nhau để gộp!', 'info');
+    if (!primaryAnchorTableId || targets.length === 0) {
+
+      showToast('Vui lòng chọn Bàn Chính và ít nhất 1 bàn thành viên để gộp!', 'info');
+
+      return;
+
+    }
+
+    if (targets.includes(primaryAnchorTableId)) {
+
+      showToast('Bàn thành viên không được trùng với Bàn Chính!', 'info');
 
       return;
 
@@ -1568,13 +1666,13 @@ export const StaffKdsPage: React.FC = () => {
 
     try {
 
-      await robotService.mergeTables(primaryAnchorTableId, [memberTableId], '00000000-0000-0000-0000-000000000000', mergeReason);
+      await robotService.mergeTables(primaryAnchorTableId, targets, '00000000-0000-0000-0000-000000000000', mergeReason);
 
       setTables((prev) =>
 
         prev.map((t) => {
 
-          if (t.id === memberTableId) {
+          if (targets.includes(t.id)) {
 
             return { ...t, status: 'merged' as const, mergedIntoTableId: primaryAnchorTableId };
 
@@ -1588,15 +1686,17 @@ export const StaffKdsPage: React.FC = () => {
 
       const targetName = tables.find((t) => t.id === primaryAnchorTableId)?.name || primaryAnchorTableId;
 
-      const sourceName = tables.find((t) => t.id === memberTableId)?.name || memberTableId;
-
-      showToast(`Đã gộp bàn ${sourceName} vào ${targetName} thành công (Giao tại Trạm Bàn Chính)!`, 'success');
+      showToast(`Đã gộp ${targets.length} bàn vào ${targetName} thành công (Robot AMR giao cố định tại Trạm ${targetName})!`, 'success');
 
       setIsGroupingModalOpen(false);
 
-    } catch {
+      setMemberTableIds([]);
 
-      showToast('Lỗi khi gộp bàn.', 'info');
+      setMemberTableId('');
+
+    } catch (err: any) {
+
+      showToast(err?.response?.data?.message || err?.message || 'Lỗi khi gộp bàn.', 'info');
 
     } finally {
 
@@ -1606,7 +1706,7 @@ export const StaffKdsPage: React.FC = () => {
 
   };
 
-  // Flow 3: Ungroup Table
+  // Flow 3: Split Table (HC-08 Full Split & HC-09 Partial Split)
 
   const handleSplitTable = async (tableId: string) => {
 
@@ -1616,20 +1716,87 @@ export const StaffKdsPage: React.FC = () => {
 
       setTables((prev) =>
 
-        prev.map((t) => (t.id === tableId ? { ...t, status: 'empty' as const, mergedIntoTableId: null } : t))
+        prev.map((t) => {
+
+          if (t.id === tableId || t.mergedIntoTableId === tableId) {
+
+            return { ...t, status: 'empty' as const, mergedIntoTableId: null };
+
+          }
+
+          return t;
+
+        })
 
       );
 
       const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
 
-      showToast(`Đã hủy nhóm ${tableName}, khôi phục bàn độc lập thành công!`, 'success');
+      showToast(`Đã tách nhóm bàn ${tableName}, hoàn nguyên trạng thái độc lập thành công!`, 'success');
 
-    } catch {
+    } catch (err: any) {
 
-      showToast('Lỗi khi hủy nhóm bàn.', 'info');
+      showToast(err?.response?.data?.message || err?.message || 'Lỗi khi tách bàn.', 'info');
 
     }
 
+  };
+
+  // Flow 3: HC-04 Confirm Pre-Dispatch Table Transfer for Pending Order
+  const handleConfirmTransferOrder = async () => {
+    if (!transferOrderModal || !transferOrderTargetId) return;
+    const targetTable = tables.find((t) => t.id === transferOrderTargetId);
+    if (!targetTable) return;
+
+    setIsSubmittingTransferOrder(true);
+    try {
+      await robotService.transferOrderTable(targetTable.id, transferOrderModal.orderId, 'Khách chuyển bàn khi món đang nấu');
+      setPendingOrders((prev) =>
+        prev.map((o) => (o.id === transferOrderModal.orderId ? { ...o, tableNo: targetTable.name } : o))
+      );
+      showToast(`Đã chuyển đơn ${transferOrderModal.orderNumber} sang ${targetTable.name} thành công!`, 'success');
+      setTransferOrderModal(null);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err?.message || 'Lỗi khi đổi bàn cho đơn món.', 'info');
+    } finally {
+      setIsSubmittingTransferOrder(false);
+    }
+  };
+
+  // Flow 3: HC-06 Confirm Second-Leg Autonomous Dispatch
+  const handleConfirmSecondLeg = async () => {
+    if (!rerouteConflictModal) return;
+    setIsSubmittingSecondLeg(true);
+    try {
+      await robotService.dispatchSecondLeg(rerouteConflictModal.taskId, rerouteConflictModal.newStationId, 'Nhân viên KDS');
+      showToast(`Đã phát lệnh Robot tự hành đi chặng 2 tới ${rerouteConflictModal.newTableNo}!`, 'success');
+      setRerouteConflictModal(null);
+    } catch (err: any) {
+      showToast(err?.message || 'Lỗi khi điều phối chặng 2.', 'info');
+    } finally {
+      setIsSubmittingSecondLeg(false);
+    }
+  };
+
+  // Flow 3: UC-08 Obstacle Avoidance Pause / Resume
+  const [isTaskPaused, setIsTaskPaused] = useState<boolean>(false);
+  const handleTogglePauseTask = async () => {
+    if (!activeSequence) return;
+    const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+    if (!currentLeg) return;
+    try {
+      if (isTaskPaused) {
+        await robotService.resumeTask(currentLeg.taskId, 'Đã dọn chướng ngại vật hành lang');
+        setIsTaskPaused(false);
+        showToast('Đã tiếp tục hành trình cho Robot sau khi giải tỏa vật cản (UC-08)!', 'success');
+      } else {
+        await robotService.pauseTask(currentLeg.taskId, 'Gặp chướng ngại vật hành lang');
+        setIsTaskPaused(true);
+        showToast('Đã tạm dừng Robot tránh va chạm chướng ngại vật (UC-08)!', 'info');
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err?.message || 'Lỗi khi gửi lệnh dừng/tiếp tục.', 'info');
+    }
   };
 
   return (
@@ -2400,27 +2567,63 @@ export const StaffKdsPage: React.FC = () => {
 
                 {pendingOrders.map((ord) => (
 
-                  <button
+                  <div key={ord.id} className="inline-flex items-center shrink-0 shadow-xs rounded-xl overflow-hidden">
 
-                    key={ord.id}
+                    <button
 
-                    type="button"
+                      type="button"
 
-                    onClick={() => handleSelectPendingOrder(ord)}
+                      onClick={() => handleSelectPendingOrder(ord)}
 
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all border cursor-pointer ${activeOrderId === ord.id
+                      className={`px-3 py-1.5 text-xs font-semibold transition-all border border-r-0 cursor-pointer ${activeOrderId === ord.id
 
-                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                          ? 'bg-amber-600 text-white border-amber-600'
 
-                        : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
+                          : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
 
-                      }`}
+                        }`}
 
-                  >
+                    >
 
-                    <span className="font-bold">{ord.orderNumber}</span> • {ord.tableNo} ({ord.items.length} món)
+                      <span className="font-bold">{ord.orderNumber}</span> • {ord.tableNo} ({ord.items.length} món)
 
-                  </button>
+                    </button>
+
+                    <button
+
+                      type="button"
+
+                      title="Đổi bàn cho đơn đang nấu (HC-04)"
+
+                      onClick={(e) => {
+
+                        e.stopPropagation();
+
+                        setTransferOrderModal({
+
+                          orderId: ord.id,
+
+                          orderNumber: ord.orderNumber,
+
+                          currentTableNo: ord.tableNo,
+
+                        });
+
+                        const avail = tables.find((t) => t.name !== ord.tableNo && t.status !== 'merged');
+
+                        setTransferOrderTargetId(avail?.id || '');
+
+                      }}
+
+                      className="px-2 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold border border-amber-300 transition-colors cursor-pointer"
+
+                    >
+
+                      ⇄ Đổi
+
+                    </button>
+
+                  </div>
 
                 ))}
 
@@ -2790,9 +2993,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-                  {/* Mid-Transit Table Transfer Action Button */}
+                  {/* Mid-Transit Table Transfer & Obstacle Pause/Resume (UC-08) */}
 
-                  <div className="pt-1 border-t border-white/10">
+                  <div className="pt-1 border-t border-white/10 space-y-2">
 
                     <button
 
@@ -2805,6 +3008,30 @@ export const StaffKdsPage: React.FC = () => {
                     >
 
                       Đổi Bàn Giữa Chặng Cho Khay {activeSequence.currentLegIndex + 1}
+
+                    </button>
+
+                    <button
+
+                      type="button"
+
+                      onClick={handleTogglePauseTask}
+
+                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+
+                        isTaskPaused
+
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-400/40 hover:bg-amber-500/30 animate-pulse'
+
+                          : 'bg-slate-800/80 text-slate-300 border-white/10 hover:bg-slate-700'
+
+                      }`}
+
+                    >
+
+                      <AlertTriangle className="w-3.5 h-3.5" />
+
+                      <span>{isTaskPaused ? '▶ Tiếp Tục Di Chuyển (Đã Dọn Vật Cản - UC-08)' : '⏸ Tạm Dừng Tránh Vật Cản Hành Lang (UC-08)'}</span>
 
                     </button>
 
@@ -4806,11 +5033,33 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
 
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <div className="flex items-center justify-between mb-1">
 
-                  Bàn Chính (Trạm giao cố định của Robot AMR)
+                  <label className="block text-xs font-semibold text-slate-700">
 
-                </label>
+                    Bàn Chính (Trạm giao cố định của Robot AMR - UC-01)
+
+                  </label>
+
+                  {primaryAnchorTableId && (() => {
+
+                    const sel = tables.find(t => t.id === primaryAnchorTableId);
+
+                    const isOcc = sel && (sel.status === 'occupied' || sel.status === 'serving' || sel.status === 'waiting');
+
+                    return isOcc ? (
+
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+
+                        ⚠️ Bàn đang có khách (UC-02)
+
+                      </span>
+
+                    ) : null;
+
+                  })()}
+
+                </div>
 
                 <select
 
@@ -4826,15 +5075,21 @@ export const StaffKdsPage: React.FC = () => {
 
                     .filter((t) => t.status !== 'merged')
 
-                    .map((t) => (
+                    .map((t) => {
 
-                      <option key={t.id} value={t.id}>
+                      const hasStation = !!(t.stationId || t.stationName);
 
-                        {t.name} {t.stationName ? `(Trạm: ${t.stationName})` : ''} ({t.zone || 'Khu Bàn Ăn'})
+                      return (
 
-                      </option>
+                        <option key={t.id} value={t.id}>
 
-                    ))}
+                          {t.name} {hasStation ? `(Trạm: ${t.stationName || t.stationId})` : '(⚠️ Chưa gán trạm)'} ({t.zone || 'Khu Bàn Ăn'})
+
+                        </option>
+
+                      );
+
+                    })}
 
                 </select>
 
@@ -4842,37 +5097,99 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
 
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <div className="flex items-center justify-between mb-1">
 
-                  Bàn Thành Viên (Gộp vào Bàn Chính)
+                  <label className="block text-xs font-semibold text-slate-700">
 
-                </label>
+                    Chọn Các Bàn Thành Viên (Gộp nhiều bàn - HC-02)
 
-                <select
+                  </label>
 
-                  value={memberTableId}
+                  <span className="text-[10px] font-mono text-blue-700 font-bold">
 
-                  onChange={(e) => setMemberTableId(e.target.value)}
+                    Đã chọn: {memberTableIds.length} bàn
 
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  </span>
 
-                >
+                </div>
+
+                <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
 
                   {tables
 
                     .filter((t) => t.id !== primaryAnchorTableId && t.status !== 'merged')
 
-                    .map((t) => (
+                    .map((t) => {
 
-                      <option key={t.id} value={t.id}>
+                      const isChecked = memberTableIds.includes(t.id);
 
-                        {t.name} ({t.zone || 'Khu Bàn Ăn'})
+                      const isOcc = t.status === 'occupied' || t.status === 'serving' || t.status === 'waiting';
 
-                      </option>
+                      return (
 
-                    ))}
+                        <label
 
-                </select>
+                          key={t.id}
+
+                          className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+
+                            isChecked
+
+                              ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold'
+
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+
+                          }`}
+
+                        >
+
+                          <div className="flex items-center gap-2">
+
+                            <input
+
+                              type="checkbox"
+
+                              checked={isChecked}
+
+                              onChange={(e) => {
+
+                                if (e.target.checked) {
+
+                                  setMemberTableIds(prev => [...prev, t.id]);
+
+                                } else {
+
+                                  setMemberTableIds(prev => prev.filter(id => id !== t.id));
+
+                                }
+
+                              }}
+
+                              className="w-3.5 h-3.5 rounded text-blue-600 border-slate-300 focus:ring-blue-500"
+
+                            />
+
+                            <span>{t.name} ({t.zone || 'Khu Bàn Ăn'})</span>
+
+                          </div>
+
+                          {isOcc && (
+
+                            <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+
+                              Đang có khách
+
+                            </span>
+
+                          )}
+
+                        </label>
+
+                      );
+
+                    })}
+
+                </div>
 
               </div>
 
@@ -4924,7 +5241,7 @@ export const StaffKdsPage: React.FC = () => {
 
                 type="button"
 
-                disabled={isSubmittingMerge || !primaryAnchorTableId || !memberTableId}
+                disabled={isSubmittingMerge || !primaryAnchorTableId || (memberTableIds.length === 0 && !memberTableId)}
 
                 onClick={handleConfirmMerge}
 
@@ -4942,6 +5259,131 @@ export const StaffKdsPage: React.FC = () => {
 
         </div>
 
+      )}
+
+      {/* FLOW 3: PRE-DISPATCH TABLE TRANSFER MODAL (HC-04 & UC-05) */}
+      {transferOrderModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-amber-600" />
+                  <span>Đổi Bàn Cho Đơn Đang Nấu (HC-04)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Chuyển đơn <strong className="text-slate-800">{transferOrderModal.orderNumber}</strong> từ bàn <strong>{transferOrderModal.currentTableNo}</strong> sang bàn mới trước khi xuất lệnh Robot.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferOrderModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Chọn Bàn Đích Mới (Phải còn trống và chưa bị gộp - UC-05)
+                </label>
+                <select
+                  value={transferOrderTargetId}
+                  onChange={(e) => setTransferOrderTargetId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                >
+                  <option value="">-- Chọn Bàn Nhận Đơn --</option>
+                  {tables
+                    .filter((t) => t.name !== transferOrderModal.currentTableNo && t.status !== 'merged')
+                    .map((t) => {
+                      const isOccupied = t.status === 'occupied' || t.status === 'serving' || t.status === 'waiting';
+                      return (
+                        <option key={t.id} value={t.id} disabled={isOccupied}>
+                          {t.name} {isOccupied ? '(Đang bận - Không khả dụng)' : '(Trống)'} {t.stationName ? `[Trạm: ${t.stationName}]` : ''}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800">
+                Lưu ý: Hệ thống tự động cập nhật đích đến cho KDS và Robot AMR. Nếu bàn đích đã gộp vào bàn chính, đơn sẽ được tự động hướng tới trạm của bàn chính.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isSubmittingTransferOrder}
+                onClick={() => setTransferOrderModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingTransferOrder || !transferOrderTargetId}
+                onClick={handleConfirmTransferOrder}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+              >
+                {isSubmittingTransferOrder ? 'Đang Chuyển...' : 'Xác Nhận Đổi Bàn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOW 3: ARRIVAL RACE CONDITION & SECOND-LEG DISPATCH MODAL (HC-06 & UC-06 / ETM-14) */}
+      {rerouteConflictModal && rerouteConflictModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border-2 border-rose-500 shadow-2xl max-w-lg w-full p-5 space-y-4 text-slate-800 animate-in zoom-in-95">
+            <div className="border-b border-rose-100 pb-3 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-slate-900 font-heading">
+                  Xung Đột Đổi Bàn: Robot Đã Đến Trạm Cũ (UC-06 / ETM-14)
+                </h3>
+                <p className="text-xs text-rose-700 mt-1">
+                  Robot AMR đã hoàn thành hành trình tới <strong>{rerouteConflictModal.oldTableNo}</strong> trước khi lệnh đổi sang <strong>{rerouteConflictModal.newTableNo}</strong> được xử lý.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs text-slate-700">
+              <div className="font-semibold text-slate-800">Chọn phương án giải quyết:</div>
+              <div className="text-[11px] leading-relaxed space-y-1">
+                <p>• <strong>Bàn giao thủ công:</strong> Nhân viên phục vụ tại bàn {rerouteConflictModal.oldTableNo} nhận món từ khay và mang tay qua bàn {rerouteConflictModal.newTableNo}.</p>
+                <p>• <strong>Robot tự hành đi chặng 2 (Second-Leg Dispatch):</strong> Robot tự động lập quỹ đạo mới và di chuyển tiếp từ {rerouteConflictModal.oldTableNo} sang {rerouteConflictModal.newTableNo}.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setRerouteConflictModal(null);
+                  showToast(`Đã chọn bàn giao thủ công từ ${rerouteConflictModal.oldTableNo} sang ${rerouteConflictModal.newTableNo}.`, 'info');
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer"
+              >
+                1. Bàn Giao Thủ Công
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingSecondLeg}
+                onClick={handleConfirmSecondLeg}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Navigation className="w-3.5 h-3.5 text-cyan-200" />
+                <span>{isSubmittingSecondLeg ? 'Đang Điều Phối...' : '2. Robot Tự Hành Đi Chặng 2 (HC-06)'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
