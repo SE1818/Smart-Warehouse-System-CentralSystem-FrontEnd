@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_SLAM_METADATA,
   rosToCanvasPixel,
   canvasPixelToRos,
   rosYawToCanvasAngleRad,

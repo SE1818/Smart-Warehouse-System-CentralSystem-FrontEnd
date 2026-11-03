@@ -36,7 +36,7 @@ import {
 
   ArrowRight,
   ArrowRightLeft,
-
+  GitMerge,
   Layers,
 
   Cpu,
@@ -161,13 +161,16 @@ export const StaffKdsPage: React.FC = () => {
 
   // 2-Tray Multi-Table Sequence Setup (Khay 1 & Khay 2)
 
-  const [tray1Table, setTray1Table] = useState<string>('Bàn 11');
+  const [tray1Table, setTray1Table] = useState<string>('Bàn 01');
 
   const [tray1OrderId, setTray1OrderId] = useState<string>('ORD-101');
 
-  const [tray2Table, setTray2Table] = useState<string>('Bàn 12');
+  const [tray2Table, setTray2Table] = useState<string>('Bàn 02');
 
   const [tray2OrderId, setTray2OrderId] = useState<string>('ORD-102');
+
+  // Active focused tray target when clicking tables on map/grid: 'tray1' | 'tray2'
+  const [activeTrayTarget, setActiveTrayTarget] = useState<'tray1' | 'tray2'>('tray1');
 
   // Active Multi-Table Sequence Mission (Realtime Tracking & Dual Confirmation)
 
@@ -675,6 +678,60 @@ export const StaffKdsPage: React.FC = () => {
     setPageSize: setTablePageSize,
 
   } = usePagination(tables, 12);
+
+  // Unified Table Selection Handler: Interlinks Map/Grid Selection with Dispatch Trays & Table Focus
+  const handleTableSelect = (tableId: string) => {
+    setSelectedTableId(tableId);
+    const matched = tables.find((t) => t.id === tableId);
+    const tableName = matched?.name || (tableId.startsWith('T') || tableId.startsWith('Bàn') ? tableId : `Bàn ${tableId}`);
+
+    if (dispatchMode === 'sequence') {
+      if (activeTrayTarget === 'tray1') {
+        setTray1Table(tableName);
+        if (!tray1OrderId && matched?.currentOrders?.[0]) {
+          setTray1OrderId(matched.currentOrders[0]);
+        }
+        setActiveTrayTarget('tray2');
+        showToast(`Đã gán ${tableName} vào Khay 1 (Tầng Dưới). Tiếp tục click chọn bàn cho Khay 2.`, 'info');
+      } else {
+        setTray2Table(tableName);
+        if (!tray2OrderId && matched?.currentOrders?.[0]) {
+          setTray2OrderId(matched.currentOrders[0]);
+        }
+        setActiveTrayTarget('tray1');
+        showToast(`Đã gán ${tableName} vào Khay 2 (Tầng Trên).`, 'info');
+      }
+    } else {
+      setDestinationInput(tableName);
+      if (!orderInputId && matched?.currentOrders?.[0]) {
+        setOrderInputId(matched.currentOrders[0]);
+      }
+      showToast(`Đã chọn ${tableName} làm điểm đích giao món.`, 'info');
+    }
+  };
+
+  // Open Pre-Dispatch Table Transfer (Dining Table Transfer - HC-04 & WF-02)
+  const handleOpenTableTransferForSelected = (specificTable?: any) => {
+    const activeFromTable = specificTable || (currentSelectedTable && currentSelectedTable.id !== 'Chưa có' ? currentSelectedTable : tables[0]) || {
+      id: '01',
+      name: 'Bàn 01',
+      zone: 'Sảnh Chính',
+      status: 'occupied',
+    };
+
+    const matchingOrder = pendingOrders.find(
+      (o) => o.tableNo.toLowerCase() === activeFromTable.name.toLowerCase() || o.tableNo === activeFromTable.id
+    );
+
+    setTransferOrderModal({
+      orderId: matchingOrder?.id || `ORD-${activeFromTable.name.replace(/\s+/g, '')}`,
+      orderNumber: matchingOrder?.orderNumber || `Đơn ${activeFromTable.name}`,
+      currentTableNo: activeFromTable.name,
+    });
+
+    const avail = tables.find((t) => t.name !== activeFromTable.name && t.status !== 'merged');
+    setTransferOrderTargetId(avail?.id || tables[1]?.id || '');
+  };
 
   // Action: Select Pending Order -> Autofill Order ID & Destination Table in Form
 
@@ -1600,17 +1657,17 @@ export const StaffKdsPage: React.FC = () => {
 
               ? {
 
-                  ...t,
+                ...t,
 
-                  stationId: assignStationTargetStationId || null,
+                stationId: assignStationTargetStationId || null,
 
-                  stationName: stationObj ? stationObj.name : null,
+                stationName: stationObj ? stationObj.name : null,
 
-                  worldX: stationObj ? stationObj.xCoord : t.worldX,
+                worldX: stationObj ? stationObj.xCoord : t.worldX,
 
-                  worldY: stationObj ? stationObj.yCoord : t.worldY,
+                worldY: stationObj ? stationObj.yCoord : t.worldY,
 
-                }
+              }
 
               : t
 
@@ -1815,9 +1872,9 @@ export const StaffKdsPage: React.FC = () => {
 
             className={`pointer-events-auto px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-right duration-200 border ${toast.type === 'success'
 
-                ? 'bg-emerald-600 text-white border-emerald-500'
+              ? 'bg-emerald-600 text-white border-emerald-500'
 
-                : 'bg-blue-600 text-white border-blue-500'
+              : 'bg-blue-600 text-white border-blue-500'
 
               }`}
 
@@ -1939,75 +1996,76 @@ export const StaffKdsPage: React.FC = () => {
 
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            {/* Table Area Header & Operation Toolbar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
 
-              <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
+              <div className="flex items-center gap-3">
 
-                <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
 
-                <span className="text-[11px] font-mono font-normal text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
 
-                  {tables.length} Bàn
+                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs">
 
-                </span>
+                    {tables.length} Bàn
 
-              </h2>
+                  </span>
 
-              {/* Actions & View Switcher */}
+                </h2>
 
+                {/* View Switcher Segmented Control */}
+                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-2xs">
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => setViewMode('slam-map')}
+
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'slam-map'
+
+                      ? 'bg-white text-blue-700 shadow-xs'
+
+                      : 'text-slate-600 hover:text-slate-900'
+
+                      }`}
+
+                  >
+
+                    <MapIcon className="w-3.5 h-3.5" />
+
+                    <span>Bản Đồ SLAM (ROS 2)</span>
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => setViewMode('grid')}
+
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${viewMode === 'grid'
+
+                      ? 'bg-white text-blue-700 shadow-xs'
+
+                      : 'text-slate-600 hover:text-slate-900'
+
+                      }`}
+
+                  >
+
+                    <LayoutGrid className="w-3.5 h-3.5" />
+
+                    <span>Dạng Thẻ Bàn</span>
+
+                  </button>
+
+                </div>
+
+              </div>
+
+              {/* Action Buttons Toolbar */}
               <div className="flex flex-wrap items-center gap-2">
-
-                <button
-
-                  type="button"
-
-                  onClick={() => {
-
-                    setNewTableNo(`T${(tables.length + 1).toString().padStart(2, '0')}`);
-
-                    setNewTableName(`Bàn ${(tables.length + 1).toString().padStart(2, '0')}`);
-
-                    setNewTableCapacity(4);
-
-                    setNewTableStationId('');
-
-                    setIsCreateTableModalOpen(true);
-
-                  }}
-
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-500 shadow-xs transition-all cursor-pointer"
-
-                >
-
-                  <Plus className="w-3.5 h-3.5" />
-
-                  <span>Thêm Bàn</span>
-
-                </button>
-
-                <button
-
-                  type="button"
-
-                  onClick={() => {
-
-                    setImportResult(null);
-
-                    setImportCsvFile(null);
-
-                    setIsImportCsvModalOpen(true);
-
-                  }}
-
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
-
-                >
-
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-
-                  <span>Nhập Excel / CSV</span>
-
-                </button>
 
                 <button
 
@@ -2023,7 +2081,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   }}
 
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
+
+                  title="Gán trạm điều phối AMR cho bàn này"
 
                 >
 
@@ -2047,11 +2107,34 @@ export const StaffKdsPage: React.FC = () => {
 
                   }}
 
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer shadow-2xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
+
+                  title="Gộp các bàn ăn thành một nhóm tiệc (Logical Table Grouping)"
 
                 >
 
-                  Gộp Bàn (Table Merge)
+                  <GitMerge className="w-3.5 h-3.5 text-blue-600" />
+
+                  <span>Gộp Bàn (Merge)</span>
+
+                </button>
+
+                {/* Main Flow 1: Dining Table Transfer (WF-02 & HC-04) */}
+                <button
+
+                  type="button"
+
+                  onClick={() => handleOpenTableTransferForSelected()}
+
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
+
+                  title="Đổi bàn cho khách khi món đang nấu hoặc đổi vị trí (Dining Table Transfer - HC-04 & WF-02)"
+
+                >
+
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
+
+                  <span>Đổi Bàn (Table Transfer)</span>
 
                 </button>
 
@@ -2067,63 +2150,65 @@ export const StaffKdsPage: React.FC = () => {
 
                   >
 
-                    Tách Bàn (Table Split)
+                    Tách Bàn (Split)
 
                   </button>
 
                 )}
 
-                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+                <button
 
-                  <button
+                  type="button"
 
-                    type="button"
+                  onClick={() => {
 
-                    onClick={() => setViewMode('slam-map')}
+                    setImportResult(null);
 
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    setImportCsvFile(null);
 
-                      viewMode === 'slam-map'
+                    setIsImportCsvModalOpen(true);
 
-                        ? 'bg-blue-600 text-white shadow-xs'
+                  }}
 
-                        : 'text-slate-600 hover:text-slate-900'
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
 
-                    }`}
+                  title="Nhập danh sách bàn từ Excel / CSV"
 
-                  >
+                >
 
-                    <MapIcon className="w-3.5 h-3.5" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
 
-                    <span>Bản Đồ SLAM (ROS 2)</span>
+                  <span>Nhập Excel/CSV</span>
 
-                  </button>
+                </button>
 
-                  <button
+                <button
 
-                    type="button"
+                  type="button"
 
-                    onClick={() => setViewMode('grid')}
+                  onClick={() => {
 
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    setNewTableNo(`T${(tables.length + 1).toString().padStart(2, '0')}`);
 
-                      viewMode === 'grid'
+                    setNewTableName(`Bàn ${(tables.length + 1).toString().padStart(2, '0')}`);
 
-                        ? 'bg-blue-600 text-white shadow-xs'
+                    setNewTableCapacity(4);
 
-                        : 'text-slate-600 hover:text-slate-900'
+                    setNewTableStationId('');
 
-                    }`}
+                    setIsCreateTableModalOpen(true);
 
-                  >
+                  }}
 
-                    <LayoutGrid className="w-3.5 h-3.5" />
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-all cursor-pointer active:scale-95"
 
-                    <span>Dạng Thẻ Bàn</span>
+                >
 
-                  </button>
+                  <Plus className="w-3.5 h-3.5" />
 
-                </div>
+                  <span>Thêm Bàn</span>
+
+                </button>
 
               </div>
 
@@ -2139,15 +2224,7 @@ export const StaffKdsPage: React.FC = () => {
 
                 selectedTableId={selectedTableId}
 
-                onSelectTable={(id) => {
-
-                  setSelectedTableId(id);
-
-                  const matched = tables.find((t) => t.id === id);
-
-                  showToast(`Đã chọn ${matched?.name || id} trên sơ đồ`, 'info');
-
-                }}
+                onSelectTable={(id) => handleTableSelect(id)}
 
                 robots={robots}
 
@@ -2233,31 +2310,25 @@ export const StaffKdsPage: React.FC = () => {
 
                         type="button"
 
-                        onClick={() => {
-
-                          setSelectedTableId(table.id);
-
-                          showToast(`Đã chọn ${table.name}`, 'info');
-
-                        }}
+                        onClick={() => handleTableSelect(table.id)}
 
                         className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group active:scale-[0.98] h-[145px] cursor-pointer ${isSelected
 
-                            ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20'
+                          ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20'
 
-                            : isWaiting
+                          : isWaiting
 
-                              ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
+                            ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
 
-                              : isServing
+                            : isServing
 
-                                ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300'
+                              ? 'border-blue-200 bg-blue-50/30 hover:border-blue-300'
 
-                                : isOccupied
+                              : isOccupied
 
-                                  ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300'
+                                ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-300'
 
-                                  : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                                : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
 
                           }`}
 
@@ -2291,21 +2362,21 @@ export const StaffKdsPage: React.FC = () => {
 
                             className={`w-2.5 h-2.5 rounded-full shrink-0 ${isWaiting
 
-                                ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
+                              ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse'
 
-                                : isServing
+                              : isServing
 
-                                  ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
+                                ? 'bg-blue-600 shadow-[0_0_6px_#2563eb]'
 
-                                  : isOccupied
+                                : isOccupied
 
-                                    ? 'bg-emerald-500'
+                                  ? 'bg-emerald-500'
 
-                                    : table.status === 'merged'
+                                  : table.status === 'merged'
 
-                                      ? 'bg-purple-500'
+                                    ? 'bg-purple-500'
 
-                                      : 'bg-slate-300'
+                                    : 'bg-slate-300'
 
                               }`}
 
@@ -2449,13 +2520,27 @@ export const StaffKdsPage: React.FC = () => {
 
           {/* Target Table Header Banner */}
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-slate-300">
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3.5">
 
-              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-base shadow-2xs">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-mono font-black text-sm shadow-2xs shrink-0 border ${currentSelectedTable.id && currentSelectedTable.id !== 'Chưa có'
 
-                {currentSelectedTable.id}
+                ? 'bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 border-blue-200'
+
+                : 'bg-slate-50 text-slate-400 border-slate-200'
+
+                }`}>
+
+                {currentSelectedTable.id && currentSelectedTable.id !== 'Chưa có' ? (
+
+                  currentSelectedTable.id
+
+                ) : (
+
+                  <Target className="w-5 h-5 text-slate-400" />
+
+                )}
 
               </div>
 
@@ -2463,13 +2548,13 @@ export const StaffKdsPage: React.FC = () => {
 
                 <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
 
-                  <span>{currentSelectedTable.name}</span>
+                  <span className="text-sm font-black tracking-tight">{currentSelectedTable.name}</span>
 
                   {currentSelectedTable.zone && currentSelectedTable.zone !== 'Toàn quán' && (
 
-                    <span className="text-[10px] font-mono font-normal text-slate-500">
+                    <span className="text-[10px] font-mono font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
 
-                      ({currentSelectedTable.zone})
+                      {currentSelectedTable.zone}
 
                     </span>
 
@@ -2477,9 +2562,49 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
 
-                  Trạng thái: <strong className="text-slate-800">{currentSelectedTable.status === 'waiting' ? 'Đang chờ món ăn' : currentSelectedTable.status === 'serving' ? 'Đang giao' : currentSelectedTable.status === 'merged' ? 'Đã gộp bàn (Giao tại Bàn Chính)' : 'Đang đón khách'}</strong>
+                  <span>Trạng thái:</span>
+
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold ${currentSelectedTable.status === 'waiting'
+
+                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+
+                    : currentSelectedTable.status === 'serving'
+
+                      ? 'bg-blue-100 text-blue-800 border border-blue-200 animate-pulse'
+
+                      : currentSelectedTable.status === 'merged'
+
+                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
+
+                        : currentSelectedTable.status === 'occupied'
+
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+
+                          : 'bg-slate-100 text-slate-700 border border-slate-200'
+
+                    }`}>
+
+                    {currentSelectedTable.status === 'waiting'
+
+                      ? 'Đang chờ món ăn'
+
+                      : currentSelectedTable.status === 'serving'
+
+                        ? 'Đang giao'
+
+                        : currentSelectedTable.status === 'merged'
+
+                          ? 'Đã gộp bàn (Giao bàn chính)'
+
+                          : currentSelectedTable.status === 'occupied'
+
+                            ? 'Khách đang dùng bữa'
+
+                            : 'Đang đón khách'}
+
+                  </span>
 
                 </div>
 
@@ -2489,7 +2614,7 @@ export const StaffKdsPage: React.FC = () => {
 
                   {currentSelectedTable.stationName || currentSelectedTable.stationId ? (
 
-                    <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                    <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1 shadow-2xs">
 
                       <MapPin className="w-3 h-3 text-purple-600" />
 
@@ -2499,7 +2624,7 @@ export const StaffKdsPage: React.FC = () => {
 
                   ) : (
 
-                    <span className="text-amber-600 font-mono text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                    <span className="text-amber-700 font-mono text-[10px] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
 
                       Chưa gán trạm
 
@@ -2521,7 +2646,7 @@ export const StaffKdsPage: React.FC = () => {
 
                     }}
 
-                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer transition-colors"
 
                   >
 
@@ -2535,39 +2660,138 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-            <span className="text-[11px] font-mono bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-lg border border-blue-200">
+            {/* Quick Actions Bridging Map to Dispatch Trays & Table Transfer */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:self-center">
 
-              Điểm Đích Đến
+              {dispatchMode === 'sequence' && currentSelectedTable.id !== 'Chưa có' && (
 
-            </span>
+                <>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => {
+
+                      setTray1Table(currentSelectedTable.name);
+
+                      setActiveTrayTarget('tray2');
+
+                      showToast(`Đã nạp ${currentSelectedTable.name} vào Khay 1 (Tầng 1)`, 'info');
+
+                    }}
+
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${activeTrayTarget === 'tray1'
+
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+
+                      : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'
+
+                      }`}
+
+                    title="Nạp bàn này vào Khay 1 (Tầng Dưới)"
+
+                  >
+
+                    ➔ Khay 1
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => {
+
+                      setTray2Table(currentSelectedTable.name);
+
+                      setActiveTrayTarget('tray1');
+
+                      showToast(`Đã nạp ${currentSelectedTable.name} vào Khay 2 (Tầng 2)`, 'info');
+
+                    }}
+
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${activeTrayTarget === 'tray2'
+
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+
+                      : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+
+                      }`}
+
+                    title="Nạp bàn này vào Khay 2 (Tầng Trên)"
+
+                  >
+
+                    ➔ Khay 2
+
+                  </button>
+
+                </>
+
+              )}
+
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono bg-blue-50 text-blue-700 font-bold px-2.5 py-1 rounded-lg border border-blue-200 shadow-2xs">
+
+                <Target className="w-3.5 h-3.5 text-blue-600" />
+
+                <span>Đích Đến</span>
+
+              </span>
+
+            </div>
 
           </div>
 
-          {/* Pending Orders Selector Bar */}
+          {/* Pending Orders Selector Bar & Dining Table Transfer */}
 
           {pendingOrders.length > 0 ? (
 
-            <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200/90 space-y-2">
+            <div className="p-3.5 bg-gradient-to-r from-amber-50/90 via-amber-50/60 to-orange-50/80 rounded-2xl border border-amber-200 space-y-2.5 shadow-2xs">
 
-              <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
 
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-2 font-black text-amber-950">
 
-                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
 
-                  <span>Đơn Món Chờ Ra Bếp ({pendingOrders.length})</span>
+                  <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+
+                  <span>ĐƠN MÓN CHỜ RA BẾP ({pendingOrders.length})</span>
+
+                  <span className="text-[10px] font-mono font-bold bg-amber-200/70 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+
+                    Dining Table Transfer
+
+                  </span>
 
                 </span>
 
-                <span className="text-[10px] font-mono text-amber-700">Click đơn để nạp khay</span>
+                <span className="text-[10px] font-medium text-amber-800">
+
+                  Click đơn để nạp khay • Nhấn <strong className="text-amber-900 font-bold font-mono">⇄ Đổi Bàn</strong> khi khách chuyển chỗ (HC-04)
+
+                </span>
 
               </div>
 
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="flex gap-2.5 overflow-x-auto pb-1 pt-0.5">
 
                 {pendingOrders.map((ord) => (
 
-                  <div key={ord.id} className="inline-flex items-center shrink-0 shadow-xs rounded-xl overflow-hidden">
+                  <div
+
+                    key={ord.id}
+
+                    className={`inline-flex items-stretch shrink-0 rounded-xl overflow-hidden border shadow-2xs transition-all ${activeOrderId === ord.id
+
+                      ? 'border-amber-500 ring-2 ring-amber-400/40 bg-white'
+
+                      : 'border-amber-200/90 bg-white hover:border-amber-300'
+
+                      }`}
+
+                  >
 
                     <button
 
@@ -2575,17 +2799,27 @@ export const StaffKdsPage: React.FC = () => {
 
                       onClick={() => handleSelectPendingOrder(ord)}
 
-                      className={`px-3 py-1.5 text-xs font-semibold transition-all border border-r-0 cursor-pointer ${activeOrderId === ord.id
+                      className={`px-3 py-2 text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${activeOrderId === ord.id
 
-                          ? 'bg-amber-600 text-white border-amber-600'
+                        ? 'bg-amber-600 text-white'
 
-                          : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100'
+                        : 'bg-white text-slate-800 hover:bg-amber-50/60'
 
                         }`}
 
                     >
 
-                      <span className="font-bold">{ord.orderNumber}</span> • {ord.tableNo} ({ord.items.length} món)
+                      <span className="font-mono font-black">{ord.orderNumber}</span>
+
+                      <span className={`text-[10px] ${activeOrderId === ord.id ? 'text-amber-200' : 'text-slate-400'}`}>•</span>
+
+                      <span className="font-bold">{ord.tableNo}</span>
+
+                      <span className={`text-[10px] font-normal ${activeOrderId === ord.id ? 'text-amber-100' : 'text-slate-500'}`}>
+
+                        ({ord.items.length} món)
+
+                      </span>
 
                     </button>
 
@@ -2593,7 +2827,7 @@ export const StaffKdsPage: React.FC = () => {
 
                       type="button"
 
-                      title="Đổi bàn cho đơn đang nấu (HC-04)"
+                      title="Đổi bàn cho đơn đang nấu (HC-04 / Dining Table Transfer)"
 
                       onClick={(e) => {
 
@@ -2615,11 +2849,13 @@ export const StaffKdsPage: React.FC = () => {
 
                       }}
 
-                      className="px-2 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-bold border border-amber-300 transition-colors cursor-pointer"
+                      className="px-2.5 py-2 bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 text-[11px] font-bold border-l border-amber-300 flex items-center gap-1 transition-all cursor-pointer"
 
                     >
 
-                      ⇄ Đổi
+                      <ArrowRightLeft className="w-3 h-3 text-amber-700" />
+
+                      <span>Đổi Bàn</span>
 
                     </button>
 
@@ -2633,35 +2869,44 @@ export const StaffKdsPage: React.FC = () => {
 
           ) : (
 
-            <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500">
+            <div className="p-3 bg-slate-50/90 rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500 shadow-2xs">
 
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-2">
+
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
 
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
 
-                <span>Chưa có đơn món chờ ra từ POS/QR</span>
+                <span>Chưa có đơn món chờ ra từ POS/QR (Bếp sẵn sàng)</span>
 
               </span>
 
-              <span className="text-[10px] text-slate-400 font-mono">Tự động đồng bộ</span>
+              <span className="text-[10px] text-slate-500 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">
+
+                Tự động đồng bộ Realtime
+
+              </span>
 
             </div>
 
           )}
 
-          {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR (DS-07 REALTIME DUAL CONFIRMATION) */}
+          {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR (ASSISTED DROP-OFF & DUAL CONFIRMATION) */}
 
           {activeSequence && (
 
-            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 text-white rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-blue-500/80 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-2xl border-2 border-blue-500 space-y-4 animate-in fade-in zoom-in-95 duration-200 relative overflow-hidden">
 
-              {/* Top Header */}
+              {/* Ambient High-Tech Glow */}
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              {/* Mission Telemetry Top Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-white/10 gap-2 relative z-10">
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
 
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-400/40 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center shadow-inner shrink-0">
 
                     <Navigation className="w-4 h-4 text-cyan-300 animate-spin-slow" />
 
@@ -2671,9 +2916,9 @@ export const StaffKdsPage: React.FC = () => {
 
                     <div className="text-xs font-black tracking-tight flex items-center gap-2">
 
-                      <span>CHUỖI ĐA BÀN 2 KHAY ĐANG THỰC HIỆN</span>
+                      <span className="uppercase text-cyan-200 font-mono">CHUỖI 2 KHAY ĐA BÀN ĐANG THỰC HIỆN</span>
 
-                      <span className="font-mono text-[10px] bg-blue-500/30 text-cyan-300 px-2 py-0.5 rounded border border-blue-400/30">
+                      <span className="font-mono text-[10px] font-bold bg-blue-500/30 text-cyan-300 px-2 py-0.5 rounded border border-blue-400/30">
 
                         {activeSequence.sequenceId}
 
@@ -2681,9 +2926,13 @@ export const StaffKdsPage: React.FC = () => {
 
                     </div>
 
-                    <div className="text-[11px] text-slate-300">
+                    <div className="text-[11px] text-slate-300 flex items-center gap-2 mt-0.5">
 
-                      Robot: <strong>{activeSequence.robotCode}</strong> ({activeSequence.robotName}) • Bắt đầu: {activeSequence.startTime}
+                      <span>Robot: <strong className="text-white font-mono">{activeSequence.robotCode}</strong> ({activeSequence.robotName})</span>
+
+                      <span className="text-slate-500">•</span>
+
+                      <span>Bắt đầu: <strong className="text-slate-200 font-mono">{activeSequence.startTime}</strong></span>
 
                     </div>
 
@@ -2691,209 +2940,240 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-                <span
+                <div className="flex items-center gap-2">
 
-                  className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border ${
+                  <span
 
-                    activeSequence.status === 'completed'
+                    className={`text-[10px] font-mono font-bold px-3 py-1 rounded-full border shadow-2xs ${activeSequence.status === 'completed'
 
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
 
                       : 'bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse'
 
-                  }`}
+                      }`}
 
-                >
+                  >
 
-                  {activeSequence.status === 'completed' ? 'Hoàn tất chuỗi' : `Đang chạy Chặng ${activeSequence.currentLegIndex + 1}/2`}
+                    {activeSequence.status === 'completed' ? 'Hoàn tất toàn chuỗi ✓' : `Đang giao: Chặng ${activeSequence.currentLegIndex + 1}/2`}
 
-                </span>
-
-              </div>
-
-              {/* 4-Step Visual Sequence Stepper */}
-
-              <div className="grid grid-cols-4 gap-1.5 p-2 rounded-xl bg-white/5 border border-white/10 text-center">
-
-                {/* Step 1: Kitchen */}
-
-                <div className="p-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40">
-
-                  <div className="text-[10px] text-slate-400 font-mono">Trạm 1</div>
-
-                  <div className="text-xs font-bold text-emerald-300">Bếp Trung Tâm</div>
-
-                  <div className="text-[9px] text-emerald-400 font-mono mt-0.5">Đã xuất phát ✓</div>
+                  </span>
 
                 </div>
 
-                {/* Step 2: Tray 1 -> Table 1 */}
+              </div>
 
-                <div
+              {/* 4-Step Visual Sequence Stepper with Realtime Indicators */}
+              <div className="relative z-10">
 
-                  className={`p-2 rounded-lg border transition-all ${
+                <div className="grid grid-cols-4 gap-2 text-center">
 
-                    activeSequence.legs[0].status === 'completed'
+                  {/* Step 1: Central Kitchen */}
+                  <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 shadow-inner flex flex-col justify-between">
+
+                    <div>
+
+                      <div className="text-[10px] text-emerald-300/80 font-mono font-bold uppercase">Trạm 1</div>
+
+                      <div className="text-xs font-black text-emerald-300 mt-0.5">Bếp Trung Tâm</div>
+
+                    </div>
+
+                    <div className="text-[9px] text-emerald-400 font-mono mt-1 font-bold">Đã xuất phát ✓</div>
+
+                  </div>
+
+                  {/* Step 2: Tray 1 -> Table 1 */}
+                  <div
+
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${activeSequence.legs[0].status === 'completed'
 
                       ? 'bg-emerald-500/20 border-emerald-500/40'
 
                       : activeSequence.currentLegIndex === 0
 
-                        ? 'bg-blue-600/40 border-blue-400 ring-2 ring-blue-400/30 animate-pulse'
+                        ? 'bg-blue-600/40 border-cyan-400 ring-2 ring-cyan-400/40 shadow-lg shadow-blue-500/20'
 
                         : 'bg-white/5 border-white/10 opacity-60'
 
-                  }`}
-
-                >
-
-                  <div className="text-[10px] text-slate-400 font-mono">Khay 1 (Tầng 1)</div>
-
-                  <div className="text-xs font-bold text-white">{activeSequence.legs[0].tableNo}</div>
-
-                  <div
-
-                    className={`text-[9px] font-mono mt-0.5 ${
-
-                      activeSequence.legs[0].status === 'completed' ? 'text-emerald-400' : 'text-cyan-300 font-bold'
-
-                    }`}
+                      }`}
 
                   >
 
-                    {activeSequence.legs[0].status === 'completed' ? 'Đã lấy món ✓' : 'Đang tới bàn...'}
+                    <div>
+
+                      <div className="text-[10px] text-cyan-200/80 font-mono font-bold uppercase">Khay 1 (Tầng 1)</div>
+
+                      <div className="text-xs font-black text-white mt-0.5">{activeSequence.legs[0].tableNo}</div>
+
+                    </div>
+
+                    <div>
+
+                      <div
+
+                        className={`text-[9px] font-mono mt-1 ${activeSequence.legs[0].status === 'completed'
+
+                          ? 'text-emerald-400 font-bold'
+
+                          : activeSequence.currentLegIndex === 0
+
+                            ? 'text-cyan-300 font-extrabold animate-pulse'
+
+                            : 'text-slate-400'
+
+                          }`}
+
+                      >
+
+                        {activeSequence.legs[0].status === 'completed' ? 'Đã lấy món ✓' : 'Đang tới bàn...'}
+
+                      </div>
+
+                      {activeSequence.legs[0].status !== 'completed' && activeSequence.status === 'in_progress' && (
+
+                        <button
+
+                          type="button"
+
+                          onClick={(e) => {
+
+                            e.stopPropagation();
+
+                            handleOpenRerouteModal(0);
+
+                          }}
+
+                          className="mt-1.5 w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-95"
+
+                          title="Đổi bàn giữa chặng cho Khay 1 (Mid-Transit Table Transfer)"
+
+                        >
+
+                          <ArrowRightLeft className="w-3 h-3 text-amber-300" />
+
+                          <span>Đổi Bàn</span>
+
+                        </button>
+
+                      )}
+
+                    </div>
 
                   </div>
 
-                  {activeSequence.legs[0].status !== 'completed' && activeSequence.status === 'in_progress' && (
+                  {/* Step 3: Tray 2 -> Table 2 */}
+                  <div
 
-                    <button
-
-                      type="button"
-
-                      onClick={(e) => {
-
-                        e.stopPropagation();
-
-                        handleOpenRerouteModal(0);
-
-                      }}
-
-                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
-
-                    >
-
-                      Đổi Bàn
-
-                    </button>
-
-                  )}
-
-                </div>
-
-                {/* Step 3: Tray 2 -> Table 2 */}
-
-                <div
-
-                  className={`p-2 rounded-lg border transition-all ${
-
-                    activeSequence.legs[1].status === 'completed'
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${activeSequence.legs[1].status === 'completed'
 
                       ? 'bg-emerald-500/20 border-emerald-500/40'
 
                       : activeSequence.currentLegIndex === 1
 
-                        ? 'bg-blue-600/40 border-blue-400 ring-2 ring-blue-400/30 animate-pulse'
+                        ? 'bg-indigo-600/40 border-indigo-400 ring-2 ring-indigo-400/40 shadow-lg shadow-indigo-500/20'
 
                         : 'bg-white/5 border-white/10 opacity-60'
 
-                  }`}
-
-                >
-
-                  <div className="text-[10px] text-slate-400 font-mono">Khay 2 (Tầng 2)</div>
-
-                  <div className="text-xs font-bold text-white">{activeSequence.legs[1].tableNo}</div>
-
-                  <div
-
-                    className={`text-[9px] font-mono mt-0.5 ${
-
-                      activeSequence.legs[1].status === 'completed'
-
-                        ? 'text-emerald-400'
-
-                        : activeSequence.currentLegIndex === 1
-
-                          ? 'text-cyan-300 font-bold'
-
-                          : 'text-slate-400'
-
-                    }`}
+                      }`}
 
                   >
 
-                    {activeSequence.legs[1].status === 'completed'
+                    <div>
 
-                      ? 'Đã lấy món ✓'
+                      <div className="text-[10px] text-indigo-200/80 font-mono font-bold uppercase">Khay 2 (Tầng 2)</div>
 
-                      : activeSequence.currentLegIndex === 1
+                      <div className="text-xs font-black text-white mt-0.5">{activeSequence.legs[1].tableNo}</div>
 
-                        ? 'Đang tới bàn...'
+                    </div>
 
-                        : 'Chờ chặng 1'}
+                    <div>
+
+                      <div
+
+                        className={`text-[9px] font-mono mt-1 ${activeSequence.legs[1].status === 'completed'
+
+                          ? 'text-emerald-400 font-bold'
+
+                          : activeSequence.currentLegIndex === 1
+
+                            ? 'text-cyan-300 font-extrabold animate-pulse'
+
+                            : 'text-slate-400'
+
+                          }`}
+
+                      >
+
+                        {activeSequence.legs[1].status === 'completed'
+
+                          ? 'Đã lấy món ✓'
+
+                          : activeSequence.currentLegIndex === 1
+
+                            ? 'Đang tới bàn...'
+
+                            : 'Chờ chặng 1'}
+
+                      </div>
+
+                      {activeSequence.legs[1].status !== 'completed' && activeSequence.status === 'in_progress' && (
+
+                        <button
+
+                          type="button"
+
+                          onClick={(e) => {
+
+                            e.stopPropagation();
+
+                            handleOpenRerouteModal(1);
+
+                          }}
+
+                          className="mt-1.5 w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-95"
+
+                          title="Đổi bàn giữa chặng cho Khay 2 (Mid-Transit Table Transfer)"
+
+                        >
+
+                          <ArrowRightLeft className="w-3 h-3 text-amber-300" />
+
+                          <span>Đổi Bàn</span>
+
+                        </button>
+
+                      )}
+
+                    </div>
 
                   </div>
 
-                  {activeSequence.legs[1].status !== 'completed' && activeSequence.status === 'in_progress' && (
+                  {/* Step 4: Back to Central Kitchen */}
+                  <div
 
-                    <button
-
-                      type="button"
-
-                      onClick={(e) => {
-
-                        e.stopPropagation();
-
-                        handleOpenRerouteModal(1);
-
-                      }}
-
-                      className="mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 cursor-pointer transition-all"
-
-                    >
-
-                      Đổi Bàn
-
-                    </button>
-
-                  )}
-
-                </div>
-
-                {/* Step 4: Back to Kitchen */}
-
-                <div
-
-                  className={`p-2 rounded-lg border transition-all ${
-
-                    activeSequence.status === 'completed'
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${activeSequence.status === 'completed'
 
                       ? 'bg-emerald-500/20 border-emerald-500/40'
 
                       : 'bg-white/5 border-white/10 opacity-60'
 
-                  }`}
+                      }`}
 
-                >
+                  >
 
-                  <div className="text-[10px] text-slate-400 font-mono">Trạm Cuối</div>
+                    <div>
 
-                  <div className="text-xs font-bold text-white">Về Bếp</div>
+                      <div className="text-[10px] text-slate-400 font-mono font-bold uppercase">Trạm Cuối</div>
 
-                  <div className="text-[9px] font-mono mt-0.5 text-slate-400">
+                      <div className="text-xs font-black text-white mt-0.5">Về Bếp</div>
 
-                    {activeSequence.status === 'completed' ? 'Đã về bãi ✓' : 'Tự động quay về'}
+                    </div>
+
+                    <div className="text-[9px] font-mono mt-1 text-slate-400">
+
+                      {activeSequence.status === 'completed' ? 'Đã về bãi ✓' : 'Tự động quay về'}
+
+                    </div>
 
                   </div>
 
@@ -2901,101 +3181,136 @@ export const StaffKdsPage: React.FC = () => {
 
               </div>
 
-              {/* Dual Confirmation Actions Panel */}
-
+              {/* DUAL CONFIRMATION TERMINAL (ASSISTED DROP-OFF) */}
               {activeSequence.status === 'in_progress' ? (
 
-                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-400/30 space-y-3">
+                <div className="p-4 rounded-xl bg-gradient-to-b from-blue-950/70 to-slate-900/95 border border-cyan-500/40 space-y-3.5 relative z-10 shadow-xl">
 
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-white/10">
 
-                    <span className="flex items-center gap-1.5 text-cyan-300 font-bold">
+                    <span className="flex items-center gap-2 text-xs font-black text-cyan-300 uppercase tracking-wide">
 
-                      <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                      <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
 
-                      <span>Xác Nhận Kép (Dual Confirmation: Nút Bấm ESP32 / Web)</span>
-
-                    </span>
-
-                    <span className="text-[10px] font-mono text-slate-400">
-
-                      Đang ở {activeSequence.legs[activeSequence.currentLegIndex].tableNo}
+                      <span>ASSISTED DROP-OFF • XÁC NHẬN KÉP TRẢ MÓN (DUAL CONFIRMATION)</span>
 
                     </span>
 
-                  </div>
+                    <span className="text-[11px] font-mono font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-400/30 flex items-center gap-1">
 
-                  <div className="text-[11px] text-slate-300 leading-relaxed">
+                      <span>Đang Dừng Tại:</span>
 
-                    Robot đang dừng phục vụ tại <strong>{activeSequence.legs[activeSequence.currentLegIndex].tableNo}</strong>. Khách hàng lấy đồ ăn và bấm <strong>Nút bấm ESP32</strong> trên xe HOẶC nhân viên xác nhận tại Web:
+                      <strong className="text-white">{activeSequence.legs[activeSequence.currentLegIndex].tableNo}</strong>
 
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-
-                    {/* Button 1: Web KDS Confirmation */}
-
-                    <button
-
-                      type="button"
-
-                      disabled={isConfirmingTable}
-
-                      onClick={() => handleConfirmNextTable(false)}
-
-                      className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-blue-400/40"
-
-                    >
-
-                      {isConfirmingTable ? (
-
-                        <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-
-                      ) : (
-
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-
-                      )}
-
-                      <span>
-
-                        {activeSequence.currentLegIndex === 0
-
-                          ? `Xác Nhận (Web): Đến ${activeSequence.legs[1].tableNo}`
-
-                          : 'Xác Nhận (Web): Xe Quay Về Bếp'}
-
-                      </span>
-
-                    </button>
-
-                    {/* Button 2: Simulate Physical ESP32 Hardware Button Push */}
-
-                    <button
-
-                      type="button"
-
-                      disabled={isConfirmingTable}
-
-                      onClick={() => handleConfirmNextTable(true)}
-
-                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer border border-emerald-500/40"
-
-                      title="Mô phỏng nhân viên phục vụ nhấn nút vật lý ESP32 gắn trên thân robot"
-
-                    >
-
-                      <Cpu className="w-3.5 h-3.5 text-amber-300" />
-
-                      <span>Mô Phỏng Nút Bấm ESP32</span>
-
-                    </button>
+                    </span>
 
                   </div>
 
-                  {/* Mid-Transit Table Transfer & Obstacle Pause/Resume (UC-08) */}
+                  {/* Tray Guidance Banner (Chỉ định khay lấy món chống nhầm lẫn giữa 2 bàn) */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-3 transition-all ${activeSequence.currentLegIndex === 0
+                    ? 'bg-amber-500/15 border-amber-400/40 text-amber-200'
+                    : 'bg-indigo-500/15 border-indigo-400/40 text-indigo-200'
+                    }`}>
+                    <div className={`p-2 rounded-lg shrink-0 mt-0.5 ${activeSequence.currentLegIndex === 0 ? 'bg-amber-500/30 text-amber-300' : 'bg-indigo-500/30 text-indigo-300'
+                      }`}>
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black tracking-wider uppercase">
+                          {activeSequence.currentLegIndex === 0 ? `CHẶNG 1: TRẢ MÓN BÀN ${activeSequence.legs[0].tableNo}` : `CHẶNG 2: TRẢ MÓN BÀN ${activeSequence.legs[1].tableNo}`}
+                        </span>
+                        <span className="text-[9px] font-mono px-2 py-0.5 rounded-md bg-white/10 font-bold">
+                          {activeSequence.currentLegIndex === 0 ? 'Chặng 1/2' : 'Chặng 2/2'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
+                        <span>Chỉ lấy món ở:</span>
+                        <span className={`px-2 py-0.5 rounded-md font-mono font-black text-xs ${activeSequence.currentLegIndex === 0 ? 'bg-amber-400 text-slate-950 shadow-xs' : 'bg-indigo-400 text-slate-950 shadow-xs'
+                          }`}>
+                          {activeSequence.currentLegIndex === 0 ? 'KHAY 1 (TẦNG DƯỚI)' : 'KHAY 2 (TẦNG TRÊN)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-normal">
+                        {activeSequence.currentLegIndex === 0 ? (
+                          <>⚠️ Khay 2 (Tầng Trên) đang khóa bảo lưu cho bàn <strong>{activeSequence.legs[1].tableNo}</strong>. Tuyệt đối không nhấc đĩa ở tầng trên.</>
+                        ) : (
+                          <>Khay 1 (Tầng Dưới) đã giao xong. Sau khi bàn <strong>{activeSequence.legs[1].tableNo}</strong> nhận khay 2, robot sẽ tự động quay về trạm bếp.</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
 
-                  <div className="pt-1 border-t border-white/10 space-y-2">
+                  {/* Phân định 2 kênh xác nhận: Kênh 1 (Tại Bàn) & Kênh 2 (Tại Bếp) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+
+                    {/* Kênh 1: Tại Bàn (Khách / Nhân Viên Bấm Nút ESP32 Gắn Trên Xe) */}
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex flex-col justify-between space-y-2">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
+                            <Cpu className="w-3.5 h-3.5" />
+                            Kênh 1 • Bấm Tại Bàn (Khách/Runner)
+                          </span>
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30 font-bold">Mặc Định</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                          Khách hoặc nhân viên tại bàn {activeSequence.legs[activeSequence.currentLegIndex].tableNo} nhấc món xong và ấn nút vật lý trên xe.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isConfirmingTable}
+                        onClick={() => handleConfirmNextTable(true)}
+                        className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer border border-emerald-400/50"
+                        title="Mô phỏng nhân viên phục vụ hoặc khách bấm nút vật lý ESP32 gắn trên robot"
+                      >
+                        {isConfirmingTable ? (
+                          <RotateCcw className="w-4 h-4 animate-spin text-white" />
+                        ) : (
+                          <Cpu className="w-4 h-4 text-amber-300" />
+                        )}
+                        <span>Mô Phỏng Nút ESP32 (Xe AMR)</span>
+                      </button>
+                    </div>
+
+                    {/* Kênh 2: Tại Bếp (Nhân viên Điều phối Web KDS ghi đè từ xa) */}
+                    <div className="p-3 rounded-xl bg-slate-900/80 border border-blue-500/30 flex flex-col justify-between space-y-2">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold text-blue-400 uppercase flex items-center gap-1">
+                            <Radio className="w-3.5 h-3.5" />
+                            Kênh 2 • Tại Bếp (Web KDS)
+                          </span>
+                          <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-bold">Ghi Đè (Override)</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                          Dùng khi khách quên bấm nút vật lý hoặc sự cố kết nối ESP32. Bếp quan sát rồi xác nhận từ xa.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isConfirmingTable}
+                        onClick={() => handleConfirmNextTable(false)}
+                        className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all cursor-pointer border border-blue-400/50"
+                      >
+                        {isConfirmingTable ? (
+                          <RotateCcw className="w-4 h-4 animate-spin text-white" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                        )}
+                        <span>
+                          {activeSequence.currentLegIndex === 0
+                            ? `Xác Nhận (Web): Đến ${activeSequence.legs[1].tableNo}`
+                            : 'Xác Nhận (Web): Xe Quay Về Bếp'}
+                        </span>
+                      </button>
+                    </div>
+
+                  </div>
+
+                  {/* Operational Override & Obstacle Control */}
+                  <div className="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-2">
 
                     <button
 
@@ -3003,11 +3318,13 @@ export const StaffKdsPage: React.FC = () => {
 
                       onClick={() => handleOpenRerouteModal(activeSequence.currentLegIndex)}
 
-                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-cyan-300 text-xs font-semibold border border-cyan-500/30 transition-all cursor-pointer text-center"
+                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
 
                     >
 
-                      Đổi Bàn Giữa Chặng Cho Khay {activeSequence.currentLegIndex + 1}
+                      <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400" />
+
+                      <span>Đổi Bàn Giữa Chặng (Khay {activeSequence.currentLegIndex + 1})</span>
 
                     </button>
 
@@ -3017,19 +3334,17 @@ export const StaffKdsPage: React.FC = () => {
 
                       onClick={handleTogglePauseTask}
 
-                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isTaskPaused
 
-                        isTaskPaused
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 hover:bg-amber-500/30 animate-pulse'
 
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-400/40 hover:bg-amber-500/30 animate-pulse'
+                        : 'bg-slate-800/90 text-slate-300 border-white/10 hover:bg-slate-700'
 
-                          : 'bg-slate-800/80 text-slate-300 border-white/10 hover:bg-slate-700'
-
-                      }`}
+                        }`}
 
                     >
 
-                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
 
                       <span>{isTaskPaused ? '▶ Tiếp Tục Di Chuyển (Đã Dọn Vật Cản - UC-08)' : '⏸ Tạm Dừng Tránh Vật Cản Hành Lang (UC-08)'}</span>
 
@@ -3041,13 +3356,13 @@ export const StaffKdsPage: React.FC = () => {
 
               ) : (
 
-                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-xs text-emerald-300 flex items-center justify-between">
+                <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-xs text-emerald-300 flex items-center justify-between">
 
                   <div className="flex items-center gap-2">
 
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
 
-                    <span>Toàn bộ chuỗi 2 khay đã phục vụ thành công! Xe đã quay về trạm.</span>
+                    <span className="font-bold">Toàn bộ chuỗi 2 khay đã phục vụ thành công! Xe đã quay về trạm an toàn.</span>
 
                   </div>
 
@@ -3057,11 +3372,11 @@ export const StaffKdsPage: React.FC = () => {
 
                     onClick={() => setActiveSequence(null)}
 
-                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold border border-white/20 transition-all cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold border border-emerald-400/30 transition-all cursor-pointer shadow-xs"
 
                   >
 
-                    Đóng / Tạo Lượt Mới
+                    Tạo Lượt Mới
 
                   </button>
 
@@ -3111,15 +3426,13 @@ export const StaffKdsPage: React.FC = () => {
 
                 onClick={() => setDispatchMode('sequence')}
 
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${dispatchMode === 'sequence'
 
-                  dispatchMode === 'sequence'
+                  ? 'bg-blue-600 text-white shadow-xs'
 
-                    ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
 
-                    : 'text-slate-600 hover:text-slate-900'
-
-                }`}
+                  }`}
 
               >
 
@@ -3129,11 +3442,9 @@ export const StaffKdsPage: React.FC = () => {
 
                 <span
 
-                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${dispatchMode === 'sequence' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
 
-                    dispatchMode === 'sequence' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'
-
-                  }`}
+                    }`}
 
                 >
 
@@ -3149,15 +3460,13 @@ export const StaffKdsPage: React.FC = () => {
 
                 onClick={() => setDispatchMode('single')}
 
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${dispatchMode === 'single'
 
-                  dispatchMode === 'single'
+                  ? 'bg-blue-600 text-white shadow-xs'
 
-                    ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
 
-                    : 'text-slate-600 hover:text-slate-900'
-
-                }`}
+                  }`}
 
               >
 
@@ -3176,8 +3485,7 @@ export const StaffKdsPage: React.FC = () => {
               <div className="space-y-3.5">
 
                 {/* TRAY 1 (LEVEL 1 - TẦNG DƯỚI) */}
-
-                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5">
+                <div className="p-3.5 rounded-xl border border-blue-200/80 bg-blue-50/30 space-y-2.5">
 
                   <div className="flex items-center justify-between">
 
@@ -3219,7 +3527,7 @@ export const StaffKdsPage: React.FC = () => {
 
                         onChange={(e) => setTray1Table(e.target.value)}
 
-                        placeholder="Ví dụ: Bàn 11..."
+                        placeholder="Click bàn trên map hoặc nhập..."
 
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
 
@@ -3253,13 +3561,15 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-                  {/* Suggestion chips for Tray 1 */}
-
+                  {/* Suggestion chips for Tray 1 - Dynamic from tables */}
                   <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
 
                     <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
 
-                    {['Bàn 11', 'Bàn 01', 'Bàn 02', 'Bàn 03'].map((tbl) => (
+                    {(tables.length > 0
+                      ? tables.slice(0, 6).map((t) => t.name)
+                      : ['Bàn 01', 'Bàn 02', 'Bàn 03', 'Bàn 04']
+                    ).map((tbl) => (
 
                       <button
 
@@ -3267,17 +3577,21 @@ export const StaffKdsPage: React.FC = () => {
 
                         type="button"
 
-                        onClick={() => setTray1Table(tbl)}
+                        onClick={() => {
 
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${
+                          setTray1Table(tbl);
 
-                          tray1Table === tbl
+                          setActiveTrayTarget('tray2');
 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                        }}
 
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${tray1Table === tbl
 
-                        }`}
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+
+                          }`}
 
                       >
 
@@ -3292,8 +3606,7 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
 
                 {/* TRAY 2 (LEVEL 2 - TẦNG TRÊN) */}
-
-                <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-2.5">
+                <div className="p-3.5 rounded-xl border border-indigo-200/80 bg-indigo-50/30 space-y-2.5">
 
                   <div className="flex items-center justify-between">
 
@@ -3335,7 +3648,7 @@ export const StaffKdsPage: React.FC = () => {
 
                         onChange={(e) => setTray2Table(e.target.value)}
 
-                        placeholder="Ví dụ: Bàn 12..."
+                        placeholder="Click bàn trên map hoặc nhập..."
 
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
 
@@ -3369,13 +3682,15 @@ export const StaffKdsPage: React.FC = () => {
 
                   </div>
 
-                  {/* Suggestion chips for Tray 2 */}
-
+                  {/* Suggestion chips for Tray 2 - Dynamic from tables */}
                   <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
 
                     <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
 
-                    {['Bàn 12', 'Bàn 04', 'Bàn 05', 'Bàn 06'].map((tbl) => (
+                    {(tables.length > 0
+                      ? tables.slice(0, 6).map((t) => t.name)
+                      : ['Bàn 02', 'Bàn 03', 'Bàn 04', 'Bàn 05']
+                    ).map((tbl) => (
 
                       <button
 
@@ -3383,17 +3698,21 @@ export const StaffKdsPage: React.FC = () => {
 
                         type="button"
 
-                        onClick={() => setTray2Table(tbl)}
+                        onClick={() => {
 
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${
+                          setTray2Table(tbl);
 
-                          tray2Table === tbl
+                          setActiveTrayTarget('tray1');
 
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        }}
 
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${tray2Table === tbl
 
-                        }`}
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+
+                          }`}
 
                       >
 
@@ -3408,36 +3727,81 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
 
                 {/* Sequence Route Preview */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 space-y-2">
 
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
+                  <div className="flex items-center justify-between">
 
-                  <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 font-bold text-slate-900">
 
-                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
 
-                    <span>Lộ Trình Tuần Tự:</span>
+                      <span>Lộ Trình Tuần Tự (Multi-Table Sequence):</span>
 
-                  </span>
+                    </span>
 
-                  <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200">
+                    <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs">
 
-                    <span className="text-emerald-700">Bếp</span>
+                      <span className="text-emerald-700">Bếp</span>
 
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
+                      <ArrowRight className="w-3 h-3 text-slate-400" />
 
-                    <span className="text-blue-700">{tray1Table || 'Bàn A'}</span>
+                      <span className="text-blue-700 font-extrabold">{tray1Table || 'Khay 1'}</span>
 
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
+                      <ArrowRight className="w-3 h-3 text-slate-400" />
 
-                    <span className="text-indigo-700">{tray2Table || 'Bàn B'}</span>
+                      <span className="text-indigo-700 font-extrabold">{tray2Table || 'Khay 2'}</span>
 
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
+                      <ArrowRight className="w-3 h-3 text-slate-400" />
 
-                    <span className="text-slate-500">Về Bếp</span>
+                      <span className="text-slate-500">Về Bếp</span>
+
+                    </div>
 
                   </div>
 
+                  {/* Merged table warning if either tray is merged */}
+                  {(tables.find((t) => t.name.toLowerCase() === tray1Table.toLowerCase())?.status === 'merged' ||
+                    tables.find((t) => t.name.toLowerCase() === tray2Table.toLowerCase())?.status === 'merged') && (
+                      <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] flex items-center gap-1.5 font-medium">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Lưu ý: Có bàn đã gộp. Robot AMR sẽ tự động điều phối trả món tại Trạm Bàn Chính tương ứng.</span>
+                      </div>
+                    )}
+
                 </div>
+
+                {/* STANDBY WORKFLOW PIPELINE: Visible in Standby to avoid empty state confusion */}
+                {!activeSequence && (
+                  <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs space-y-2 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                        <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                        <span>QUY TRÌNH CHUỖI 2 KHAY &amp; ASSISTED DROP-OFF</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
+                        DS-07 Realtime
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-mono pt-1">
+                      <div className="p-2 rounded-lg bg-white border border-blue-200 text-slate-700">
+                        <div className="font-bold text-blue-700">1. Xuất Bếp</div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">Nạp 2 khay</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-white border border-blue-200 text-slate-700">
+                        <div className="font-bold text-blue-700">2. Đến Khay 1</div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">ESP32 / Đổi Bàn</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-white border border-indigo-200 text-slate-700">
+                        <div className="font-bold text-indigo-700">3. Đến Khay 2</div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">ESP32 / Đổi Bàn</div>
+                      </div>
+                      <div className="p-2 rounded-lg bg-white border border-emerald-200 text-slate-700">
+                        <div className="font-bold text-emerald-700">4. Về Bếp</div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">Tự động</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
 
@@ -3499,15 +3863,13 @@ export const StaffKdsPage: React.FC = () => {
 
                         onClick={() => setOrderInputId(chip)}
 
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${orderInputId === chip
 
-                          orderInputId === chip
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
 
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
 
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-
-                        }`}
+                          }`}
 
                       >
 
@@ -3569,21 +3931,21 @@ export const StaffKdsPage: React.FC = () => {
 
                       : [
 
-                          { id: '01', name: 'Bàn 01' },
+                        { id: '01', name: 'Bàn 01' },
 
-                          { id: '02', name: 'Bàn 02' },
+                        { id: '02', name: 'Bàn 02' },
 
-                          { id: '03', name: 'Bàn 03' },
+                        { id: '03', name: 'Bàn 03' },
 
-                          { id: '04', name: 'Bàn 04' },
+                        { id: '04', name: 'Bàn 04' },
 
-                          { id: '05', name: 'Bàn 05' },
+                        { id: '05', name: 'Bàn 05' },
 
-                          { id: '06', name: 'Bàn 06' },
+                        { id: '06', name: 'Bàn 06' },
 
-                          { id: 'VIP', name: 'Bàn VIP 01' },
+                        { id: 'VIP', name: 'Bàn VIP 01' },
 
-                        ]
+                      ]
 
                     ).map((tbl) => (
 
@@ -3601,15 +3963,13 @@ export const StaffKdsPage: React.FC = () => {
 
                         }}
 
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${destinationInput === tbl.name
 
-                          destinationInput === tbl.name
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
 
-                            ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
 
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-
-                        }`}
+                          }`}
 
                       >
 
@@ -3689,9 +4049,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${isAutoSelectMode
 
-                      ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-xs'
 
-                      : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900'
 
                     }`}
 
@@ -3711,9 +4071,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   className={`px-2.5 py-1 rounded-lg transition-all ${!isAutoSelectMode
 
-                      ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-xs'
 
-                      : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900'
 
                     }`}
 
@@ -3787,9 +4147,21 @@ export const StaffKdsPage: React.FC = () => {
 
               ) : (
 
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/90 text-xs text-amber-900 space-y-1.5 shadow-2xs">
 
-                  Hiện không có AMR nào ở trạng thái rảnh và đủ điều kiện pin (&gt;30%). Vui lòng kiểm tra lại đội xe.
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+
+                    <span>Chưa Có Robot AMR Khả Dụng Để Nhận Lệnh</span>
+
+                  </div>
+
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+
+                    Điều kiện dispatch: Robot ở trạng thái <strong className="font-semibold text-slate-800">Rảnh (Idle)</strong>, pin <strong className="font-semibold text-slate-800">&gt; 30%</strong> và kết nối online với trạm điều phối Bếp.
+
+                  </p>
 
                 </div>
 
@@ -3827,13 +4199,13 @@ export const StaffKdsPage: React.FC = () => {
 
                         className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col justify-between ${isSelected
 
-                            ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold shadow-xs'
+                          ? 'border-blue-600 bg-blue-50 text-blue-900 font-bold shadow-xs'
 
-                            : isBusy
+                          : isBusy
 
-                              ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60'
+                            ? 'border-slate-200 bg-slate-50 text-slate-400 opacity-60'
 
-                              : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                            : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
 
                           }`}
 
@@ -3887,25 +4259,23 @@ export const StaffKdsPage: React.FC = () => {
 
               onClick={dispatchMode === 'sequence' ? handleDispatchSequence : handleDispatchOrder}
 
-              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
+              className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isDispatching
 
-                isDispatching
+                ? 'bg-blue-400 text-white cursor-not-allowed'
 
-                  ? 'bg-blue-400 text-white cursor-not-allowed'
+                : !effectiveRobot ||
 
-                  : !effectiveRobot ||
+                  (dispatchMode === 'sequence'
 
-                    (dispatchMode === 'sequence'
+                    ? !tray1Table.trim() || !tray2Table.trim()
 
-                      ? !tray1Table.trim() || !tray2Table.trim()
+                    : !destinationInput.trim())
 
-                      : !destinationInput.trim())
+                  ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
 
-                    ? 'bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75'
+                  : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
 
-                    : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer'
-
-              }`}
+                }`}
 
             >
 
@@ -4051,15 +4421,13 @@ export const StaffKdsPage: React.FC = () => {
 
                     <span
 
-                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${task.status === 'Delivering'
 
-                        task.status === 'Delivering'
+                        ? 'bg-blue-100 text-blue-700'
 
-                          ? 'bg-blue-100 text-blue-700'
+                        : 'bg-emerald-100 text-emerald-700'
 
-                          : 'bg-emerald-100 text-emerald-700'
-
-                      }`}
+                        }`}
 
                     >
 
@@ -4145,25 +4513,23 @@ export const StaffKdsPage: React.FC = () => {
 
           onClick={dispatchMode === 'sequence' ? handleDispatchSequence : handleDispatchOrder}
 
-          className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
+          className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${isDispatching
 
-            isDispatching
+            ? 'bg-blue-400 text-white cursor-not-allowed'
 
-              ? 'bg-blue-400 text-white cursor-not-allowed'
+            : !effectiveRobot ||
 
-              : !effectiveRobot ||
+              (dispatchMode === 'sequence'
 
-                (dispatchMode === 'sequence'
+                ? !tray1Table.trim() || !tray2Table.trim()
 
-                  ? !tray1Table.trim() || !tray2Table.trim()
+                : !destinationInput.trim())
 
-                  : !destinationInput.trim())
+              ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
 
-                ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
+              : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer'
 
-                : 'bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer'
-
-          }`}
+            }`}
 
         >
 
@@ -4203,7 +4569,7 @@ export const StaffKdsPage: React.FC = () => {
 
       </div>
 
-      {/* MID-TRANSIT TABLE REROUTE MODAL */}
+      {/* MID-TRANSIT TABLE REROUTE MODAL (MAIN FLOW: TABLE TRANSFER) */}
 
       {isRerouteModalOpen && activeSequence && (
 
@@ -4211,31 +4577,80 @@ export const StaffKdsPage: React.FC = () => {
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
 
-            <div className="border-b border-slate-100 pb-3">
+            <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
 
-              <h3 className="text-sm font-bold text-slate-900 font-heading">
+              <div>
 
-                Đổi Bàn Giữa Chặng (Mid-Transit Reroute)
+                <h3 className="text-sm font-black text-slate-900 font-heading flex items-center gap-2">
 
-              </h3>
+                  <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
 
-              <p className="text-xs text-slate-500 mt-1">
+                    <ArrowRightLeft className="w-4 h-4 text-amber-600" />
 
-                Chuyển hướng di chuyển của Robot {activeSequence.robotCode} sang bàn ăn mới.
+                  </div>
 
-              </p>
+                  <span>Đổi Bàn Giữa Chặng (Mid-Transit Table Transfer)</span>
+
+                </h3>
+
+                <p className="text-xs text-slate-500 mt-1">
+
+                  Chuyển hướng di chuyển thời gian thực của Robot <strong className="text-slate-800 font-mono">{activeSequence.robotCode}</strong> sang bàn mới.
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                onClick={() => setIsRerouteModalOpen(false)}
+
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer transition-colors"
+
+              >
+
+                <X className="w-4 h-4" />
+
+              </button>
 
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5">
 
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              {/* From-To Visual Indicator */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs shadow-2xs">
 
-                <div className="text-slate-500">Khay đang đổi hướng:</div>
+                <div>
 
-                <div className="font-bold text-slate-900">
+                  <div className="text-[10px] font-mono text-slate-500 font-semibold uppercase">Khay {rerouteLegIndex + 1} Hiện Tại</div>
 
-                  Khay {rerouteLegIndex + 1} (Hiện tại: {activeSequence.legs[rerouteLegIndex]?.tableNo})
+                  <div className="font-extrabold text-slate-900 text-sm mt-0.5">
+
+                    {activeSequence.legs[rerouteLegIndex]?.tableNo}
+
+                  </div>
+
+                </div>
+
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-100/80 border border-amber-200 text-amber-900 font-mono text-[10px] font-bold">
+
+                  <span>Đổi Hướng</span>
+
+                  <ArrowRight className="w-3 h-3 text-amber-700" />
+
+                </div>
+
+                <div className="text-right">
+
+                  <div className="text-[10px] font-mono text-blue-600 font-semibold uppercase">Đích Đến Mới</div>
+
+                  <div className="font-extrabold text-blue-700 text-sm mt-0.5">
+
+                    {rerouteNewTable || 'Chưa chọn'}
+
+                  </div>
 
                 </div>
 
@@ -4243,9 +4658,9 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
 
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
 
-                  Chọn Bàn Đích Mới
+                  Chọn Bàn Đích Mới (Khả Dụng)
 
                 </label>
 
@@ -4255,7 +4670,7 @@ export const StaffKdsPage: React.FC = () => {
 
                   onChange={(e) => setRerouteNewTable(e.target.value)}
 
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs cursor-pointer"
 
                 >
 
@@ -4279,7 +4694,7 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
 
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
 
                   Lý do chuyển bàn (Tùy chọn)
 
@@ -4293,9 +4708,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   onChange={(e) => setRerouteReason(e.target.value)}
 
-                  placeholder="Khách đổi sang bàn máy lạnh, gộp tiệc..."
+                  placeholder="Ví dụ: Khách đổi sang bàn phòng lạnh, gộp tiệc..."
 
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
 
                 />
 
@@ -4303,7 +4718,7 @@ export const StaffKdsPage: React.FC = () => {
 
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
 
               <button
 
@@ -4329,11 +4744,13 @@ export const StaffKdsPage: React.FC = () => {
 
                 onClick={handleConfirmReroute}
 
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-md shadow-blue-500/15 transition-all cursor-pointer flex items-center gap-1.5"
 
               >
 
-                {isSubmittingReroute ? 'Đang Xử Lý...' : 'Xác Nhận Đổi Bàn'}
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+
+                <span>{isSubmittingReroute ? 'Đang Xử Lý Reroute...' : 'Xác Nhận Đổi Bàn'}</span>
 
               </button>
 
@@ -4601,11 +5018,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   onClick={() => setImportCsvMode('upload')}
 
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${importCsvMode === 'upload' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
 
-                    importCsvMode === 'upload' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
-
-                  }`}
+                    }`}
 
                 >
 
@@ -4619,11 +5034,9 @@ export const StaffKdsPage: React.FC = () => {
 
                   onClick={() => setImportCsvMode('text')}
 
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${importCsvMode === 'text' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
 
-                    importCsvMode === 'text' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600'
-
-                  }`}
+                    }`}
 
                 >
 
@@ -4725,11 +5138,9 @@ export const StaffKdsPage: React.FC = () => {
 
             {importResult && (
 
-              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+              <div className={`p-3 rounded-xl border text-xs space-y-1 ${importResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
 
-                importResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
-
-              }`}>
+                }`}>
 
                 <div className="font-bold flex items-center justify-between">
 
@@ -5021,7 +5432,7 @@ export const StaffKdsPage: React.FC = () => {
 
               <p className="text-[11px] text-blue-700 leading-relaxed">
 
-                • Toàn bộ đơn hàng sẽ được Robot chuyển hướng giao tới <strong>Trạm vật lý của Bàn Chính</strong>.<br/>
+                • Toàn bộ đơn hàng sẽ được Robot chuyển hướng giao tới <strong>Trạm vật lý của Bàn Chính</strong>.<br />
 
                 • <strong>Bản đồ SLAM và các Waypoint của Robot được giữ nguyên 100%</strong>, không bị xáo trộn hay gộp sai lệch tọa độ.
 
@@ -5131,15 +5542,13 @@ export const StaffKdsPage: React.FC = () => {
 
                           key={t.id}
 
-                          className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                          className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${isChecked
 
-                            isChecked
+                            ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold'
 
-                              ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
 
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-
-                          }`}
+                            }`}
 
                         >
 
@@ -5265,34 +5674,84 @@ export const StaffKdsPage: React.FC = () => {
       {transferOrderModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-2">
-                  <ArrowRightLeft className="w-4 h-4 text-amber-600" />
-                  <span>Đổi Bàn Cho Đơn Đang Nấu (HC-04)</span>
+                <h3 className="text-sm font-black text-slate-900 font-heading flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
+                    <ArrowRightLeft className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <span>Đổi Bàn</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Chuyển đơn <strong className="text-slate-800">{transferOrderModal.orderNumber}</strong> từ bàn <strong>{transferOrderModal.currentTableNo}</strong> sang bàn mới trước khi xuất lệnh Robot.
+                  Chuyển đơn <strong className="text-slate-800 font-mono">{transferOrderModal.orderNumber}</strong> sang vị trí bàn mới trước khi xuất lệnh điều phối AMR.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setTransferOrderModal(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5">
+              {/* Visual From-To Step Card */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs shadow-2xs">
+                <div>
+                  <div className="text-[10px] font-mono text-slate-500 font-semibold uppercase">Bàn Gốc</div>
+                  <div className="font-extrabold text-slate-900 text-sm mt-0.5">
+                    {transferOrderModal.currentTableNo}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100/90 border border-amber-300 text-amber-900 font-mono text-[10px] font-bold">
+                  <span>Chuyển Bàn</span>
+                  <ArrowRight className="w-3 h-3 text-amber-700" />
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-mono text-blue-600 font-semibold uppercase">Bàn Nhận Đơn</div>
+                  <div className="font-extrabold text-blue-700 text-sm mt-0.5">
+                    {tables.find((t) => t.id === transferOrderTargetId)?.name || 'Chưa chọn'}
+                  </div>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chọn Bàn Đích Mới (Phải còn trống và chưa bị gộp - UC-05)
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Bàn Gốc Cần Chuyển Đi (From Table)
+                </label>
+                <select
+                  value={tables.find((t) => t.name.toLowerCase() === transferOrderModal.currentTableNo.toLowerCase())?.id || tables[0]?.id || ''}
+                  onChange={(e) => {
+                    const sel = tables.find((t) => t.id === e.target.value);
+                    if (sel) {
+                      const match = pendingOrders.find((o) => o.tableNo.toLowerCase() === sel.name.toLowerCase() || o.tableNo === sel.id);
+                      setTransferOrderModal((prev) => prev ? {
+                        ...prev,
+                        currentTableNo: sel.name,
+                        orderId: match?.id || `ORD-${sel.name.replace(/\s+/g, '')}`,
+                        orderNumber: match?.orderNumber || `Đơn ${sel.name}`
+                      } : null);
+                    }
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs cursor-pointer"
+                >
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.status === 'occupied' ? '(Đang dùng món)' : t.status === 'waiting' ? '(Chờ phục vụ)' : '(Khả dụng)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Chọn Bàn Đích Mới (Trống &amp; Chưa Gộp)
                 </label>
                 <select
                   value={transferOrderTargetId}
                   onChange={(e) => setTransferOrderTargetId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs cursor-pointer"
                 >
                   <option value="">-- Chọn Bàn Nhận Đơn --</option>
                   {tables
@@ -5308,12 +5767,12 @@ export const StaffKdsPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800">
-                Lưu ý: Hệ thống tự động cập nhật đích đến cho KDS và Robot AMR. Nếu bàn đích đã gộp vào bàn chính, đơn sẽ được tự động hướng tới trạm của bàn chính.
+              <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-[11px] text-amber-900 leading-relaxed shadow-2xs">
+                <strong>Lưu ý nghiệp vụ:</strong> Hệ thống tự động cập nhật lại trạm đích cho KDS và Robot AMR. Nếu bàn đích đã gộp vào bàn chính, đơn sẽ được tự động hướng tới trạm của bàn chính.
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 disabled={isSubmittingTransferOrder}
@@ -5326,9 +5785,10 @@ export const StaffKdsPage: React.FC = () => {
                 type="button"
                 disabled={isSubmittingTransferOrder || !transferOrderTargetId}
                 onClick={handleConfirmTransferOrder}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-black text-white bg-amber-600 hover:bg-amber-500 active:scale-95 shadow-md shadow-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
               >
-                {isSubmittingTransferOrder ? 'Đang Chuyển...' : 'Xác Nhận Đổi Bàn'}
+                <ArrowRightLeft className="w-3.5 h-3.5 text-white" />
+                <span>{isSubmittingTransferOrder ? 'Đang Chuyển Bàn...' : 'Xác Nhận Đổi Bàn'}</span>
               </button>
             </div>
           </div>
