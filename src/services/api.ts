@@ -53,18 +53,23 @@ export const resolveEdgeBaseUrl = (): string => {
     }
   }
 
-  // 2. Read environment variable
+  // 2. When accessed via HTTPS (e.g. Ngrok tunnel https://...ngrok-free.app or remote HTTPS),
+  // mobile browsers strictly block plain HTTP requests to localhost as Mixed Content.
+  // Moreover, 'localhost' on a smartphone resolves to the phone itself, not the PC!
+  // In Ngrok tunnel mode, proxy through relative '/api' which Vite forwards to http://localhost:5000.
+  if (typeof window !== 'undefined' && window.location?.protocol === 'https:') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('ngrok') || hostname.includes('loca.lt') || hostname.includes('trycloudflare.com')) {
+      return `${window.location.origin}/api`;
+    }
+    return resolveBaseUrl();
+  }
+
+  // 3. Read environment variable
   let edgeUrl = (import.meta.env.VITE_EDGE_API_URL || '').trim();
   if (edgeUrl) {
     const cleanUrl = edgeUrl.replace(/\/+$/, '');
     return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
-  }
-
-  // 3. When accessed via HTTPS (e.g. Vercel deployment), modern browsers strictly block
-  // plain HTTP requests to localhost:5000 as Mixed Content, resulting in instant preflight (failed) with no response code.
-  // In cloud/remote environments without an explicit edge node, default robot traffic through Cloud API Gateway.
-  if (typeof window !== 'undefined' && window.location?.protocol === 'https:') {
-    return resolveBaseUrl();
   }
 
   const hostname = typeof window !== 'undefined' ? window.location?.hostname : '';

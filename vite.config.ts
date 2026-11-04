@@ -59,6 +59,8 @@ export default defineConfig(({ mode }) => {
   server: {
     port: 5173,
     host: true,
+    allowedHosts: true,
+    cors: true,
     // Proxy API calls to avoid CORS when running npm run dev
     // Only active in dev mode — production uses Docker nginx
     proxy: mode === 'development' ? {
