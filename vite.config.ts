@@ -1,23 +1,33 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { restaurantNgrokPlugin } from './vite-plugin-ngrok.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    react(),
-    // Emit bundle-size report only on production builds
-    mode === 'production' ? visualizer({
-      filename: 'dist/stats.html',
-      open: false,
-      gzipSize: true,
-      brotliSize: true,
-    }) : undefined,
-  ].filter(Boolean),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
+    plugins: [
+      react(),
+      restaurantNgrokPlugin({
+        authtoken: env.NGROK_AUTHTOKEN,
+        domain: env.NGROK_DOMAIN,
+        staffPath: '/staff/kds',
+        enabled: mode === 'development' && env.ENABLE_NGROK !== 'false',
+      }),
+      // Emit bundle-size report only on production builds
+      mode === 'production' ? visualizer({
+        filename: 'dist/stats.html',
+        open: false,
+        gzipSize: true,
+        brotliSize: true,
+      }) : undefined,
+    ].filter(Boolean),
   define: {
     __APP_ENV__: JSON.stringify(process.env.NODE_ENV || 'development'),
   },
@@ -48,6 +58,7 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 5173,
+    host: true,
     // Proxy API calls to avoid CORS when running npm run dev
     // Only active in dev mode — production uses Docker nginx
     proxy: mode === 'development' ? {
@@ -74,4 +85,4 @@ export default defineConfig(({ mode }) => ({
       reportsDirectory: './coverage',
     },
   },
-}))
+}})
