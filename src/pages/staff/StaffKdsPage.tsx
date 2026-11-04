@@ -105,6 +105,10 @@ interface TableNode {
 
   qrCodeUrl?: string | null;
 
+  aisleWidth?: number;
+
+  isRestrictedAisle?: boolean;
+
 }
 
 export interface TrayItem {
@@ -298,6 +302,28 @@ export const StaffKdsPage: React.FC = () => {
     newStationId: string;
   } | null>(null);
   const [isSubmittingSecondLeg, setIsSubmittingSecondLeg] = useState<boolean>(false);
+
+  // Flow 3 / Sequence 3.3 (TASK-01 & TASK-02): Assisted Drop-off Staging Modal for Narrow Aisle Tables (Position S -> Point A)
+  const [assistedDropoffModal, setAssistedDropoffModal] = useState<{
+    isOpen: boolean;
+    table: TableNode;
+    resolveData: {
+      directReachable: boolean;
+      requireStationSelection: boolean;
+      aisleWidth: number;
+      restrictedReason?: string;
+      availableStations?: Array<{
+        stationId: string;
+        stationName: string;
+        xCoord: number;
+        yCoord: number;
+        distance: number;
+      }>;
+    };
+    selectedStationId: string;
+    onSuccessCallback?: () => void;
+  } | null>(null);
+  const [isBindingAssistedStation, setIsBindingAssistedStation] = useState<boolean>(false);
 
   const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
 
@@ -512,6 +538,10 @@ export const StaffKdsPage: React.FC = () => {
             worldX: t.worldX,
 
             worldY: t.worldY,
+
+            aisleWidth: t.aisleWidth,
+
+            isRestrictedAisle: t.isRestrictedAisle || (t.aisleWidth !== undefined && t.aisleWidth < 0.8) || (t.tableNo || t.id || '').toUpperCase().includes('S'),
 
           }));
 
@@ -1419,6 +1449,87 @@ export const StaffKdsPage: React.FC = () => {
 
     }
 
+  };
+
+  // Flow 3 / Sequence 3.3: Check Dropoff Reachability & Prompt Assisted Dropoff Modal (TASK-01 & TASK-02)
+  const handleCheckAndPromptAssistedDropoff = async (targetTable: TableNode, onSuccess?: () => void): Promise<boolean> => {
+    try {
+      const result = await tableService.resolveDropoff(targetTable.id);
+      if (result && result.requireStationSelection) {
+        const defaultStationId = (result.availableStations && result.availableStations[0]?.stationId) || '';
+        setAssistedDropoffModal({
+          isOpen: true,
+          table: targetTable,
+          resolveData: result,
+          selectedStationId: defaultStationId,
+          onSuccessCallback: onSuccess
+        });
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn('[StaffKdsPage] resolveDropoff check warning:', err);
+      if (targetTable.isRestrictedAisle || (targetTable.aisleWidth !== undefined && targetTable.aisleWidth < 0.8) || (targetTable.tableNo || targetTable.id || '').toUpperCase().includes('S')) {
+        const defaultStation = stations[0];
+        setAssistedDropoffModal({
+          isOpen: true,
+          table: targetTable,
+          resolveData: {
+            directReachable: false,
+            requireStationSelection: true,
+            aisleWidth: targetTable.aisleWidth || 0.75,
+            restrictedReason: 'Hành lang hẹp (< 0.8m) hoặc vị trí Position S không thể đưa robot AMR vào trực tiếp.',
+            availableStations: stations.map(s => ({
+              stationId: s.id,
+              stationName: s.name,
+              distance: 1.5,
+              xCoord: s.xCoord,
+              yCoord: s.yCoord
+            }))
+          },
+          selectedStationId: defaultStation?.id || '',
+          onSuccessCallback: onSuccess
+        });
+        return true;
+      }
+      return false;
+    }
+  };
+
+  const handleConfirmAssistedDropoff = async () => {
+    if (!assistedDropoffModal) return;
+    const { table, selectedStationId, onSuccessCallback } = assistedDropoffModal;
+    if (!selectedStationId) {
+      showToast('Vui lòng chọn Trạm Đệm (Point A)!', 'info');
+      return;
+    }
+
+    setIsBindingAssistedStation(true);
+    try {
+      const res = await tableService.bindAssistedStation(table.id, selectedStationId, 'A_to_S');
+      const chosenStation = stations.find(s => s.id === selectedStationId);
+      const chosenAvailable = assistedDropoffModal.resolveData.availableStations?.find(s => s.stationId === selectedStationId);
+      const stationName = chosenStation?.name || chosenAvailable?.stationName || res.stationName || 'Point A';
+
+      // Update local tables state
+      setTables(prev => prev.map(t => t.id === table.id ? {
+        ...t,
+        stationId: selectedStationId,
+        stationName: stationName
+      } : t));
+
+      showToast(`Đã liên kết bàn ${table.name} (Position S) vào ${stationName} (Point A) thành công! Mode: A_to_S.`, 'info');
+      setAssistedDropoffModal(null);
+
+      if (onSuccessCallback) {
+        onSuccessCallback();
+      }
+    } catch (err: any) {
+      console.error('[StaffKdsPage] bindAssistedStation error:', err);
+      showToast(err?.message || 'Lỗi liên kết trạm Point A!', 'info');
+    } finally {
+      setIsBindingAssistedStation(false);
+    }
   };
 
   // Create Table Manually
@@ -2356,6 +2467,18 @@ export const StaffKdsPage: React.FC = () => {
 
                             )}
 
+                            {table.isRestrictedAisle && (
+
+                              <span className="text-[10px] text-amber-800 font-bold bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5" title="Hành lang hẹp < 0.8m - Cần trạm đệm Point A (Sequence 3.3)">
+
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+
+                                Hẹp &lt;0.8m
+
+                              </span>
+
+                            )}
+
                           </div>
 
                           <span
@@ -2651,6 +2774,30 @@ export const StaffKdsPage: React.FC = () => {
                   >
 
                     [Gán/Đổi Trạm]
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => handleCheckAndPromptAssistedDropoff(currentSelectedTable)}
+
+                    className={`text-[10px] font-bold cursor-pointer transition-colors px-1.5 py-0.5 rounded border ${
+
+                      currentSelectedTable.isRestrictedAisle || (currentSelectedTable.aisleWidth !== undefined && currentSelectedTable.aisleWidth < 0.8) || (currentSelectedTable.tableNo || currentSelectedTable.id || '').toUpperCase().includes('S')
+
+                        ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+
+                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+
+                    }`}
+
+                    title="Kiểm tra độ rộng hành lang & liên kết trạm tiếp ứng Point A (Sequence 3.3)"
+
+                  >
+
+                    ⚡ Trạm Đệm Point A (A→S)
 
                   </button>
 
@@ -5840,6 +5987,125 @@ export const StaffKdsPage: React.FC = () => {
               >
                 <Navigation className="w-3.5 h-3.5 text-cyan-200" />
                 <span>{isSubmittingSecondLeg ? 'Đang Điều Phối...' : '2. Robot Tự Hành Đi Chặng 2 (HC-06)'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ASSISTED DROPOFF FOR NARROW AISLE / POSITION S (SEQUENCE 3.3 / TASK-01 & TASK-02) */}
+      {assistedDropoffModal && assistedDropoffModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border-2 border-amber-500 shadow-2xl max-w-lg w-full p-5 space-y-4 text-slate-800 animate-in zoom-in-95">
+            <div className="border-b border-amber-100 pb-3 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 font-heading">
+                    Vùng Hạn Chế / Hành Lang Hẹp (&lt; 0.8m)
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded border border-amber-200">
+                    Sequence 3.3
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 mt-1">
+                  Bàn <strong>{assistedDropoffModal.table.name}</strong> nằm trong lối đi hẹp ({assistedDropoffModal.resolveData.aisleWidth}m). Robot AMR không thể tiếp cận trực tiếp. Nhân viên quan sát thực tế và chọn <strong>Trạm Đệm (Point A)</strong> để AMR giao đến.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssistedDropoffModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-blue-950 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Chỉ dẫn nhân viên phục vụ:</span>
+                </div>
+                <p className="text-[11px] text-blue-900 leading-relaxed">
+                  Nhân viên quan sát mật độ khách và lối đi thực tế tại nhà hàng để chọn <strong>Trạm Đệm (Point A)</strong> thuận tiện nhất. Robot AMR sẽ vận chuyển món đến trạm này, sau đó nhân viên tiếp nhận và bưng trực tiếp vào bàn cho khách.
+                </p>
+              </div>
+
+              {assistedDropoffModal.resolveData.availableStations && assistedDropoffModal.resolveData.availableStations.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">
+                    Chọn Trạm Đệm (Point A) để Robot giao đến (Mode A_to_S):
+                  </label>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {assistedDropoffModal.resolveData.availableStations.map((st) => (
+                      <label
+                        key={st.stationId}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                          assistedDropoffModal.selectedStationId === st.stationId
+                            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-2xs'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="radio"
+                            name="assistedStation"
+                            value={st.stationId}
+                            checked={assistedDropoffModal.selectedStationId === st.stationId}
+                            onChange={() => setAssistedDropoffModal({
+                              ...assistedDropoffModal,
+                              selectedStationId: st.stationId
+                            })}
+                            className="text-blue-600 focus:ring-blue-500 w-4 h-4"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-900">{st.stationName}</span>
+                            <span className="text-[10px] text-slate-500 ml-2 font-mono">
+                              [Tọa độ: {st.xCoord}, {st.yCoord}]
+                            </span>
+                          </div>
+                        </div>
+                        {assistedDropoffModal.selectedStationId === st.stationId && (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                            Đang chọn
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 space-y-1">
+                <div className="font-semibold text-slate-800">Quy trình vận hành thực tế (Sequence 3.3):</div>
+                <p>1. Nhân viên chọn <strong>Trạm Đệm (Point A)</strong> phù hợp với tình hình mặt bằng.</p>
+                <p>2. Robot AMR tự hành chuyển món từ Bếp tới <strong>Point A</strong>.</p>
+                <p>3. Nhân viên tại trạm lấy món từ khay và mang thủ công vào <strong>Position S ({assistedDropoffModal.table.name})</strong>.</p>
+                <p>4. Nhân viên nhấn xác nhận trên KDS để hoàn tất và ghi log kiểm toán <code>AssistedDropoff_Handoff_PointA_to_PositionS</code>.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setAssistedDropoffModal(null)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isBindingAssistedStation || !assistedDropoffModal.selectedStationId}
+                onClick={handleConfirmAssistedDropoff}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 shadow-md shadow-amber-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                <span>
+                  {isBindingAssistedStation ? 'Đang Liên Kết...' : 'Xác Nhận Point A & Gán Tiếp Ứng (A→S)'}
+                </span>
               </button>
             </div>
           </div>

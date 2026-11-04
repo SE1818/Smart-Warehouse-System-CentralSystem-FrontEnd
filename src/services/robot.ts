@@ -499,11 +499,6 @@ export const robotService = {
     }
   },
 
-  // Compatibility alias for groupTables
-  async groupTables(primaryAnchorTableId: string, memberTableIds: string[], storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
-    return this.mergeTables(primaryAnchorTableId, memberTableIds, storeId, reason);
-  },
-
   // Flow 3: Table Split (Restore table back to standalone available state)
   async splitTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
     try {
@@ -516,11 +511,6 @@ export const robotService = {
       console.warn('[robotService] Lỗi gọi API split table, fallback mô phỏng:', err);
       return { success: true, message: 'Đã tách bàn hoàn nguyên thành công (chế độ dự phòng).' };
     }
-  },
-
-  // Compatibility alias for ungroupTable
-  async ungroupTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
-    return this.splitTable(tableId, storeId, reason);
   },
 
   // Flow 3: Transfer order from current table to another table while cooking (Pre-dispatch)

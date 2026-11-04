@@ -173,6 +173,8 @@ export interface DiningTableDto {
   worldY?: number;
   xCoord?: number;
   yCoord?: number;
+  aisleWidth?: number;
+  isRestrictedAisle?: boolean;
 }
 
 export interface ZaloConversation {
@@ -630,6 +632,41 @@ export const tableService = {
       return true;
     } catch {
       return false;
+    }
+  },
+
+  // Flow 3 / Sequence 3.3 (TASK-01 & TASK-02): Resolve drop-off for narrow-aisle tables (< 0.8m)
+  resolveDropoff: async (tableId: string): Promise<{
+    directReachable: boolean;
+    requireStationSelection: boolean;
+    aisleWidth: number;
+    restrictedReason?: string;
+    availableStations?: Array<{
+      stationId: string;
+      stationName: string;
+      xCoord: number;
+      yCoord: number;
+      distance: number;
+    }>;
+  }> => {
+    try {
+      const res = await portalClient.post(`/tables/${tableId}/resolve-dropoff`);
+      return res.data;
+    } catch {
+      return {
+        directReachable: true,
+        requireStationSelection: false,
+        aisleWidth: 1.2,
+      };
+    }
+  },
+
+  bindAssistedStation: async (tableId: string, stationId: string, mode: string = 'A_to_S'): Promise<{ success: boolean; message: string; stationName?: string; mode?: string }> => {
+    try {
+      const res = await portalClient.post(`/tables/${tableId}/bind-assisted-station`, { stationId, mode });
+      return res.data || { success: true, message: 'Liên kết trạm hỗ trợ thành công' };
+    } catch (err: any) {
+      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi liên kết trạm hỗ trợ' };
     }
   },
 };
