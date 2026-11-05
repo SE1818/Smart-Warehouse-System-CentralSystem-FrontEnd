@@ -485,10 +485,11 @@ export const robotService = {
 
 
   // Flow 3: Table Merge (Fixed Delivery Waypoint at Target Station)
-  async mergeTables(targetTableId: string, sourceTableIds: string[], storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
+  async mergeTables(targetTableId: string, sourceTableIds: string[], storeId?: string, reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
+    const effectiveStoreId = (storeId && storeId.trim() !== '' && storeId !== '00000000-0000-0000-0000-000000000000') ? storeId : '11111111-1111-1111-1111-111111111111';
     try {
       const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${targetTableId}/merge`, {
-        storeId,
+        storeId: effectiveStoreId,
         sourceTableIds,
         reason
       });
@@ -500,15 +501,16 @@ export const robotService = {
   },
 
   // Compatibility alias for groupTables
-  async groupTables(primaryAnchorTableId: string, memberTableIds: string[], storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
+  async groupTables(primaryAnchorTableId: string, memberTableIds: string[], storeId?: string, reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
     return this.mergeTables(primaryAnchorTableId, memberTableIds, storeId, reason);
   },
 
   // Flow 3: Table Split (Restore table back to standalone available state)
-  async splitTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
+  async splitTable(tableId: string, storeId?: string, reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
+    const effectiveStoreId = (storeId && storeId.trim() !== '' && storeId !== '00000000-0000-0000-0000-000000000000') ? storeId : '11111111-1111-1111-1111-111111111111';
     try {
       const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${tableId}/split`, {
-        storeId,
+        storeId: effectiveStoreId,
         reason
       });
       return response.data;
@@ -519,7 +521,7 @@ export const robotService = {
   },
 
   // Compatibility alias for ungroupTable
-  async ungroupTable(tableId: string, storeId: string = '00000000-0000-0000-0000-000000000000', reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
+  async ungroupTable(tableId: string, storeId?: string, reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
     return this.splitTable(tableId, storeId, reason);
   },
 

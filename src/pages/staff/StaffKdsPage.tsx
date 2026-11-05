@@ -61,7 +61,7 @@ import {
 
 import type { Station } from '@/types/robot';
 
-import { fleetService, tableService, orderService, type PendingOrderDto } from '@/services/portalApi';
+import { fleetService, tableService, orderService, resolveEffectiveStoreId, type PendingOrderDto } from '@/services/portalApi';
 
 import { robotService } from '@/services/robot';
 
@@ -1526,24 +1526,12 @@ export const StaffKdsPage: React.FC = () => {
     try {
 
       let res;
-
-      let storeIdToUse = '';
-      try {
-        const stored = localStorage.getItem('user');
-        if (stored) {
-          const u = JSON.parse(stored);
-          if (u.storeId) storeIdToUse = u.storeId;
-        }
-      } catch {}
+      const storeIdToUse = resolveEffectiveStoreId();
 
       if (importCsvMode === 'upload' && importCsvFile) {
-
         res = await tableService.uploadCsv(storeIdToUse, importCsvFile);
-
       } else {
-
         res = await tableService.importCsv(storeIdToUse, importCsvContent);
-
       }
 
       setImportResult(res);
@@ -1732,7 +1720,7 @@ export const StaffKdsPage: React.FC = () => {
 
     try {
 
-      await robotService.mergeTables(primaryAnchorTableId, targets, '00000000-0000-0000-0000-000000000000', mergeReason);
+      await robotService.mergeTables(primaryAnchorTableId, targets, resolveEffectiveStoreId(), mergeReason);
 
       setTables((prev) =>
 
@@ -1778,7 +1766,7 @@ export const StaffKdsPage: React.FC = () => {
 
     try {
 
-      await robotService.splitTable(tableId);
+      await robotService.splitTable(tableId, resolveEffectiveStoreId());
 
       setTables((prev) =>
 

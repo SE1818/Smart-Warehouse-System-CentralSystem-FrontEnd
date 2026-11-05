@@ -481,6 +481,43 @@ export const alertService = {
   },
 };
 
+export const resolveEffectiveStoreId = (storeId?: string | null): string => {
+  if (storeId && storeId.trim() !== '' && storeId !== '00000000-0000-0000-0000-000000000000') {
+    return storeId.trim();
+  }
+  try {
+    const stored = localStorage.getItem('user');
+    if (stored) {
+      const u = JSON.parse(stored);
+      if (u.storeId && typeof u.storeId === 'string' && u.storeId.trim() !== '' && u.storeId !== '00000000-0000-0000-0000-000000000000') {
+        return u.storeId.trim();
+      }
+      if (u.tenantId && typeof u.tenantId === 'string' && u.tenantId.trim() !== '' && u.tenantId !== '00000000-0000-0000-0000-000000000000') {
+        return u.tenantId.trim();
+      }
+    }
+  } catch {}
+  return '11111111-1111-1111-1111-111111111111';
+};
+
+const extractErrorMessage = (err: any, defaultMsg: string): string => {
+  if (err?.response?.data) {
+    const d = err.response.data;
+    if (typeof d === 'string' && d.trim()) return d;
+    if (d.message && typeof d.message === 'string') return d.message;
+    if (d.errors && typeof d.errors === 'object') {
+      const keys = Object.keys(d.errors);
+      if (keys.length > 0) {
+        const firstErr = d.errors[keys[0]];
+        if (Array.isArray(firstErr) && firstErr.length > 0) return `${keys[0]}: ${firstErr[0]}`;
+        if (typeof firstErr === 'string') return `${keys[0]}: ${firstErr}`;
+      }
+    }
+    if (d.title && typeof d.title === 'string') return d.title;
+  }
+  return err?.message || defaultMsg;
+};
+
 export const tableService = {
   // Danh sách bàn tải từ BE (API / Active SLAM Map), có SQLite cache cho chế độ offline
   getTables: async (storeIdOrSlug?: string): Promise<DiningTableDto[]> => {
@@ -530,8 +567,9 @@ export const tableService = {
 
   createTable: async (data: { storeId?: string; tableNo: string; tableName?: string; capacity?: number; stationId?: string | null; zone?: string }): Promise<{ success: boolean; data?: any; message?: string }> => {
     try {
+      const effectiveStoreId = resolveEffectiveStoreId(data.storeId);
       const res = await portalClient.post('/tables', {
-        storeId: (data.storeId && data.storeId !== '00000000-0000-0000-0000-000000000000') ? data.storeId : undefined,
+        storeId: effectiveStoreId,
         tableNo: data.tableNo,
         tableName: data.tableName || `Bàn ${data.tableNo}`,
         capacity: data.capacity || 4,
@@ -539,14 +577,15 @@ export const tableService = {
       });
       return { success: true, data: res.data };
     } catch (err: any) {
-      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi tạo bàn ăn' };
+      return { success: false, message: extractErrorMessage(err, 'Lỗi tạo bàn ăn') };
     }
   },
 
-  importCsv: async (storeId: string, csvContent: string): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
+  importCsv: async (storeId?: string, csvContent: string = ''): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
     try {
+      const effectiveStoreId = resolveEffectiveStoreId(storeId);
       const res = await portalClient.post('/tables/import-csv', {
-        storeId: (storeId && storeId !== '00000000-0000-0000-0000-000000000000') ? storeId : undefined,
+        storeId: effectiveStoreId,
         csvContent,
       });
       return {
@@ -562,17 +601,25 @@ export const tableService = {
         totalProcessed: 0,
         totalCreated: 0,
         totalSkipped: 0,
-        messages: [err?.response?.data?.message || err.message || 'Lỗi nhập dữ liệu CSV'],
+        messages: [extractErrorMessage(err, 'Lỗi nhập dữ liệu CSV')],
       };
     }
   },
 
-  uploadCsv: async (storeId: string, file: File): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
+  uploadCsv: async (storeId?: string, file?: File): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
     try {
-      const formData = new FormData();
-      if (storeId && storeId !== '00000000-0000-0000-0000-000000000000') {
-        formData.append('storeId', storeId);
+      if (!file) {
+        return {
+          success: false,
+          totalProcessed: 0,
+          totalCreated: 0,
+          totalSkipped: 0,
+          messages: ['File CSV không được để trống'],
+        };
       }
+      const effectiveStoreId = resolveEffectiveStoreId(storeId);
+      const formData = new FormData();
+      formData.append('storeId', effectiveStoreId);
       formData.append('file', file);
       const res = await portalClient.post('/tables/upload-csv', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -590,7 +637,7 @@ export const tableService = {
         totalProcessed: 0,
         totalCreated: 0,
         totalSkipped: 0,
-        messages: [err?.response?.data?.message || err.message || 'Lỗi tải lên file CSV'],
+        messages: [extractErrorMessage(err, 'Lỗi tải lên file CSV')],
       };
     }
   },
@@ -600,14 +647,12 @@ export const tableService = {
       const res = await portalClient.post(`/tables/${tableId}/assign-station`, { stationId });
       return { success: true, message: res.data?.message || 'Cập nhật trạm thành công' };
     } catch (err: any) {
-      return { success: false, message: err?.response?.data?.message || err.message || 'Lỗi gán trạm' };
+      return { success: false, message: extractErrorMessage(err, 'Lỗi gán trạm') };
     }
   },
 
-  batchAssignStations: async (storeId: string, assignments: { tableId?: string; tableNo?: string; stationId?: string; stationName?: string }[]): Promise<{ success: boolean; totalSuccess: number; totalFailed: number; messages: string[] }> => {
-    const effectiveStoreId = (storeId && storeId !== '00000000-0000-0000-0000-000000000000')
-      ? storeId
-      : '11111111-1111-1111-1111-111111111111';
+  batchAssignStations: async (storeId?: string, assignments: { tableId?: string; tableNo?: string; stationId?: string; stationName?: string }[] = []): Promise<{ success: boolean; totalSuccess: number; totalFailed: number; messages: string[] }> => {
+    const effectiveStoreId = resolveEffectiveStoreId(storeId);
     try {
       const res = await portalClient.post('/tables/batch-assign-stations', {
         storeId: effectiveStoreId,
@@ -624,7 +669,7 @@ export const tableService = {
         success: false,
         totalSuccess: 0,
         totalFailed: assignments.length,
-        messages: [err?.response?.data?.message || err.message || 'Lỗi gán trạm hàng loạt'],
+        messages: [extractErrorMessage(err, 'Lỗi gán trạm hàng loạt')],
       };
     }
   },
