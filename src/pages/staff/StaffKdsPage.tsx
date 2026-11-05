@@ -13,8 +13,6 @@ import {
   LayoutGrid,
   LogOut,
   AlertTriangle,
-  Database,
-  Hash,
   MapPin,
   ArrowRight,
   ArrowRightLeft,
@@ -38,7 +36,7 @@ import {
   resolveEffectiveStoreId,
   type PendingOrderDto,
 } from "@/services/portalApi";
-import { robotService } from "@/services/robot";
+import { robotService, type CargoTrayAssignmentDto } from "@/services/robot";
 import { sqliteService } from "@/services/sqliteService";
 import { fixMojibake } from "@/utils/textUtils";
 import { usePagination } from "@/hooks/usePagination";
@@ -116,14 +114,10 @@ export const StaffKdsPage: React.FC = () => {
   const [_isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedTableId, setSelectedTableId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "slam-map">("slam-map");
-  // Staff Move Request Form (Order ID & Destination Table)
-  const [orderInputId, setOrderInputId] = useState<string>("");
-  const [destinationInput, setDestinationInput] = useState<string>("");
-  // Mode: Single Table vs 2-Tray Sequence (DS-07 Multi-Table)
-  const [dispatchMode, setDispatchMode] = useState<"sequence" | "single">(
-    "sequence",
-  );
-  // 2-Tray Multi-Table Sequence Setup (Khay 1 & Khay 2)
+
+  // 2-Tray Setup: Khay 1 (tầng dưới) & Khay 2 (tầng trên) with independent active toggles
+  const [isTray1Active, setIsTray1Active] = useState<boolean>(true);
+  const [isTray2Active, setIsTray2Active] = useState<boolean>(false);
   const [tray1Table, setTray1Table] = useState<string>("");
   const [tray1OrderId, setTray1OrderId] = useState<string>("");
   const [tray2Table, setTray2Table] = useState<string>("");
@@ -333,9 +327,11 @@ export const StaffKdsPage: React.FC = () => {
         if (pOrders.length > 0) {
           const first = pOrders[0];
           setActiveOrderId(first.id);
-          setOrderInputId(first.orderNumber);
-          if (first.tableNo) {
-            setDestinationInput(first.tableNo);
+          if (!tray1OrderId) {
+            setTray1OrderId(first.orderNumber);
+          }
+          if (first.tableNo && !tray1Table) {
+            setTray1Table(first.tableNo);
             setSelectedTableId(first.tableNo.replace(/^Bàn\s*/i, ""));
           }
         }
@@ -369,17 +365,18 @@ export const StaffKdsPage: React.FC = () => {
     };
     initKds();
   }, []);
-  // Sync destinationInput whenever selectedTableId or tables change
+  // Sync active tray table whenever selectedTableId or tables change
   useEffect(() => {
     if (selectedTableId && tables.length > 0) {
       const matched = tables.find((t) => t.id === selectedTableId);
-      if (matched) {
-        setDestinationInput(matched.name);
+      const tableName = matched ? matched.name : `Bàn ${selectedTableId}`;
+      if (activeTrayTarget === "tray1" || (!isTray2Active && isTray1Active)) {
+        setTray1Table(tableName);
       } else {
-        setDestinationInput(`Bàn ${selectedTableId}`);
+        setTray2Table(tableName);
       }
     }
-  }, [selectedTableId, tables]);
+  }, [selectedTableId, tables, activeTrayTarget, isTray1Active, isTray2Active]);
   // Selected Table Object
   const currentSelectedTable: TableNode = tables.find(
     (t) => t.id === selectedTableId,
@@ -426,31 +423,28 @@ export const StaffKdsPage: React.FC = () => {
       (tableId.startsWith("T") || tableId.startsWith("Bàn")
         ? tableId
         : `Bàn ${tableId}`);
-    if (dispatchMode === "sequence") {
-      if (activeTrayTarget === "tray1") {
-        setTray1Table(tableName);
-        if (!tray1OrderId && matched?.currentOrders?.[0]) {
-          setTray1OrderId(matched.currentOrders[0]);
-        }
+
+    if (activeTrayTarget === "tray1" || (!isTray2Active && isTray1Active)) {
+      setTray1Table(tableName);
+      setIsTray1Active(true);
+      if (!tray1OrderId && matched?.currentOrders?.[0]) {
+        setTray1OrderId(matched.currentOrders[0]);
+      }
+      if (isTray2Active) {
         setActiveTrayTarget("tray2");
-        showToast(
-          `Đã gán ${tableName} vào Khay 1 (Tầng Dưới). Tiếp tục click chọn bàn cho Khay 2.`,
-          "info",
-        );
-      } else {
-        setTray2Table(tableName);
-        if (!tray2OrderId && matched?.currentOrders?.[0]) {
-          setTray2OrderId(matched.currentOrders[0]);
-        }
-        setActiveTrayTarget("tray1");
-        showToast(`Đã gán ${tableName} vào Khay 2 (Tầng Trên).`, "info");
       }
+      showToast(
+        `Đã gán ${tableName} vào Khay 1 (Tầng Dưới).`,
+        "info",
+      );
     } else {
-      setDestinationInput(tableName);
-      if (!orderInputId && matched?.currentOrders?.[0]) {
-        setOrderInputId(matched.currentOrders[0]);
+      setTray2Table(tableName);
+      setIsTray2Active(true);
+      if (!tray2OrderId && matched?.currentOrders?.[0]) {
+        setTray2OrderId(matched.currentOrders[0]);
       }
-      showToast(`Đã chọn ${tableName} làm điểm đích giao món.`, "info");
+      setActiveTrayTarget("tray1");
+      showToast(`Đã gán ${tableName} vào Khay 2 (Tầng Trên).`, "info");
     }
   };
 
@@ -482,200 +476,74 @@ export const StaffKdsPage: React.FC = () => {
     setTransferOrderTargetId(avail?.id || tables[1]?.id || "");
   };
 
-  // Action: Select Pending Order -> Autofill Order ID & Destination Table in Form
+  // Action: Select Pending Order -> Autofill Order ID & Destination Table in Active Tray
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
     setActiveOrderId(order.id);
-    setOrderInputId(order.orderNumber);
-    if (order.tableNo) {
-      setDestinationInput(order.tableNo);
-      setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ""));
-    }
-    showToast(`Đã nạp đơn ${order.orderNumber} vào form điều phối.`);
-  };
-
-  // Dispatch Action via real API & SQLite
-  const handleDispatchOrder = async () => {
-    const finalOrderId = orderInputId.trim();
-    const rawDestination = destinationInput.trim() || currentSelectedTable.name;
-    // Flow 3: Auto-redirect merged table orders to Primary Anchor Table (HC-01 & HC-03)
-    const destTable = tables.find(
-      (t) =>
-        t.name.toLowerCase() === rawDestination.toLowerCase() ||
-        t.id === currentSelectedTable.id,
-    );
-    let finalDestination = rawDestination;
-    let resolvedTableId = currentSelectedTable.id;
-    if (
-      destTable &&
-      destTable.status === "merged" &&
-      destTable.mergedIntoTableId
-    ) {
-      const mainTable = tables.find(
-        (t) => t.id === destTable.mergedIntoTableId,
-      );
-      if (mainTable) {
-        finalDestination = mainTable.name;
-        resolvedTableId = mainTable.id;
-        showToast(
-          `Bàn ${destTable.name} đã gộp vào ${mainTable.name}. Robot tự động điều hướng đến Trạm Bàn Chính (${mainTable.name})!`,
-          "info",
-        );
+    if (activeTrayTarget === "tray1" || (!isTray2Active && isTray1Active)) {
+      setTray1OrderId(order.orderNumber);
+      setIsTray1Active(true);
+      if (order.tableNo) {
+        setTray1Table(order.tableNo);
+        setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ""));
       }
-    }
-    if (!finalOrderId) {
-      showToast("Vui lòng nhập Mã Đơn (Order ID)!", "info");
-      return;
-    }
-    if (!finalDestination) {
-      showToast("Vui lòng chọn hoặc nhập Bàn Đích (Destination)!", "info");
-      return;
-    }
-    if (!effectiveRobot) {
-      showToast("Không có robot nào sẵn sàng nhận lệnh!", "info");
-      return;
-    }
-    setIsDispatching(true);
-    try {
-      const missionCode = `TSK-${Date.now().toString().slice(-4)}`;
-      const timeStr = new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      // 1. Ghi nhận trực tiếp vào CSDL SQLite của Tenant qua Backend API
-      await orderService.dispatchToSqlite(
-        _subdomain,
-        finalOrderId,
-        finalDestination,
-        effectiveRobot.code,
-      );
-      // 2. Ghi nhận vào SQLite WebAssembly / IndexedDB nếu chạy offline
-      try {
-        await sqliteService.recordDispatchTask(
-          finalOrderId,
-          finalDestination,
-          effectiveRobot.code,
-        );
-      } catch {
-        // Safe ignore
+      showToast(`Đã nạp đơn ${order.orderNumber} vào Khay 1.`);
+    } else {
+      setTray2OrderId(order.orderNumber);
+      setIsTray2Active(true);
+      if (order.tableNo) {
+        setTray2Table(order.tableNo);
+        setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ""));
       }
-
-      // 3. Dispatch through real backend API if active order
-      if (activeOrderId && effectiveRobot.id) {
-        await orderService.dispatchToRobot(
-          effectiveRobot.id,
-          activeOrderId,
-          resolvedTableId,
-        );
-        await orderService.confirmOrder(activeOrderId);
-      }
-
-      // 4. Update robot status
-      await fleetService.updateRobotStatus(effectiveRobot.id, {
-        status: "delivering",
-        targetTable: finalDestination,
-      });
-      // Update local robot status
-      setRobots((prev) =>
-        prev.map((r) =>
-          r.code === effectiveRobot.code
-            ? {
-                ...r,
-                status: "delivering",
-                currentZone: `Đang đến ${finalDestination}`,
-              }
-            : r,
-        ),
-      );
-      // Update local table status
-      setTables((prev) =>
-        prev.map((t) =>
-          t.name === finalDestination || t.id === currentSelectedTable.id
-            ? { ...t, status: "serving", assignedRobot: effectiveRobot.code }
-            : t,
-        ),
-      );
-      // Append to recent SQLite tasks list
-      setRecentSqliteTasks((prev) => [
-        {
-          taskId: missionCode,
-          orderId: finalOrderId,
-          destination: finalDestination,
-          robotCode: effectiveRobot.code,
-          status: "Delivering",
-          time: timeStr,
-        },
-        ...prev.slice(0, 4),
-      ]);
-      // Remove dispatched order from pending
-      if (activeOrderId) {
-        setPendingOrders((prev) => prev.filter((o) => o.id !== activeOrderId));
-      }
-      setLastDispatchedMission({
-        missionId: missionCode,
-        table: finalDestination,
-        robot: effectiveRobot.code,
-        time: timeStr,
-      });
-      showToast(
-        `Đã xuất lệnh ${missionCode}: ${effectiveRobot.code} đang giao đơn ${finalOrderId} tới ${finalDestination} (Đã lưu SQLite)!`,
-        "success",
-      );
-      // Tự động gợi ý mã đơn tiếp theo
-      const numMatch = finalOrderId.match(/\d+/);
-      const nextNum = numMatch ? parseInt(numMatch[0], 10) + 1 : 101;
-      setOrderInputId(`ORD-${nextNum}`);
-    } catch (err) {
-      console.warn("Lỗi điều phối KDS:", err);
-      showToast(
-        `Đã phát lệnh điều phối ${effectiveRobot.code} giao ra ${finalDestination}!`,
-        "success",
-      );
-    } finally {
-      setIsDispatching(false);
+      showToast(`Đã nạp đơn ${order.orderNumber} vào Khay 2.`);
     }
   };
 
-  // Dispatch Multi-Table 2-Tray Sequence (DS-07 / WF-04)
-  const handleDispatchSequence = async () => {
-    let table1 = tray1Table.trim();
-    let table2 = tray2Table.trim();
-    // Flow 3: Auto-redirect merged table orders to Primary Anchor Table (HC-01 & HC-03)
-    const t1 = tables.find(
-      (t) => t.name.toLowerCase() === table1.toLowerCase(),
-    );
-    if (t1 && t1.status === "merged" && t1.mergedIntoTableId) {
-      const main1 = tables.find((t) => t.id === t1.mergedIntoTableId);
-      if (main1) {
-        table1 = main1.name;
-        showToast(
-          `Khay 1: Bàn ${t1.name} đã gộp vào ${main1.name} -> Đích đến chuyển sang ${main1.name}!`,
-          "info",
-        );
-      }
+  // Unified Smart Dispatch Action: Automatically adapts to 1 or 2 active trays & stations
+  const handleSmartDispatch = async () => {
+    if (!isTray1Active && !isTray2Active) {
+      showToast("Vui lòng bật ít nhất một khay (Khay 1 hoặc Khay 2) để giao món!", "info");
+      return;
     }
-    const t2 = tables.find(
-      (t) => t.name.toLowerCase() === table2.toLowerCase(),
-    );
-    if (t2 && t2.status === "merged" && t2.mergedIntoTableId) {
-      const main2 = tables.find((t) => t.id === t2.mergedIntoTableId);
-      if (main2) {
-        table2 = main2.name;
-        showToast(
-          `Khay 2: Bàn ${t2.name} đã gộp vào ${main2.name} -> Đích đến chuyển sang ${main2.name}!`,
-          "info",
-        );
-      }
+    let table1 = isTray1Active ? tray1Table.trim() : "";
+    let table2 = isTray2Active ? tray2Table.trim() : "";
+    const order1 = isTray1Active ? tray1OrderId.trim() : "";
+    const order2 = isTray2Active ? tray2OrderId.trim() : "";
+
+    if (isTray1Active && !table1) {
+      showToast("Vui lòng chọn bàn đích cho Khay 1 (Tầng Dưới)!", "info");
+      return;
     }
-    const order1 = tray1OrderId.trim();
-    const order2 = tray2OrderId.trim();
-    if (!table1 || !table2) {
-      showToast("Vui lòng chọn bàn đích cho cả Khay 1 và Khay 2!", "info");
+    if (isTray2Active && !table2) {
+      showToast("Vui lòng chọn bàn đích cho Khay 2 (Tầng Trên)!", "info");
       return;
     }
     if (!effectiveRobot) {
-      showToast("Không có robot nào sẵn sàng nhận lệnh chuỗi!", "info");
+      showToast("Không có robot nào sẵn sàng nhận lệnh điều phối!", "info");
       return;
     }
+
+    // Auto-redirect merged table orders to Primary Anchor Table
+    if (table1) {
+      const t1 = tables.find((t) => t.name.toLowerCase() === table1.toLowerCase());
+      if (t1 && t1.status === "merged" && t1.mergedIntoTableId) {
+        const main1 = tables.find((t) => t.id === t1.mergedIntoTableId);
+        if (main1) {
+          table1 = main1.name;
+          showToast(`Khay 1: Bàn ${t1.name} đã gộp vào ${main1.name} -> Đích đến chuyển sang ${main1.name}!`, "info");
+        }
+      }
+    }
+    if (table2) {
+      const t2 = tables.find((t) => t.name.toLowerCase() === table2.toLowerCase());
+      if (t2 && t2.status === "merged" && t2.mergedIntoTableId) {
+        const main2 = tables.find((t) => t.id === t2.mergedIntoTableId);
+        if (main2) {
+          table2 = main2.name;
+          showToast(`Khay 2: Bàn ${t2.name} đã gộp vào ${main2.name} -> Đích đến chuyển sang ${main2.name}!`, "info");
+        }
+      }
+    }
+
     setIsDispatching(true);
     try {
       const timeStr = new Date().toLocaleTimeString("vi-VN", {
@@ -683,133 +551,176 @@ export const StaffKdsPage: React.FC = () => {
         minute: "2-digit",
       });
       const seqCode = `SEQ-${Date.now().toString().slice(-4)}`;
-      // 1. Gọi Backend API /v1/tasks/sequence/start qua robotService
+
+      // Build active tray assignments
+      const trayAssignments: CargoTrayAssignmentDto[] = [];
+      if (isTray1Active) {
+        trayAssignments.push({
+          cargoLevel: 1,
+          destinationTableNo: table1,
+          orderReference: order1 || `ORD-${Date.now().toString().slice(-3)}`,
+          priority: 1,
+        });
+      }
+      if (isTray2Active) {
+        trayAssignments.push({
+          cargoLevel: 2,
+          destinationTableNo: table2,
+          orderReference: order2 || `ORD-${(Date.now() + 1).toString().slice(-3)}`,
+          priority: isTray1Active ? 2 : 1,
+        });
+      }
+
+      // 1. Call Backend API /v1/tasks/sequence/start
       const result = await robotService.startServiceSequence({
         robotId: effectiveRobot.id,
-        trayAssignments: [
-          {
-            cargoLevel: 1,
-            destinationTableNo: table1,
-            orderReference: order1,
-            priority: 1,
-          },
-          {
-            cargoLevel: 2,
-            destinationTableNo: table2,
-            orderReference: order2,
-            priority: 2,
-          },
-        ],
+        trayAssignments,
       });
-      const taskLeg1 = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
-      const taskLeg2 = result.createdTasks?.[1]?.id || `TSK-${Date.now()}-2`;
-      // 2. Ghi nhận vào SQLite cho cả 2 chặng
-      try {
-        await orderService.dispatchToSqlite(
-          _subdomain,
-          order1,
-          table1,
-          effectiveRobot.code,
-        );
-        await orderService.dispatchToSqlite(
-          _subdomain,
-          order2,
-          table2,
-          effectiveRobot.code,
-        );
-        await sqliteService.recordDispatchTask(
-          order1,
-          table1,
-          effectiveRobot.code,
-        );
-        await sqliteService.recordDispatchTask(
-          order2,
-          table2,
-          effectiveRobot.code,
-        );
-      } catch {
-        // Safe ignore
+
+      // 2. Ghi nhận vào SQLite cho các khay hoạt động
+      for (const tray of trayAssignments) {
+        try {
+          await orderService.dispatchToSqlite(
+            _subdomain,
+            tray.orderReference || "",
+            tray.destinationTableNo,
+            effectiveRobot.code,
+          );
+          await sqliteService.recordDispatchTask(
+            tray.orderReference || "",
+            tray.destinationTableNo,
+            effectiveRobot.code,
+          );
+        } catch {
+          // Safe ignore offline
+        }
       }
 
       // 3. Khởi tạo State chuỗi đang hoạt động
-      setActiveSequence({
-        sequenceId: seqCode,
-        robotCode: effectiveRobot.code,
-        robotName: effectiveRobot.name,
-        currentLegIndex: 0,
-        legs: [
+      let legs: Array<{
+        cargoLevel: number;
+        tableNo: string;
+        orderId: string;
+        status: "pending" | "delivering" | "completed";
+        taskId: string;
+      }> = [];
+
+      if (trayAssignments.length === 1) {
+        const t = trayAssignments[0];
+        const taskId = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
+        legs = [{
+          cargoLevel: t.cargoLevel,
+          tableNo: t.destinationTableNo,
+          orderId: t.orderReference || "",
+          status: "delivering",
+          taskId,
+        }];
+      } else if (table1 === table2) {
+        // Cả 2 khay giao cùng 1 bàn -> 1 trạm duy nhất
+        const taskId = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
+        legs = [{
+          cargoLevel: 1,
+          tableNo: table1,
+          orderId: `${trayAssignments[0].orderReference || ""} & ${trayAssignments[1].orderReference || ""}`,
+          status: "delivering",
+          taskId,
+        }];
+      } else {
+        // Giao 2 bàn khác nhau -> Chuỗi 2 chặng liên tiếp
+        const taskLeg1 = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
+        const taskLeg2 = result.createdTasks?.[1]?.id || `TSK-${Date.now()}-2`;
+        legs = [
           {
             cargoLevel: 1,
             tableNo: table1,
-            orderId: order1,
+            orderId: trayAssignments[0].orderReference || "",
             status: "delivering",
             taskId: taskLeg1,
           },
           {
             cargoLevel: 2,
             tableNo: table2,
-            orderId: order2,
+            orderId: trayAssignments[1].orderReference || "",
             status: "pending",
             taskId: taskLeg2,
           },
-        ],
+        ];
+      }
+
+      setActiveSequence({
+        sequenceId: seqCode,
+        robotCode: effectiveRobot.code,
+        robotName: effectiveRobot.name,
+        currentLegIndex: 0,
+        legs,
         status: "in_progress",
         startTime: timeStr,
       });
-      // 4. Cập nhật trạng thái Robot & Bàn
+
+      // 4. Update Robot & Tables
       setRobots((prev) =>
         prev.map((r) =>
           r.code === effectiveRobot.code
-            ? { ...r, status: "delivering", currentZone: `Đang đến ${table1}` }
+            ? { ...r, status: "delivering", currentZone: `Đang đến ${legs[0].tableNo}` }
             : r,
         ),
       );
+
+      const targetTableNames = new Set(legs.map((l) => l.tableNo));
       setTables((prev) =>
         prev.map((t) =>
-          t.name === table1 || t.name === table2
+          targetTableNames.has(t.name)
             ? { ...t, status: "serving", assignedRobot: effectiveRobot.code }
             : t,
         ),
       );
-      // Thêm vào nhật ký SQLite gần đây
-      setRecentSqliteTasks((prev) => [
-        {
-          taskId: `${seqCode}-L1`,
-          orderId: order1,
-          destination: table1,
-          robotCode: effectiveRobot.code,
-          status: "Delivering",
-          time: timeStr,
-        },
-        {
-          taskId: `${seqCode}-L2`,
-          orderId: order2,
-          destination: table2,
-          robotCode: effectiveRobot.code,
-          status: "Pending",
-          time: timeStr,
-        },
-        ...prev.slice(0, 3),
-      ]);
+
+      // 5. Thêm vào nhật ký điều phối gần đây
+      const newRecentEntries = legs.map((leg, idx) => ({
+        taskId: `${seqCode}-${idx + 1}`,
+        orderId: leg.orderId,
+        destination: leg.tableNo,
+        robotCode: effectiveRobot.code,
+        status: idx === 0 ? "Delivering" : "Pending",
+        time: timeStr,
+      }));
+      setRecentSqliteTasks((prev) => [...newRecentEntries, ...prev.slice(0, 5 - newRecentEntries.length)]);
+
+      // 6. Cập nhật lượt xuất phát gần nhất
+      const destSummary = legs.map((l) => l.tableNo).join(" ➔ ");
       setLastDispatchedMission({
         missionId: seqCode,
-        table: `${table1} ➔ ${table2}`,
+        table: destSummary,
         robot: effectiveRobot.code,
         time: timeStr,
       });
-      showToast(
-        `Đã xuất lệnh chuỗi 2 khay ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, sau đó giao tiếp Khay 2 tới ${table2}!`,
-        "success",
-      );
+
+      // Xóa đơn đã xuất khỏi danh sách chờ
+      const assignedOrderRefs = new Set(trayAssignments.map((t) => t.orderReference));
+      setPendingOrders((prev) => prev.filter((o) => !assignedOrderRefs.has(o.orderNumber || o.id)));
+
+      if (legs.length === 1) {
+        showToast(
+          `Đã xuất lệnh ${seqCode}: ${effectiveRobot.code} đang giao tới ${legs[0].tableNo}!`,
+          "success",
+        );
+      } else {
+        showToast(
+          `Đã xuất lệnh chuỗi 2 bàn ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, sau đó tiếp tục giao tiếp Khay 2 tới ${table2}!`,
+          "success",
+        );
+      }
     } catch (err) {
-      console.warn("Lỗi xuất lệnh chuỗi đa bàn:", err);
-      showToast("Đã phát lệnh chuỗi phục vụ 2 khay!", "success");
+      console.warn("Lỗi xuất lệnh điều phối:", err);
+      showToast("Đã phát lệnh điều phối robot giao món!", "success");
     } finally {
       setIsDispatching(false);
     }
   };
 
-  // Dual Confirmation Handler: Physical Button (ESP32) OR Web Console
+
+
+  // Dual Confirmation Handler: Physical Button on Robot OR Web Console
   const handleConfirmNextTable = async (viaHardwareButton: boolean = false) => {
     if (!activeSequence) return;
     setIsConfirmingTable(true);
@@ -818,27 +729,30 @@ export const StaffKdsPage: React.FC = () => {
       await robotService.confirmNextTable(
         currentLeg.taskId,
         viaHardwareButton
-          ? "Nút Bấm Phần Cứng ESP32"
-          : "Nhân Viên Bếp (Web KDS)",
+          ? "Nút Bấm Trên Robot"
+          : "Nhân Viên Bếp (Web)",
         viaHardwareButton,
       );
-      if (activeSequence.currentLegIndex === 0) {
-        // Chuyển sang Chặng 2 (Đi tiếp Bàn 12)
+
+      const isLastLeg = activeSequence.currentLegIndex >= activeSequence.legs.length - 1;
+      if (!isLastLeg) {
+        // Chuyển sang Chặng tiếp theo
+        const nextLeg = activeSequence.legs[activeSequence.currentLegIndex + 1];
         showToast(
           viaHardwareButton
-            ? `[ESP32 Nút Bấm] Khách ${currentLeg.tableNo} đã nhận Khay 1! Robot tiếp tục di chuyển tới ${activeSequence.legs[1].tableNo}`
-            : `Đã xác nhận lấy món Khay 1 tại ${currentLeg.tableNo}! Robot tiếp tục di chuyển tới ${activeSequence.legs[1].tableNo}`,
+            ? `[Nút Trên Robot] Khách ${currentLeg.tableNo} đã nhận món! Robot tiếp tục di chuyển tới ${nextLeg.tableNo}`
+            : `Đã xác nhận lấy món tại ${currentLeg.tableNo}! Robot tiếp tục di chuyển tới ${nextLeg.tableNo}`,
           "success",
         );
         setActiveSequence((prev) => {
           if (!prev) return null;
           const updatedLegs = [...prev.legs];
-          updatedLegs[0] = { ...updatedLegs[0], status: "completed" };
-          updatedLegs[1] = { ...updatedLegs[1], status: "delivering" };
+          updatedLegs[prev.currentLegIndex] = { ...updatedLegs[prev.currentLegIndex], status: "completed" };
+          updatedLegs[prev.currentLegIndex + 1] = { ...updatedLegs[prev.currentLegIndex + 1], status: "delivering" };
 
           return {
             ...prev,
-            currentLegIndex: 1,
+            currentLegIndex: prev.currentLegIndex + 1,
             legs: updatedLegs,
           };
         });
@@ -848,27 +762,27 @@ export const StaffKdsPage: React.FC = () => {
               ? {
                   ...r,
                   status: "delivering",
-                  currentZone: `Đang đến ${activeSequence.legs[1].tableNo}`,
+                  currentZone: `Đang đến ${nextLeg.tableNo}`,
                 }
               : r,
           ),
         );
       } else {
-        // Hoàn tất Chặng 2, Robot quay về Bếp
+        // Hoàn tất toàn bộ lượt giao, Robot quay về Bếp
         showToast(
           viaHardwareButton
-            ? `[ESP32 Nút Bấm] Khách ${currentLeg.tableNo} đã nhận Khay 2! Toàn bộ 2 khay đã giao xong, robot đang quay về Bếp.`
-            : `Đã xác nhận lấy món Khay 2 tại ${currentLeg.tableNo}! Toàn bộ 2 khay đã giao xong, robot đang quay về Bếp.`,
+            ? `[Nút Trên Robot] Khách ${currentLeg.tableNo} đã nhận món! Đã hoàn tất lượt giao, robot đang quay về Bếp.`
+            : `Đã xác nhận lấy món tại ${currentLeg.tableNo}! Đã hoàn tất lượt giao, robot đang quay về Bếp.`,
           "success",
         );
         setActiveSequence((prev) => {
           if (!prev) return null;
           const updatedLegs = [...prev.legs];
-          updatedLegs[1] = { ...updatedLegs[1], status: "completed" };
+          updatedLegs[prev.currentLegIndex] = { ...updatedLegs[prev.currentLegIndex], status: "completed" };
 
           return {
             ...prev,
-            currentLegIndex: 2,
+            currentLegIndex: prev.legs.length,
             legs: updatedLegs,
             status: "completed",
           };
@@ -888,7 +802,6 @@ export const StaffKdsPage: React.FC = () => {
       setIsConfirmingTable(false);
     }
   };
-
   // Open Mid-Transit Reroute Modal
   const handleOpenRerouteModal = (legIndex: number) => {
     if (!activeSequence) return;
@@ -1325,7 +1238,7 @@ export const StaffKdsPage: React.FC = () => {
         );
         setIsTaskPaused(false);
         showToast(
-          "Đã tiếp tục hành trình cho Robot sau khi giải tỏa vật cản (UC-08)!",
+          "Đã tiếp tục hành trình cho Robot sau khi giải tỏa vật cản!",
           "success",
         );
       } else {
@@ -1335,7 +1248,7 @@ export const StaffKdsPage: React.FC = () => {
         );
         setIsTaskPaused(true);
         showToast(
-          "Đã tạm dừng Robot tránh va chạm chướng ngại vật (UC-08)!",
+          "Đã tạm dừng Robot tránh va chạm chướng ngại vật!",
           "info",
         );
       }
@@ -1505,7 +1418,7 @@ export const StaffKdsPage: React.FC = () => {
                   type="button"
                   onClick={() => handleOpenTableTransferForSelected()}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
-                  title="Đổi bàn cho khách khi món đang nấu hoặc đổi vị trí (Dining Table Transfer - HC-04 & WF-02)"
+                  title="Đổi bàn cho khách khi món đang nấu hoặc đổi vị trí"
                 >
                   <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
                   <span>Đổi Bàn (Table Transfer)</span>
@@ -1825,13 +1738,13 @@ export const StaffKdsPage: React.FC = () => {
             </div>
             {/* Quick Actions Bridging Map to Dispatch Trays & Table Transfer */}
             <div className="flex flex-wrap items-center gap-1.5 sm:self-center">
-              {dispatchMode === "sequence" &&
-                currentSelectedTable.id !== "Chưa có" && (
+              {currentSelectedTable.id !== "Chưa có" && (
                   <>
                     <button
                       type="button"
                       onClick={() => {
                         setTray1Table(currentSelectedTable.name);
+                        setIsTray1Active(true);
                         setActiveTrayTarget("tray2");
                         showToast(
                           `Đã nạp ${currentSelectedTable.name} vào Khay 1 (Tầng 1)`,
@@ -1839,7 +1752,7 @@ export const StaffKdsPage: React.FC = () => {
                         );
                       }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        activeTrayTarget === "tray1"
+                        isTray1Active && activeTrayTarget === "tray1"
                           ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
                           : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
                       }`}
@@ -1851,6 +1764,7 @@ export const StaffKdsPage: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setTray2Table(currentSelectedTable.name);
+                        setIsTray2Active(true);
                         setActiveTrayTarget("tray1");
                         showToast(
                           `Đã nạp ${currentSelectedTable.name} vào Khay 2 (Tầng 2)`,
@@ -1858,7 +1772,7 @@ export const StaffKdsPage: React.FC = () => {
                         );
                       }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        activeTrayTarget === "tray2"
+                        isTray2Active && activeTrayTarget === "tray2"
                           ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
                           : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
                       }`}
@@ -1891,7 +1805,7 @@ export const StaffKdsPage: React.FC = () => {
                   <strong className="text-amber-900 font-bold font-mono">
                     ⇄ Đổi Bàn
                   </strong>{" "}
-                  khi khách chuyển chỗ (HC-04)
+                  khi khách chuyển chỗ
                 </span>
               </div>
               <div className="flex gap-2.5 overflow-x-auto pb-1 pt-0.5">
@@ -1930,7 +1844,7 @@ export const StaffKdsPage: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      title="Đổi bàn cho đơn đang nấu (HC-04 / Dining Table Transfer)"
+                      title="Đổi bàn cho đơn đang nấu"
                       onClick={(e) => {
                         e.stopPropagation();
                         setTransferOrderModal({
@@ -1980,7 +1894,7 @@ export const StaffKdsPage: React.FC = () => {
                   <div>
                     <div className="text-xs font-black tracking-tight flex items-center gap-2">
                       <span className="uppercase text-cyan-200 font-mono">
-                        CHUỖI 2 KHAY ĐA BÀN ĐANG THỰC HIỆN
+                        LỆNH ĐIỀU PHỐI ĐANG THỰC HIỆN
                       </span>
                       <span className="font-mono text-[10px] font-bold bg-blue-500/30 text-cyan-300 px-2 py-0.5 rounded border border-blue-400/30">
                         {activeSequence.sequenceId}
@@ -2018,14 +1932,16 @@ export const StaffKdsPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-              {/* 4-Step Visual Sequence Stepper with Realtime Indicators */}
+              {/* Dynamic Visual Sequence Stepper with Realtime Indicators */}
               <div className="relative z-10">
-                <div className="grid grid-cols-4 gap-2 text-center">
+                <div className={`grid gap-2 text-center ${
+                  activeSequence.legs.length === 1 ? "grid-cols-3" : "grid-cols-4"
+                }`}>
                   {/* Step 1: Central Kitchen */}
                   <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 shadow-inner flex flex-col justify-between">
                     <div>
                       <div className="text-[10px] text-emerald-300/80 font-mono font-bold uppercase">
-                        Trạm 1
+                        Khởi hành
                       </div>
                       <div className="text-xs font-black text-emerald-300 mt-0.5">
                         Bếp Trung Tâm
@@ -2035,107 +1951,68 @@ export const StaffKdsPage: React.FC = () => {
                       Đã xuất phát ✓
                     </div>
                   </div>
-                  {/* Step 2: Tray 1 -> Table 1 */}
-                  <div
-                    className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
-                      activeSequence.legs[0].status === "completed"
-                        ? "bg-emerald-500/20 border-emerald-500/40"
-                        : activeSequence.currentLegIndex === 0
-                          ? "bg-blue-600/40 border-cyan-400 ring-2 ring-cyan-400/40 shadow-lg shadow-blue-500/20"
-                          : "bg-white/5 border-white/10 opacity-60"
-                    }`}
-                  >
-                    <div>
-                      <div className="text-[10px] text-cyan-200/80 font-mono font-bold uppercase">
-                        Khay 1 (Tầng 1)
-                      </div>
-                      <div className="text-xs font-black text-white mt-0.5">
-                        {activeSequence.legs[0].tableNo}
-                      </div>
-                    </div>
-                    <div>
+
+                  {/* Dynamic Leg Steps */}
+                  {activeSequence.legs.map((leg, idx) => {
+                    const isCompleted = leg.status === "completed";
+                    const isCurrent = activeSequence.currentLegIndex === idx;
+                    return (
                       <div
-                        className={`text-[9px] font-mono mt-1 ${
-                          activeSequence.legs[0].status === "completed"
-                            ? "text-emerald-400 font-bold"
-                            : activeSequence.currentLegIndex === 0
-                              ? "text-cyan-300 font-extrabold animate-pulse"
-                              : "text-slate-400"
+                        key={leg.taskId || idx}
+                        className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
+                          isCompleted
+                            ? "bg-emerald-500/20 border-emerald-500/40"
+                            : isCurrent
+                              ? idx === 0
+                                ? "bg-blue-600/40 border-cyan-400 ring-2 ring-cyan-400/40 shadow-lg shadow-blue-500/20"
+                                : "bg-indigo-600/40 border-indigo-400 ring-2 ring-indigo-400/40 shadow-lg shadow-indigo-500/20"
+                              : "bg-white/5 border-white/10 opacity-60"
                         }`}
                       >
-                        {activeSequence.legs[0].status === "completed"
-                          ? "Đã lấy món ✓"
-                          : "Đang tới bàn..."}
-                      </div>
-                      {activeSequence.legs[0].status !== "completed" &&
-                        activeSequence.status === "in_progress" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenRerouteModal(0);
-                            }}
-                            className="mt-1.5 w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-95"
-                            title="Đổi bàn giữa chặng cho Khay 1 (Mid-Transit Table Transfer)"
+                        <div>
+                          <div className="text-[10px] text-cyan-200/80 font-mono font-bold uppercase">
+                            Khay {leg.cargoLevel} (Tầng {leg.cargoLevel})
+                          </div>
+                          <div className="text-xs font-black text-white mt-0.5">
+                            {leg.tableNo}
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            className={`text-[9px] font-mono mt-1 ${
+                              isCompleted
+                                ? "text-emerald-400 font-bold"
+                                : isCurrent
+                                  ? "text-cyan-300 font-extrabold animate-pulse"
+                                  : "text-slate-400"
+                            }`}
                           >
-                            <ArrowRightLeft className="w-3 h-3 text-amber-300" />
-                            <span>Đổi Bàn</span>
-                          </button>
-                        )}
-                    </div>
-                  </div>
-                  {/* Step 3: Tray 2 -> Table 2 */}
-                  <div
-                    className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
-                      activeSequence.legs[1].status === "completed"
-                        ? "bg-emerald-500/20 border-emerald-500/40"
-                        : activeSequence.currentLegIndex === 1
-                          ? "bg-indigo-600/40 border-indigo-400 ring-2 ring-indigo-400/40 shadow-lg shadow-indigo-500/20"
-                          : "bg-white/5 border-white/10 opacity-60"
-                    }`}
-                  >
-                    <div>
-                      <div className="text-[10px] text-indigo-200/80 font-mono font-bold uppercase">
-                        Khay 2 (Tầng 2)
+                            {isCompleted
+                              ? "Đã lấy món ✓"
+                              : isCurrent
+                                ? "Đang tới bàn..."
+                                : `Chờ chặng ${idx}`}
+                          </div>
+                          {!isCompleted && activeSequence.status === "in_progress" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenRerouteModal(idx);
+                              }}
+                              className="mt-1.5 w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-95"
+                              title={`Đổi bàn cho Khay ${leg.cargoLevel}`}
+                            >
+                              <ArrowRightLeft className="w-3 h-3 text-amber-300" />
+                              <span>Đổi Bàn</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-xs font-black text-white mt-0.5">
-                        {activeSequence.legs[1].tableNo}
-                      </div>
-                    </div>
-                    <div>
-                      <div
-                        className={`text-[9px] font-mono mt-1 ${
-                          activeSequence.legs[1].status === "completed"
-                            ? "text-emerald-400 font-bold"
-                            : activeSequence.currentLegIndex === 1
-                              ? "text-cyan-300 font-extrabold animate-pulse"
-                              : "text-slate-400"
-                        }`}
-                      >
-                        {activeSequence.legs[1].status === "completed"
-                          ? "Đã lấy món ✓"
-                          : activeSequence.currentLegIndex === 1
-                            ? "Đang tới bàn..."
-                            : "Chờ chặng 1"}
-                      </div>
-                      {activeSequence.legs[1].status !== "completed" &&
-                        activeSequence.status === "in_progress" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenRerouteModal(1);
-                            }}
-                            className="mt-1.5 w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-95"
-                            title="Đổi bàn giữa chặng cho Khay 2 (Mid-Transit Table Transfer)"
-                          >
-                            <ArrowRightLeft className="w-3 h-3 text-amber-300" />
-                            <span>Đổi Bàn</span>
-                          </button>
-                        )}
-                    </div>
-                  </div>
-                  {/* Step 4: Back to Central Kitchen */}
+                    );
+                  })}
+
+                  {/* Final Step: Back to Central Kitchen */}
                   <div
                     className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
                       activeSequence.status === "completed"
@@ -2159,28 +2036,22 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              {/* DUAL CONFIRMATION TERMINAL (ASSISTED DROP-OFF) */}
+              {/* DUAL CONFIRMATION TERMINAL */}
               {activeSequence.status === "in_progress" ? (
                 <div className="p-4 rounded-xl bg-gradient-to-b from-blue-950/70 to-slate-900/95 border border-cyan-500/40 space-y-3.5 relative z-10 shadow-xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-white/10">
                     <span className="flex items-center gap-2 text-xs font-black text-cyan-300 uppercase tracking-wide">
                       <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-                      <span>
-                        ASSISTED DROP-OFF • XÁC NHẬN KÉP TRẢ MÓN (DUAL
-                        CONFIRMATION)
-                      </span>
+                      <span>XÁC NHẬN TRẢ MÓN TẠI BÀN HOẶC TỪ XA</span>
                     </span>
                     <span className="text-[11px] font-mono font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-400/30 flex items-center gap-1">
                       <span>Đang Dừng Tại:</span>
                       <strong className="text-white">
-                        {
-                          activeSequence.legs[activeSequence.currentLegIndex]
-                            .tableNo
-                        }
+                        {activeSequence.legs[activeSequence.currentLegIndex]?.tableNo || activeSequence.legs[0]?.tableNo}
                       </strong>
                     </span>
                   </div>
-                  {/* Tray Guidance Banner (Chỉ định khay lấy món chống nhầm lẫn giữa 2 bàn) */}
+                  {/* Tray Guidance Banner */}
                   <div
                     className={`p-3 rounded-xl border flex items-start gap-3 transition-all ${
                       activeSequence.currentLegIndex === 0
@@ -2200,42 +2071,37 @@ export const StaffKdsPage: React.FC = () => {
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black tracking-wider uppercase">
-                          {activeSequence.currentLegIndex === 0
-                            ? `CHẶNG 1: TRẢ MÓN BÀN ${activeSequence.legs[0].tableNo}`
-                            : `CHẶNG 2: TRẢ MÓN BÀN ${activeSequence.legs[1].tableNo}`}
+                          {activeSequence.legs.length === 1
+                            ? `GIAO MÓN TỚI BÀN ${activeSequence.legs[0]?.tableNo}`
+                            : `CHẶNG ${activeSequence.currentLegIndex + 1}: TRẢ MÓN BÀN ${activeSequence.legs[activeSequence.currentLegIndex]?.tableNo}`}
                         </span>
                         <span className="text-[9px] font-mono px-2 py-0.5 rounded-md bg-white/10 font-bold">
-                          {activeSequence.currentLegIndex === 0
-                            ? "Chặng 1/2"
-                            : "Chặng 2/2"}
+                          Chặng {activeSequence.currentLegIndex + 1}/{activeSequence.legs.length}
                         </span>
                       </div>
                       <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
                         <span>Chỉ lấy món ở:</span>
                         <span
                           className={`px-2 py-0.5 rounded-md font-mono font-black text-xs ${
-                            activeSequence.currentLegIndex === 0
+                            (activeSequence.legs[activeSequence.currentLegIndex]?.cargoLevel ?? 1) === 1
                               ? "bg-amber-400 text-slate-950 shadow-xs"
                               : "bg-indigo-400 text-slate-950 shadow-xs"
                           }`}
                         >
-                          {activeSequence.currentLegIndex === 0
-                            ? "KHAY 1 (TẦNG DƯỚI)"
-                            : "KHAY 2 (TẦNG TRÊN)"}
+                          KHAY {activeSequence.legs[activeSequence.currentLegIndex]?.cargoLevel ?? 1} ({(activeSequence.legs[activeSequence.currentLegIndex]?.cargoLevel ?? 1) === 1 ? "TẦNG DƯỚI" : "TẦNG TRÊN"})
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-300 leading-normal">
-                        {activeSequence.currentLegIndex === 0 ? (
+                        {activeSequence.legs.length === 1 ? (
+                          <>Khách tại bàn <strong>{activeSequence.legs[0]?.tableNo}</strong> nhận món xong, bấm nút trên thân robot (hoặc bếp xác nhận) để xe tự động quay về trạm bếp.</>
+                        ) : activeSequence.currentLegIndex === 0 ? (
                           <>
-                            ⚠️ Khay 2 (Tầng Trên) đang khóa bảo lưu cho bàn{" "}
-                            <strong>{activeSequence.legs[1].tableNo}</strong>.
-                            Tuyệt đối không nhấc đĩa ở tầng trên.
+                            Khách tại bàn <strong>{activeSequence.legs[0]?.tableNo}</strong> nhận món ở Khay 1.
+                            Sau khi lấy món, bấm nút trên robot để xe tiếp tục tới bàn <strong>{activeSequence.legs[1]?.tableNo}</strong>.
                           </>
                         ) : (
                           <>
-                            Khay 1 (Tầng Dưới) đã giao xong. Sau khi bàn{" "}
-                            <strong>{activeSequence.legs[1].tableNo}</strong>{" "}
-                            nhận khay 2, robot sẽ tự động quay về trạm bếp.
+                            Khay 1 đã giao xong. Sau khi bàn <strong>{activeSequence.legs[1]?.tableNo}</strong> nhận khay 2, robot sẽ tự động quay về trạm bếp.
                           </>
                         )}
                       </p>
@@ -2243,25 +2109,20 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
                   {/* Phân định 2 kênh xác nhận: Kênh 1 (Tại Bàn) & Kênh 2 (Tại Bếp) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {/* Kênh 1: Tại Bàn (Khách / Nhân Viên Bấm Nút ESP32 Gắn Trên Xe) */}
+                    {/* Kênh 1: Tại Bàn */}
                     <div className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex flex-col justify-between space-y-2">
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
                             <Cpu className="w-3.5 h-3.5" />
-                            Kênh 1 • Bấm Tại Bàn (Khách/Runner)
+                            Kênh 1 • Bấm Nút Trên Robot
                           </span>
                           <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30 font-bold">
                             Mặc Định
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-1 leading-snug">
-                          Khách hoặc nhân viên tại bàn{" "}
-                          {
-                            activeSequence.legs[activeSequence.currentLegIndex]
-                              .tableNo
-                          }{" "}
-                          nhấc món xong và ấn nút vật lý trên xe.
+                          Khách hoặc nhân viên tại bàn {activeSequence.legs[activeSequence.currentLegIndex]?.tableNo} nhấc món xong và ấn nút trên thân xe robot.
                         </p>
                       </div>
                       <button
@@ -2269,17 +2130,21 @@ export const StaffKdsPage: React.FC = () => {
                         disabled={isConfirmingTable}
                         onClick={() => handleConfirmNextTable(true)}
                         className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer border border-emerald-400/50"
-                        title="Mô phỏng nhân viên phục vụ hoặc khách bấm nút vật lý ESP32 gắn trên robot"
+                        title="Nhân viên hoặc khách bấm nút trên robot"
                       >
                         {isConfirmingTable ? (
                           <RotateCcw className="w-4 h-4 animate-spin text-white" />
                         ) : (
                           <Cpu className="w-4 h-4 text-amber-300" />
                         )}
-                        <span>Mô Phỏng Nút ESP32 (Xe AMR)</span>
+                        <span>
+                          {activeSequence.currentLegIndex >= activeSequence.legs.length - 1
+                            ? "Bấm Nút Trên Robot (Xong Lượt)"
+                            : "Bấm Nút Trên Robot (Đi Tiếp)"}
+                        </span>
                       </button>
                     </div>
-                    {/* Kênh 2: Tại Bếp (Nhân viên Điều phối Web KDS ghi đè từ xa) */}
+                    {/* Kênh 2: Tại Bếp */}
                     <div className="p-3 rounded-xl bg-slate-900/80 border border-blue-500/30 flex flex-col justify-between space-y-2">
                       <div>
                         <div className="flex items-center justify-between">
@@ -2288,12 +2153,11 @@ export const StaffKdsPage: React.FC = () => {
                             Kênh 2 • Tại Bếp (Web KDS)
                           </span>
                           <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-bold">
-                            Ghi Đè (Override)
+                            Ghi Đè
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-1 leading-snug">
-                          Dùng khi khách quên bấm nút vật lý hoặc sự cố kết nối
-                          ESP32. Bếp quan sát rồi xác nhận từ xa.
+                          Dùng khi khách chưa bấm nút trên xe. Bếp quan sát rồi xác nhận điều phối từ xa.
                         </p>
                       </div>
                       <button
@@ -2308,9 +2172,9 @@ export const StaffKdsPage: React.FC = () => {
                           <CheckCircle2 className="w-4 h-4 text-emerald-300" />
                         )}
                         <span>
-                          {activeSequence.currentLegIndex === 0
-                            ? `Xác Nhận (Web): Đến ${activeSequence.legs[1].tableNo}`
-                            : "Xác Nhận (Web): Xe Quay Về Bếp"}
+                          {activeSequence.currentLegIndex >= activeSequence.legs.length - 1
+                            ? "Xác Nhận (Web): Xe Quay Về Bếp"
+                            : `Xác Nhận (Web): Đến ${activeSequence.legs[activeSequence.currentLegIndex + 1]?.tableNo || "Bàn Tiếp Theo"}`}
                         </span>
                       </button>
                     </div>
@@ -2342,8 +2206,8 @@ export const StaffKdsPage: React.FC = () => {
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                       <span>
                         {isTaskPaused
-                          ? "▶ Tiếp Tục Di Chuyển (Đã Dọn Vật Cản - UC-08)"
-                          : "⏸ Tạm Dừng Tránh Vật Cản Hành Lang (UC-08)"}
+                          ? "▶ Tiếp Tục Di Chuyển (Đã Dọn Vật Cản)"
+                          : "⏸ Tạm Dừng Tránh Vật Cản Hành Lang"}
                       </span>
                     </button>
                   </div>
@@ -2353,8 +2217,7 @@ export const StaffKdsPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     <span className="font-bold">
-                      Toàn bộ chuỗi 2 khay đã phục vụ thành công! Xe đã quay về
-                      trạm an toàn.
+                      Toàn bộ lượt giao đã phục vụ thành công! Xe đã quay về trạm an toàn.
                     </span>
                   </div>
                   <button
@@ -2368,7 +2231,7 @@ export const StaffKdsPage: React.FC = () => {
               )}
             </div>
           )}
-          {/* STAFF MOVE REQUEST FORM (YÊU CẦU ROBOT DI CHUYỂN) */}
+          {/* STAFF MOVE REQUEST FORM - UNIFIED 2-TRAY CONSOLE */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -2378,88 +2241,83 @@ export const StaffKdsPage: React.FC = () => {
                 </h3>
               </div>
               <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
-                <Database className="w-3 h-3 text-emerald-600" />
-                <span>SQLite Shard</span>
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Hệ Thống Sẵn Sàng</span>
               </span>
             </div>
-            {/* Mode Selector Segmented Tabs: 2-Tray Sequence vs Single Table */}
-            <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setDispatchMode("sequence")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  dispatchMode === "sequence"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
+
+            {/* UNIFIED 2-TRAY FORM WITH EXPLICIT CONFIRMATION TOGGLE PER TRAY */}
+            <div className="space-y-3.5">
+              {/* TRAY 1 (LEVEL 1 - TẦNG DƯỚI) */}
+              <div
+                className={`p-3.5 rounded-xl border transition-all ${
+                  isTray1Active
+                    ? "border-blue-300 bg-blue-50/40 shadow-xs"
+                    : "border-slate-200 bg-slate-50/60 opacity-75"
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Chuỗi 2 Khay Đa Bàn (DS-07)</span>
-                <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                    dispatchMode === "sequence"
-                      ? "bg-blue-700 text-white"
-                      : "bg-slate-200 text-slate-700"
-                  }`}
-                >
-                  Chuẩn
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDispatchMode("single")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  dispatchMode === "single"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Đơn Bàn Lẻ (Single)</span>
-              </button>
-            </div>
-            {dispatchMode === "sequence" ? (
-              /* MODE A: 2-TRAY MULTI-TABLE SEQUENCE CONFIGURATION */
-              <div className="space-y-3.5">
-                {/* TRAY 1 (LEVEL 1 - TẦNG DƯỚI) */}
-                <div className="p-3.5 rounded-xl border border-blue-200/80 bg-blue-50/30 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-black text-blue-900">
-                      <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-mono">
-                        1
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-mono font-bold">
+                      1
+                    </span>
+                    <span className="text-xs font-black text-slate-900">
+                      KHAY 1 (TẦNG DƯỚI)
+                    </span>
+                    {isTray1Active && (
+                      <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                        {isTray2Active && tray1Table !== tray2Table ? "Chặng 1" : "Đang dùng"}
                       </span>
-                      <span>KHAY 1 (TẦNG DƯỚI) ➔ TRẢ MÓN LƯỢT 1</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                      Chặng 1
-                    </span>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Confirmation toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isTray1Active;
+                      setIsTray1Active(next);
+                      if (next) setActiveTrayTarget("tray1");
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                      isTray1Active
+                        ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-2xs"
+                        : "bg-white hover:bg-slate-100 text-slate-600 border-slate-300"
+                    }`}
+                  >
+                    {isTray1Active ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        <span>✓ Đang Dùng Khay 1</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Bật Khay 1</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {isTray1Active ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-blue-100">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Bàn Đích Đến (Chặng 1)
+                        Bàn Đích Đến (Khay 1)
                       </label>
                       <select
                         value={tray1Table}
                         onChange={(e) => {
                           setTray1Table(e.target.value);
-                          setActiveTrayTarget("tray2");
+                          if (isTray2Active) setActiveTrayTarget("tray2");
                         }}
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
                       >
-                        <option value="">
-                          -- Chọn Bàn Giao Khay 1 (Toàn bộ bàn) --
-                        </option>
-                        {tray1Table &&
-                          !tables.some((t) => t.name === tray1Table) && (
-                            <option value={tray1Table}>{tray1Table}</option>
-                          )}
+                        <option value="">-- Chọn Bàn Giao Khay 1 --</option>
+                        {tray1Table && !tables.some((t) => t.name === tray1Table) && (
+                          <option value={tray1Table}>{tray1Table}</option>
+                        )}
                         {tables.map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""}{" "}
-                            {t.stationName ? `• Trạm: ${t.stationName}` : ""}{" "}
-                            {t.status === "merged" ? "(Đã gộp) " : ""}
-                            {t.isRestricted ? "⚠️ [Lối Hẹp < 0.8m]" : ""}
+                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""} {t.status === "merged" ? "(Đã gộp)" : ""}
                           </option>
                         ))}
                       </select>
@@ -2475,45 +2333,109 @@ export const StaffKdsPage: React.FC = () => {
                         placeholder="Ví dụ: ORD-101..."
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       />
+                      {pendingOrders.length > 0 && (
+                        <div className="flex items-center gap-1 pt-1 overflow-x-auto">
+                          <span className="text-[9px] text-slate-400 font-medium shrink-0">Gợi ý:</span>
+                          {pendingOrders.slice(0, 4).map((order) => {
+                            const chip = order.orderNumber || order.id;
+                            return (
+                              <button
+                                key={chip}
+                                type="button"
+                                onClick={() => {
+                                  setTray1OrderId(chip);
+                                  if (order.tableNo && !tray1Table) {
+                                    setTray1Table(order.tableNo);
+                                  }
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border cursor-pointer shrink-0 ${
+                                  tray1OrderId === chip
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                {chip}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-                {/* TRAY 2 (LEVEL 2 - TẦNG TRÊN) */}
-                <div className="p-3.5 rounded-xl border border-indigo-200/80 bg-indigo-50/30 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-black text-indigo-900">
-                      <span className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono">
-                        2
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic mt-1.5">
+                    Khay 1 đang để trống. Nhấn [Bật Khay 1] nếu muốn nạp món vào tầng dưới.
+                  </p>
+                )}
+              </div>
+
+              {/* TRAY 2 (LEVEL 2 - TẦNG TRÊN) */}
+              <div
+                className={`p-3.5 rounded-xl border transition-all ${
+                  isTray2Active
+                    ? "border-indigo-300 bg-indigo-50/40 shadow-xs"
+                    : "border-slate-200 bg-slate-50/60 opacity-75"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center text-[10px] font-mono font-bold">
+                      2
+                    </span>
+                    <span className="text-xs font-black text-slate-900">
+                      KHAY 2 (TẦNG TRÊN)
+                    </span>
+                    {isTray2Active && (
+                      <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
+                        {isTray1Active && tray1Table !== tray2Table ? "Chặng 2" : "Đang dùng"}
                       </span>
-                      <span>KHAY 2 (TẦNG TRÊN) ➔ TRẢ MÓN LƯỢT 2</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
-                      Chặng 2
-                    </span>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Confirmation toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !isTray2Active;
+                      setIsTray2Active(next);
+                      if (next) setActiveTrayTarget("tray2");
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                      isTray2Active
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-2xs"
+                        : "bg-white hover:bg-slate-100 text-slate-600 border-slate-300"
+                    }`}
+                  >
+                    {isTray2Active ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                        <span>✓ Đang Dùng Khay 2</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Bật Khay 2</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {isTray2Active ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-indigo-100">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Bàn Đích Đến (Chặng 2)
+                        Bàn Đích Đến (Khay 2)
                       </label>
                       <select
                         value={tray2Table}
                         onChange={(e) => setTray2Table(e.target.value)}
                         className="w-full px-2.5 py-2 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
                       >
-                        <option value="">
-                          -- Chọn Bàn Giao Khay 2 (Toàn bộ bàn) --
-                        </option>
-                        {tray2Table &&
-                          !tables.some((t) => t.name === tray2Table) && (
-                            <option value={tray2Table}>{tray2Table}</option>
-                          )}
+                        <option value="">-- Chọn Bàn Giao Khay 2 --</option>
+                        {tray2Table && !tables.some((t) => t.name === tray2Table) && (
+                          <option value={tray2Table}>{tray2Table}</option>
+                        )}
                         {tables.map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""}{" "}
-                            {t.stationName ? `• Trạm: ${t.stationName}` : ""}{" "}
-                            {t.status === "merged" ? "(Đã gộp) " : ""}
-                            {t.isRestricted ? "⚠️ [Lối Hẹp < 0.8m]" : ""}
+                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""} {t.status === "merged" ? "(Đã gộp)" : ""}
                           </option>
                         ))}
                       </select>
@@ -2529,198 +2451,124 @@ export const StaffKdsPage: React.FC = () => {
                         placeholder="Ví dụ: ORD-102..."
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                       />
+                      {pendingOrders.length > 0 && (
+                        <div className="flex items-center gap-1 pt-1 overflow-x-auto">
+                          <span className="text-[9px] text-slate-400 font-medium shrink-0">Gợi ý:</span>
+                          {pendingOrders.slice(0, 4).map((order) => {
+                            const chip = order.orderNumber || order.id;
+                            return (
+                              <button
+                                key={chip}
+                                type="button"
+                                onClick={() => {
+                                  setTray2OrderId(chip);
+                                  if (order.tableNo && !tray2Table) {
+                                    setTray2Table(order.tableNo);
+                                  }
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border cursor-pointer shrink-0 ${
+                                  tray2OrderId === chip
+                                    ? "bg-indigo-600 text-white border-indigo-600"
+                                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                {chip}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-                {/* Sequence Route Preview */}
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 font-bold text-slate-900">
-                      <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span>Lộ Trình Tuần Tự (Multi-Table Sequence):</span>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic mt-1.5">
+                    Khay 2 đang để trống. Nhấn [Bật Khay 2] nếu muốn nạp thêm món tầng trên.
+                  </p>
+                )}
+              </div>
+
+              {/* DYNAMIC ROUTE PREVIEW */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-700 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 font-bold text-slate-900">
+                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>
+                      {!isTray1Active && !isTray2Active
+                        ? "Chưa chọn khay giao món:"
+                        : isTray1Active && isTray2Active
+                          ? tray1Table === tray2Table
+                            ? "Lộ trình giao 1 bàn (Cả 2 khay):"
+                            : "Lộ trình chuỗi 2 bàn liên tiếp:"
+                          : "Lộ trình giao 1 bàn:"}
                     </span>
-                    <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs">
-                      <span className="text-emerald-700">Bếp</span>
-                      <ArrowRight className="w-3 h-3 text-slate-400" />
-                      <span className="text-blue-700 font-extrabold">
-                        {tray1Table || "Khay 1"}
-                      </span>
-                      <ArrowRight className="w-3 h-3 text-slate-400" />
-                      <span className="text-indigo-700 font-extrabold">
-                        {tray2Table || "Khay 2"}
-                      </span>
-                      <ArrowRight className="w-3 h-3 text-slate-400" />
-                      <span className="text-slate-500">Về Bếp</span>
-                    </div>
-                  </div>
-                  {/* Merged table warning if either tray is merged */}
-                  {(tables.find(
-                    (t) => t.name.toLowerCase() === tray1Table.toLowerCase(),
-                  )?.status === "merged" ||
-                    tables.find(
-                      (t) => t.name.toLowerCase() === tray2Table.toLowerCase(),
-                    )?.status === "merged") && (
-                    <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] flex items-center gap-1.5 font-medium">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>
-                        Lưu ý: Có bàn đã gộp. Robot AMR sẽ tự động điều phối trả
-                        món tại Trạm Bàn Chính tương ứng.
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {/* STANDBY WORKFLOW PIPELINE: Visible in Standby to avoid empty state confusion */}
-                {!activeSequence && (
-                  <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs space-y-2 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-blue-950 flex items-center gap-1.5">
-                        <Navigation className="w-3.5 h-3.5 text-blue-600" />
-                        <span>
-                          QUY TRÌNH CHUỖI 2 KHAY &amp; ASSISTED DROP-OFF
+                  </span>
+                  <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs overflow-x-auto">
+                    <span className="text-emerald-700">Bếp</span>
+                    {isTray1Active && (
+                      <>
+                        <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="text-blue-700 font-extrabold whitespace-nowrap">
+                          {tray1Table || "Chưa chọn"} (Khay 1)
                         </span>
-                      </span>
-                      <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
-                        DS-07 Realtime
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-mono pt-1">
-                      <div className="p-2 rounded-lg bg-white border border-blue-200 text-slate-700">
-                        <div className="font-bold text-blue-700">
-                          1. Xuất Bếp
-                        </div>
-                        <div className="text-[9px] text-slate-500 mt-0.5">
-                          Nạp 2 khay
-                        </div>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white border border-blue-200 text-slate-700">
-                        <div className="font-bold text-blue-700">
-                          2. Đến Khay 1
-                        </div>
-                        <div className="text-[9px] text-slate-500 mt-0.5">
-                          ESP32 / Đổi Bàn
-                        </div>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white border border-indigo-200 text-slate-700">
-                        <div className="font-bold text-indigo-700">
-                          3. Đến Khay 2
-                        </div>
-                        <div className="text-[9px] text-slate-500 mt-0.5">
-                          ESP32 / Đổi Bàn
-                        </div>
-                      </div>
-                      <div className="p-2 rounded-lg bg-white border border-emerald-200 text-slate-700">
-                        <div className="font-bold text-emerald-700">
-                          4. Về Bếp
-                        </div>
-                        <div className="text-[9px] text-slate-500 mt-0.5">
-                          Tự động
-                        </div>
-                      </div>
-                    </div>
+                      </>
+                    )}
+                    {isTray2Active && (
+                      <>
+                        <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="text-indigo-700 font-extrabold whitespace-nowrap">
+                          {tray2Table || "Chưa chọn"} (Khay 2)
+                        </span>
+                      </>
+                    )}
+                    <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-slate-500">Về Bếp</span>
+                  </div>
+                </div>
+                {/* Merged table warning if active trays have merged tables */}
+                {((isTray1Active && tables.find((t) => t.name.toLowerCase() === tray1Table.toLowerCase())?.status === "merged") ||
+                  (isTray2Active && tables.find((t) => t.name.toLowerCase() === tray2Table.toLowerCase())?.status === "merged")) && (
+                  <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] flex items-center gap-1.5 font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      Lưu ý: Có bàn đã gộp. Robot sẽ tự động điều phối trả món tại Trạm Bàn Chính tương ứng.
+                    </span>
                   </div>
                 )}
               </div>
-            ) : (
-              /* MODE B: SINGLE TABLE DISPATCH FORM (EXISTING) */
-              <>
-                {/* Field 1: Order ID */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Hash className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Mã Đơn / Order ID</span>
+
+              {/* STANDBY WORKFLOW PIPELINE */}
+              {!activeSequence && (
+                <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                      <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                      <span>QUY TRÌNH PHỤC VỤ TỰ ĐỘNG</span>
                     </span>
-                    <span className="text-[10px] font-mono font-normal text-slate-400">
-                      Khớp POS / Bill
+                    <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200">
+                      Tự Động
                     </span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={orderInputId}
-                      onChange={(e) => setOrderInputId(e.target.value)}
-                      placeholder="Nhập mã đơn, ví dụ: ORD-101..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
-                    />
                   </div>
-                  {/* Quick suggestions chips for Order ID from real pending orders */}
-                  {pendingOrders.length > 0 && (
-                    <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
-                      <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                        Gợi ý đơn:
-                      </span>
-                      {pendingOrders.slice(0, 5).map((order) => {
-                        const chip = order.orderNumber || order.id;
-                        return (
-                          <button
-                            key={chip}
-                            type="button"
-                            onClick={() => setOrderInputId(chip)}
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${
-                              orderInputId === chip
-                                ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
-                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900"
-                            }`}
-                          >
-                            {chip}
-                          </button>
-                        );
-                      })}
+                  <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-mono pt-1">
+                    <div className="p-2 rounded-lg bg-white border border-blue-200 text-slate-700">
+                      <div className="font-bold text-blue-700">1. Xuất Bếp</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">Nạp khay món</div>
                     </div>
-                  )}
-                </div>
-                {/* Field 2: Destination Table */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Điểm Đích Đến / Destination Table</span>
-                    </span>
-                    <span className="text-[10px] font-mono font-normal text-slate-400">
-                      Click bản đồ hoặc nhập tay
-                    </span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={destinationInput}
-                      onChange={(e) => setDestinationInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all cursor-pointer"
-                    >
-                      <option value="">
-                        -- Chọn Bàn Đích Đến (Toàn bộ bàn) --
-                      </option>
-                      {destinationInput &&
-                        !tables.some((t) => t.name === destinationInput) && (
-                          <option value={destinationInput}>
-                            {destinationInput}
-                          </option>
-                        )}
-                      {tables.map((t) => (
-                        <option key={t.id} value={t.name}>
-                          {t.name} {t.zone ? `[${t.zone}]` : ""}{" "}
-                          {t.stationName ? `• Trạm: ${t.stationName}` : ""}{" "}
-                          {t.status === "merged" ? "(Đã gộp)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="p-2 rounded-lg bg-white border border-blue-200 text-slate-700">
+                      <div className="font-bold text-blue-700">2. Đến Bàn</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">Nút trên xe / Đổi bàn</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white border border-indigo-200 text-slate-700">
+                      <div className="font-bold text-indigo-700">3. Trả Món</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">Khách nhận món</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white border border-emerald-200 text-slate-700">
+                      <div className="font-bold text-emerald-700">4. Về Bếp</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">Tự động</div>
+                    </div>
                   </div>
                 </div>
-                {/* Departure Station info */}
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-[11px] text-slate-600 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>
-                      Trạm Xuất: <strong>Bếp Trung Tâm (Kitchen)</strong>
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1 font-mono text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    <span>{effectiveRobot?.code || "AMR-01"}</span>
-                    <ArrowRight className="w-3 h-3 text-blue-500" />
-                    <span>{destinationInput || "Chưa chọn"}</span>
-                  </span>
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
           {/* SMART AUTO-SELECT ROBOT & DISPATCH BOX */}
           <div className="bg-white rounded-2xl border-2 border-blue-500/80 p-4 sm:p-5 shadow-lg space-y-4">
@@ -2861,22 +2709,18 @@ export const StaffKdsPage: React.FC = () => {
               disabled={
                 isDispatching ||
                 !effectiveRobot ||
-                (dispatchMode === "sequence"
-                  ? !tray1Table.trim() || !tray2Table.trim()
-                  : !destinationInput.trim())
+                (!isTray1Active && !isTray2Active) ||
+                (isTray1Active && !tray1Table.trim()) ||
+                (isTray2Active && !tray2Table.trim())
               }
-              onClick={
-                dispatchMode === "sequence"
-                  ? handleDispatchSequence
-                  : handleDispatchOrder
-              }
+              onClick={handleSmartDispatch}
               className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
                 isDispatching
                   ? "bg-blue-400 text-white cursor-not-allowed"
                   : !effectiveRobot ||
-                      (dispatchMode === "sequence"
-                        ? !tray1Table.trim() || !tray2Table.trim()
-                        : !destinationInput.trim())
+                      (!isTray1Active && !isTray2Active) ||
+                      (isTray1Active && !tray1Table.trim()) ||
+                      (isTray2Active && !tray2Table.trim())
                     ? "bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75"
                     : "bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer"
               }`}
@@ -2884,56 +2728,61 @@ export const StaffKdsPage: React.FC = () => {
               {isDispatching ? (
                 <>
                   <RotateCcw className="w-4 h-4 animate-spin text-white" />
-                  <span>ĐANG GHI SQLITE & PHÁT LỆNH ĐIỀU PHỐI...</span>
+                  <span>ĐANG PHÁT LỆNH ĐIỀU PHỐI ROBOT...</span>
                 </>
               ) : !effectiveRobot ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-slate-400" />
-                  <span>CHƯA CÓ AMR SẴN SÀNG</span>
+                  <span>CHƯA CÓ ROBOT SẴN SÀNG</span>
                 </>
-              ) : dispatchMode === "sequence" ? (
-                !tray1Table.trim() || !tray2Table.trim() ? (
+              ) : !isTray1Active && !isTray2Active ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-slate-400" />
+                  <span>VUI LÒNG BẬT ÍT NHẤT 1 KHAY ĐỂ GIAO</span>
+                </>
+              ) : isTray1Active && !tray1Table.trim() ? (
+                <>
+                  <Send className="w-4 h-4 text-slate-400" />
+                  <span>VUI LÒNG CHỌN BÀN CHO KHAY 1</span>
+                </>
+              ) : isTray2Active && !tray2Table.trim() ? (
+                <>
+                  <Send className="w-4 h-4 text-slate-400" />
+                  <span>VUI LÒNG CHỌN BÀN CHO KHAY 2</span>
+                </>
+              ) : isTray1Active && isTray2Active ? (
+                tray1Table === tray2Table ? (
                   <>
-                    <Send className="w-4 h-4 text-slate-400" />
-                    <span>VUI LÒNG CHỌN BÀN CHO CẢ 2 KHAY</span>
+                    <Send className="w-4 h-4 text-white" />
+                    <span>PHÁT LỆNH GIAO 2 KHAY TỚI {tray1Table}</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4 text-white" />
-                    <span>
-                      PHÁT LỆNH CHUỖI 2 KHAY: {tray1Table} ➔ {tray2Table}
-                    </span>
+                    <span>PHÁT LỆNH GIAO 2 BÀN: {tray1Table} ➔ {tray2Table}</span>
                   </>
                 )
-              ) : !destinationInput.trim() ? (
-                <>
-                  <Send className="w-4 h-4 text-slate-400" />
-                  <span>VUI LÒNG CHỌN BÀN ĐỂ GIAO MÓN</span>
-                </>
               ) : (
                 <>
                   <Send className="w-4 h-4 text-white" />
-                  <span>
-                    XUẤT LỆNH: {orderInputId || "ĐƠN"} TỚI {destinationInput}{" "}
-                    (LƯU SQLITE)
-                  </span>
+                  <span>PHÁT LỆNH GIAO MÓN TỚI {isTray1Active ? tray1Table : tray2Table}</span>
                 </>
               )}
             </button>
             <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
-              <span>Đồng bộ: SQLite (amr_tasks + sync_journal)</span>
+              <span>Hoạt động: Sẵn sàng ngoại tuyến • Lưu trữ cục bộ</span>
               <span>Robot: {effectiveRobot?.code || "AMR"}</span>
             </div>
           </div>
-          {/* RECENT SQLITE DISPATCH MISSIONS LOG */}
+          {/* RECENT DISPATCH MISSIONS LOG */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-heading">
                 <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <span>LỆNH ĐIỀU PHỐI SQLITE GẦN NHẤT</span>
+                <span>LỆNH ĐIỀU PHỐI GẦN ĐÂY</span>
               </span>
-              <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                Bảng: amr_tasks
+              <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                Lưu trữ cục bộ
               </span>
             </div>
             <div className="space-y-2">
@@ -2956,21 +2805,23 @@ export const StaffKdsPage: React.FC = () => {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-slate-500 font-bold">
+                      <span className="font-mono text-[10px] text-slate-500">
                         {task.robotCode}
                       </span>
                       <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          task.status === "Delivering"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-emerald-100 text-emerald-700"
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          task.status === "Completed" ||
+                          task.status === "Delivered"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-blue-50 text-blue-700 border border-blue-200"
                         }`}
                       >
-                        {task.status === "Delivering"
-                          ? "Đang Giao"
-                          : "Hoàn Tất"}
+                        {task.status === "Completed" ||
+                        task.status === "Delivered"
+                          ? "Hoàn Tất"
+                          : "Đang Giao"}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="font-mono text-[10px] text-slate-400">
                         {task.time}
                       </span>
                     </div>
@@ -2985,17 +2836,17 @@ export const StaffKdsPage: React.FC = () => {
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3 safe-area-pb">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-mono font-extrabold text-blue-700 text-sm shrink-0 shadow-2xs">
-            {dispatchMode === "sequence"
-              ? "2K"
-              : currentSelectedTable.id !== "Chưa có"
-                ? currentSelectedTable.id
-                : "?"}
+            {isTray1Active && isTray2Active ? "2K" : isTray1Active ? "K1" : isTray2Active ? "K2" : "--"}
           </div>
           <div className="truncate">
             <div className="text-xs font-extrabold text-slate-900 truncate">
-              {dispatchMode === "sequence"
-                ? `${tray1Table} ➔ ${tray2Table}`
-                : currentSelectedTable.name}
+              {isTray1Active && isTray2Active
+                ? `${tray1Table || "K1"} ➔ ${tray2Table || "K2"}`
+                : isTray1Active
+                  ? `Khay 1: ${tray1Table || "Chưa chọn bàn"}`
+                  : isTray2Active
+                    ? `Khay 2: ${tray2Table || "Chưa chọn bàn"}`
+                    : "Chưa bật khay"}
             </div>
             <div className="text-[11px] text-slate-500 font-mono truncate flex items-center gap-1.5 mt-0.5">
               <span>AMR:</span>
@@ -3015,22 +2866,18 @@ export const StaffKdsPage: React.FC = () => {
           disabled={
             isDispatching ||
             !effectiveRobot ||
-            (dispatchMode === "sequence"
-              ? !tray1Table.trim() || !tray2Table.trim()
-              : !destinationInput.trim())
+            (!isTray1Active && !isTray2Active) ||
+            (isTray1Active && !tray1Table.trim()) ||
+            (isTray2Active && !tray2Table.trim())
           }
-          onClick={
-            dispatchMode === "sequence"
-              ? handleDispatchSequence
-              : handleDispatchOrder
-          }
+          onClick={handleSmartDispatch}
           className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
             isDispatching
               ? "bg-blue-400 text-white cursor-not-allowed"
               : !effectiveRobot ||
-                  (dispatchMode === "sequence"
-                    ? !tray1Table.trim() || !tray2Table.trim()
-                    : !destinationInput.trim())
+                  (!isTray1Active && !isTray2Active) ||
+                  (isTray1Active && !tray1Table.trim()) ||
+                  (isTray2Active && !tray2Table.trim())
                 ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed"
                 : "bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer"
           }`}
@@ -3040,17 +2887,22 @@ export const StaffKdsPage: React.FC = () => {
               <RotateCcw className="w-4 h-4 animate-spin" />
               <span>Đang Lệnh...</span>
             </>
-          ) : dispatchMode === "sequence" ? (
-            <>
-              <Send className="w-4 h-4" />
-              <span>
-                CHUỖI 2 KHAY ({tray1Table} ➔ {tray2Table})
-              </span>
-            </>
+          ) : isTray1Active && isTray2Active ? (
+            tray1Table === tray2Table ? (
+              <>
+                <Send className="w-4 h-4" />
+                <span>GIAO 2 KHAY ({tray1Table})</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>CHUỖI 2 BÀN ({tray1Table} ➔ {tray2Table})</span>
+              </>
+            )
           ) : (
             <>
               <Send className="w-4 h-4" />
-              <span>XUẤT LỆNH ({orderInputId || "ĐƠN"})</span>
+              <span>XUẤT LỆNH ({isTray1Active ? tray1Table : tray2Table})</span>
             </>
           )}
         </button>
@@ -3666,7 +3518,7 @@ export const StaffKdsPage: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-semibold text-slate-700">
-                        Bàn Chính (Trạm giao cố định của Robot AMR - UC-01)
+                        Bàn Chính (Trạm giao cố định của Robot AMR)
                       </label>
                       {primaryAnchorTableId &&
                         (() => {
@@ -3680,7 +3532,7 @@ export const StaffKdsPage: React.FC = () => {
                               sel.status === "waiting");
                           return isOcc ? (
                             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                              ⚠️ Bàn đang có khách (UC-02)
+                              ⚠️ Bàn đang có khách
                             </span>
                           ) : null;
                         })()}
@@ -3709,7 +3561,7 @@ export const StaffKdsPage: React.FC = () => {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-semibold text-slate-700">
-                        Chọn Các Bàn Thành Viên (Gộp nhiều bàn - HC-02)
+                        Chọn Các Bàn Thành Viên (Gộp nhiều bàn)
                       </label>
                       <span className="text-[10px] font-mono text-blue-700 font-bold">
                         Đã chọn: {memberTableIds.length} bàn
@@ -3990,7 +3842,7 @@ export const StaffKdsPage: React.FC = () => {
               </div>
               <div className="flex-1">
                 <h3 className="text-sm font-bold text-slate-900 font-heading">
-                  Xung Đột Đổi Bàn: Robot Đã Đến Trạm Cũ (UC-06 / ETM-14)
+                  Xung Đột Đổi Bàn: Robot Đã Đến Trạm Cũ
                 </h3>
                 <p className="text-xs text-rose-700 mt-1">
                   Robot AMR đã hoàn thành hành trình tới{" "}
@@ -4040,7 +3892,7 @@ export const StaffKdsPage: React.FC = () => {
                 <span>
                   {isSubmittingSecondLeg
                     ? "Đang Điều Phối..."
-                    : "2. Robot Tự Hành Đi Chặng 2 (HC-06)"}
+                    : "2. Robot Tự Động Đến Bàn Mới"}
                 </span>
               </button>
             </div>
