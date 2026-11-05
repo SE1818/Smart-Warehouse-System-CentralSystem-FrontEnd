@@ -686,27 +686,7 @@ export const tableService = {
 
 export const orderService = {
   getPendingOrders: async (): Promise<PendingOrderDto[]> => {
-    try {
-      const res = await portalClient.get('/orders/pending');
-      if (res.data && Array.isArray(res.data)) {
-        return res.data.map((o: any) => ({
-          id: o.id?.toString() || `ord-${Date.now()}`,
-          orderNumber: o.orderNumber || `DH-${o.id?.toString().slice(0, 6) || '001'}`,
-          tableNo: o.tableNo || o.shippingAddress || 'Bàn A-01',
-          items: Array.isArray(o.items)
-            ? o.items.map((i: any) => ({
-                dishName: i.productName || i.dishName || 'Món ăn',
-                qty: i.quantity || i.qty || 1,
-                note: i.note || '',
-              }))
-            : [],
-          status: o.status || 'Pending',
-          createdAt: o.createdAt || new Date().toISOString(),
-        }));
-      }
-    } catch (err) {
-      console.warn('Lỗi tải đơn chờ ra món:', err);
-    }
+    // Orders are purely treated as external reference metadata for robot tasks; no external order backend is queried
     return [];
   },
 

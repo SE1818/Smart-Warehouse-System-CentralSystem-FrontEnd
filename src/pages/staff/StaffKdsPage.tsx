@@ -485,7 +485,7 @@ export const StaffKdsPage: React.FC = () => {
 
           const mappedTables: TableNode[] = tableList.map((t) => ({
 
-            id: t.tableNo || t.id,
+            id: t.id || t.tableNo || 'Table',
 
             tableNo: t.tableNo || t.id,
 
@@ -1465,7 +1465,7 @@ export const StaffKdsPage: React.FC = () => {
 
           setTables(updatedList.map((t) => ({
 
-            id: t.tableNo || t.id,
+            id: t.id || t.tableNo || 'Table',
 
             tableNo: t.tableNo || t.id,
 
@@ -1548,7 +1548,7 @@ export const StaffKdsPage: React.FC = () => {
 
           setTables(updatedList.map((t) => ({
 
-            id: t.tableNo || t.id,
+            id: t.id || t.tableNo || 'Table',
 
             tableNo: t.tableNo || t.id,
 
@@ -1640,7 +1640,11 @@ export const StaffKdsPage: React.FC = () => {
 
     try {
 
-      const res = await tableService.assignStation(assignStationTableId, assignStationTargetStationId || null);
+      const targetTable = tables.find((t) => t.id === assignStationTableId || t.tableNo === assignStationTableId);
+
+      const effectiveTableId = targetTable?.id || assignStationTableId;
+
+      const res = await tableService.assignStation(effectiveTableId, assignStationTargetStationId || null);
 
       if (res.success) {
 
@@ -1650,7 +1654,7 @@ export const StaffKdsPage: React.FC = () => {
 
           prev.map((t) =>
 
-            t.id === assignStationTableId
+            t.id === assignStationTableId || t.id === effectiveTableId
 
               ? {
 
