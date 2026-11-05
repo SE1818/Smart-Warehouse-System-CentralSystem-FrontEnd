@@ -256,6 +256,16 @@ export interface SqliteAuditEntry {
   timestamp: string;
 }
 
+/**
+ * SqliteService (Frontend Thin Client)
+ * 
+ * KIẾN TRÚC VORA:
+ * - Toàn bộ CSDL nghiệp vụ (Robots, Bàn ăn, Nhiệm vụ điều phối, Nhật ký chuyển hàng, SLAM Map, Waypoints)
+ *   được lưu trữ và quản lý tập trung tại BACKEND (RobotDbContext sử dụng SQLite ở Edge Node cho Local Tenant,
+ *   hoặc Supabase PostgreSQL khi triển khai Cloud VPS).
+ * - Frontend (Vercel) là Thin Client, KHÔNG trực tiếp tạo bảng hay ghi dữ liệu nghiệp vụ vào SQLite trình duyệt.
+ * - Mọi hàm ghi/đọc dữ liệu nghiệp vụ dưới đây được chuyển giao cho Backend API đảm nhiệm.
+ */
 class SqliteService {
   private db: Database | null = null;
   private initPromise: Promise<Database> | null = null;
@@ -267,7 +277,6 @@ class SqliteService {
 
     this.initPromise = (async () => {
       try {
-        // Automatically request persistent storage from browser to prevent eviction
         void this.requestPersistentStorage();
 
         const SQL = await initSqlJs({
@@ -278,14 +287,14 @@ class SqliteService {
         if (savedBinary && savedBinary.length > 0) {
           try {
             this.db = new SQL.Database(savedBinary);
-            console.log('[SQLite Engine] Đã nạp cơ sở dữ liệu SQLite thành công từ IndexedDB (' + savedBinary.byteLength + ' bytes).');
+            console.log('[SQLite Engine] Đã nạp SQLite client metadata từ IndexedDB (' + savedBinary.byteLength + ' bytes).');
           } catch (loadErr) {
             console.warn('[SQLite Engine] File binary cũ bị lỗi, khởi tạo DB mới:', loadErr);
             this.db = new SQL.Database();
           }
         } else {
           this.db = new SQL.Database();
-          console.log('[SQLite Engine] Đã khởi tạo cơ sở dữ liệu SQLite mới trong bộ nhớ WebAssembly.');
+          console.log('[SQLite Engine] Đã khởi tạo SQLite client trong bộ nhớ WebAssembly.');
         }
 
         this.createSchema(this.db);
@@ -301,76 +310,10 @@ class SqliteService {
   }
 
   private createSchema(db: Database) {
+    // Chỉ duy trì bảng audit/metadata phục vụ kiểm toán kết nối client-edge sync
+    // Toàn bộ các bảng nghiệp vụ (robots, dining_tables, amr_tasks, local_orders, transfer_logs, slam_maps, waypoints)
+    // được quản lý trên CSDL Backend (RobotDbContext).
     db.run(`
-      CREATE TABLE IF NOT EXISTS robots (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        current_x REAL DEFAULT 0,
-        current_y REAL DEFAULT 0,
-        battery_level REAL DEFAULT 100,
-        status TEXT DEFAULT 'Idle',
-        current_area_id TEXT,
-        destination TEXT,
-        ip_address TEXT,
-        raw_json TEXT,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS slam_maps (
-        map_id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        resolution REAL NOT NULL,
-        origin_x REAL NOT NULL,
-        origin_y REAL NOT NULL,
-        origin_z REAL DEFAULT 0,
-        width INTEGER NOT NULL,
-        height INTEGER NOT NULL,
-        map_url TEXT,
-        format TEXT DEFAULT 'png',
-        tables_json TEXT,
-        stations_json TEXT,
-        waypoints_json TEXT,
-        last_updated TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS waypoints (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        world_x REAL NOT NULL,
-        world_y REAL NOT NULL,
-        theta REAL DEFAULT 0,
-        type TEXT DEFAULT 'waypoint',
-        received_from_mqtt INTEGER DEFAULT 1,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS dining_tables (
-        id TEXT PRIMARY KEY,
-        table_no TEXT NOT NULL,
-        name TEXT NOT NULL,
-        world_x REAL NOT NULL,
-        world_y REAL NOT NULL,
-        zone TEXT DEFAULT 'Khu Trong Nhà',
-        capacity INTEGER DEFAULT 4,
-        status TEXT DEFAULT 'empty',
-        assigned_robot_code TEXT,
-        waypoint_id TEXT,
-        source TEXT DEFAULT 'mqtt_waypoint',
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS transfer_logs (
-        id TEXT PRIMARY KEY,
-        transfer_request_id TEXT,
-        robot_id TEXT,
-        status_result TEXT,
-        distance_travelled REAL,
-        error_notes TEXT,
-        started_at TEXT,
-        finished_at TEXT,
-        created_at TEXT NOT NULL
-      );
-
       CREATE TABLE IF NOT EXISTS sync_audit (
         id TEXT PRIMARY KEY,
         action TEXT NOT NULL,
@@ -384,28 +327,6 @@ class SqliteService {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS amr_tasks (
-        task_id TEXT PRIMARY KEY,
-        order_id TEXT,
-        robot_code TEXT,
-        task_type TEXT,
-        pickup_station TEXT,
-        dropoff_station TEXT,
-        status TEXT DEFAULT 'Idle',
-        created_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS local_orders (
-        order_id TEXT PRIMARY KEY,
-        order_code TEXT NOT NULL,
-        customer_name TEXT,
-        table_number TEXT,
-        total_amount REAL DEFAULT 0,
-        items_summary TEXT,
-        status TEXT DEFAULT 'Completed',
-        created_at TEXT NOT NULL
       );
     `);
   }
@@ -424,44 +345,16 @@ class SqliteService {
   }
 
   // ==========================================
-  // ROBOT OPERATIONS (From BE / Supabase -> SQLite)
+  // ROBOT OPERATIONS
+  // Quản lý trên Backend API (/api/v1/robots)
   // ==========================================
 
-  public async saveRobots(robots: Robot[]): Promise<void> {
-    const db = await this.getDb();
-    const now = new Date().toISOString();
-
-    for (const r of robots) {
-      db.run(
-        `INSERT INTO robots (id, name, current_x, current_y, battery_level, status, current_area_id, raw_json, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name,
-           current_x = excluded.current_x,
-           current_y = excluded.current_y,
-           battery_level = excluded.battery_level,
-           status = excluded.status,
-           current_area_id = excluded.current_area_id,
-           raw_json = excluded.raw_json,
-           updated_at = excluded.updated_at`,
-        [
-          r.id,
-          r.name,
-          r.x ?? 0,
-          r.y ?? 0,
-          r.battery ?? 100,
-          r.status ?? 'Idle',
-          r.currentAreaId || null,
-          JSON.stringify(r),
-          now,
-        ]
-      );
-    }
-
-    await this.persist();
+  public async saveRobots(_robots: Robot[]): Promise<void> {
+    // Dữ liệu danh sách Robot được lưu trữ và quản lý tập trung tại Backend CSDL (RobotService).
+    // Không ghi vào SQLite trên Frontend.
   }
 
-  public async updateRobotTelemetry(robot: {
+  public async updateRobotTelemetry(_robot: {
     id: string;
     name?: string;
     x: number;
@@ -470,338 +363,79 @@ class SqliteService {
     status?: string;
     destination?: string;
   }): Promise<void> {
-    const db = await this.getDb();
-    const now = new Date().toISOString();
-
-    db.run(
-      `INSERT INTO robots (id, name, current_x, current_y, battery_level, status, destination, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         name = COALESCE(excluded.name, robots.name),
-         current_x = excluded.current_x,
-         current_y = excluded.current_y,
-         battery_level = COALESCE(excluded.battery_level, robots.battery_level),
-         status = COALESCE(excluded.status, robots.status),
-         destination = COALESCE(excluded.destination, robots.destination),
-         updated_at = excluded.updated_at`,
-      [
-        robot.id,
-        robot.name || 'AMR',
-        robot.x,
-        robot.y,
-        robot.battery ?? null,
-        robot.status ?? null,
-        robot.destination || null,
-        now,
-      ]
-    );
-
-    await this.persist();
+    // Telemetry thời gian thực được quản lý trực tiếp trong Zustand store (robotStore.ts)
+    // và đồng bộ qua Backend SignalR Hub / MQTT.
   }
 
   public async getRobots(): Promise<Robot[]> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT id, name, current_x, current_y, battery_level, status, current_area_id, raw_json FROM robots ORDER BY name ASC`);
-    if (!res || res.length === 0 || !res[0].values) return [];
-
-    const rows = res[0].values;
-    return rows.map((row: any[]) => {
-      const [id, name, current_x, current_y, battery_level, status, current_area_id, raw_json] = row;
-      let rawObj: any = {};
-      try {
-        if (raw_json) rawObj = JSON.parse(raw_json);
-      } catch {
-        // ignore
-      }
-
-      return {
-        id: String(id),
-        name: String(name),
-        x: Number(current_x),
-        y: Number(current_y),
-        battery: Number(battery_level),
-        status: (String(status).charAt(0).toUpperCase() + String(status).slice(1).toLowerCase()) as any,
-        currentAreaId: current_area_id ? String(current_area_id) : undefined,
-        createdAt: rawObj.createdAt,
-        updatedAt: rawObj.updatedAt,
-      };
-    });
+    // Danh sách Robot được tải trực tiếp từ Backend API (/api/v1/robots).
+    return [];
   }
 
   // ==========================================
-  // SLAM MAP OPERATIONS (From MQTT -> SQLite)
+  // SLAM MAP & WAYPOINTS OPERATIONS
+  // Quản lý trên Backend API & ROS 2
   // ==========================================
 
-  public async saveSlamMap(map: SlamMapResponse): Promise<void> {
-    const db = await this.getDb();
-    const now = new Date().toISOString();
-
-    db.run(
-      `INSERT INTO slam_maps (map_id, name, resolution, origin_x, origin_y, origin_z, width, height, map_url, format, tables_json, stations_json, waypoints_json, last_updated)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(map_id) DO UPDATE SET
-         name = excluded.name,
-         resolution = excluded.resolution,
-         origin_x = excluded.origin_x,
-         origin_y = excluded.origin_y,
-         origin_z = excluded.origin_z,
-         width = excluded.width,
-         height = excluded.height,
-         map_url = excluded.map_url,
-         format = excluded.format,
-         tables_json = excluded.tables_json,
-         stations_json = excluded.stations_json,
-         waypoints_json = excluded.waypoints_json,
-         last_updated = excluded.last_updated`,
-      [
-        map.mapId || 'default-map',
-        map.name || 'Bản Đồ SLAM Thực Địa',
-        map.resolution || 0.05,
-        map.originX ?? 0,
-        map.originY ?? 0,
-        map.originZ ?? 0,
-        map.width || 800,
-        map.height || 600,
-        map.mapUrl || '',
-        map.format || 'png',
-        JSON.stringify(map.tables || []),
-        JSON.stringify(map.stations || []),
-        JSON.stringify(map.waypoints || []),
-        map.lastUpdated || now,
-      ]
-    );
-
-    // Save waypoints received from MQTT
-    if (map.waypoints && Array.isArray(map.waypoints) && map.waypoints.length > 0) {
-      await this.saveWaypointsFromMqtt(map.waypoints);
-    }
-
-    await this.persist();
+  public async saveSlamMap(_map: SlamMapResponse): Promise<void> {
+    // Bản đồ SLAM được lưu trữ và quản lý bởi Backend CSDL.
   }
 
   public async getSlamMap(): Promise<SlamMapResponse | null> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT map_id, name, resolution, origin_x, origin_y, origin_z, width, height, map_url, format, tables_json, stations_json, waypoints_json, last_updated FROM slam_maps ORDER BY last_updated DESC LIMIT 1`);
-    if (!res || res.length === 0 || !res[0].values || res[0].values.length === 0) return null;
-
-    const row = res[0].values[0];
-    const [map_id, name, resolution, origin_x, origin_y, origin_z, width, height, map_url, format, tables_json, stations_json, _waypoints_json, last_updated] = row;
-
-    // Load REAL waypoints from waypoints table (strictly received from MQTT)
-    const waypoints = await this.getWaypoints();
-    const tables = await this.getDiningTables();
-
-    return {
-      mapId: String(map_id),
-      name: String(name),
-      resolution: Number(resolution),
-      originX: Number(origin_x),
-      originY: Number(origin_y),
-      originZ: Number(origin_z),
-      width: Number(width),
-      height: Number(height),
-      mapUrl: String(map_url),
-      format: String(format),
-      tables: tables.length > 0 ? tables.map((t) => ({
-        id: t.id,
-        tableNo: t.tableNo,
-        name: `Bàn ${t.tableNo}`,
-        worldX: t.worldX || 0,
-        worldY: t.worldY || 0,
-        zone: t.zone,
-      })) : (tables_json ? JSON.parse(String(tables_json)) : []),
-      stations: stations_json ? JSON.parse(String(stations_json)) : [],
-      waypoints,
-      lastUpdated: String(last_updated),
-    };
+    // SLAM Map được nạp từ Backend API / SignalR broadcast.
+    return null;
   }
 
-  // ==========================================
-  // WAYPOINTS & TABLES FROM MQTT (Strict No-Fake-Waypoint Policy)
-  // ==========================================
-
   public async hasMqttWaypoints(): Promise<boolean> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT COUNT(*) FROM waypoints WHERE received_from_mqtt = 1`);
-    if (!res || res.length === 0 || !res[0].values) return false;
-    const count = Number(res[0].values[0][0]);
-    return count > 0;
+    return false;
   }
 
   public async getWaypoints(): Promise<SlamMapWaypointDto[]> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT id, name, world_x, world_y, theta, type FROM waypoints WHERE received_from_mqtt = 1 ORDER BY name ASC`);
-    if (!res || res.length === 0 || !res[0].values) return [];
-
-    return res[0].values.map((row) => ({
-      id: String(row[0]),
-      name: String(row[1]),
-      worldX: Number(row[2]),
-      worldY: Number(row[3]),
-      theta: Number(row[4] || 0),
-      type: String(row[5] || 'waypoint'),
-    }));
+    return [];
   }
 
-  /**
-   * Save waypoints received from MQTT.
-   * Also derives dining tables from waypoints of type 'table' or dining stations.
-   * If no MQTT waypoints are received, no waypoints are saved and tables is not populated!
-   */
-  public async saveWaypointsFromMqtt(waypoints: SlamMapWaypointDto[]): Promise<void> {
-    const db = await this.getDb();
-    const now = new Date().toISOString();
-
-    // Clear old waypoints and tables to ensure strictly fresh MQTT sync
-    db.run(`DELETE FROM waypoints`);
-    db.run(`DELETE FROM dining_tables`);
-
-    if (!waypoints || waypoints.length === 0) {
-      await this.persist();
-      return;
-    }
-
-    for (const wp of waypoints) {
-      db.run(
-        `INSERT INTO waypoints (id, name, world_x, world_y, theta, type, received_from_mqtt, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-        [wp.id, wp.name, wp.worldX, wp.worldY, wp.theta ?? 0, wp.type || 'waypoint', now]
-      );
-
-      // If waypoint represents a dining table, store into dining_tables
-      const isTable =
-        (wp.type && (wp.type.toLowerCase() === 'table' || wp.type.toLowerCase() === 'dining')) ||
-        wp.name.toLowerCase().startsWith('bàn') ||
-        wp.name.toLowerCase().startsWith('table') ||
-        wp.id.toLowerCase().startsWith('wp-table');
-
-      if (isTable) {
-        const tableNo = wp.name.replace(/^Bàn\s*/i, '').replace(/^Table\s*/i, '').trim() || wp.id;
-        db.run(
-          `INSERT INTO dining_tables (id, table_no, name, world_x, world_y, zone, capacity, status, waypoint_id, source, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'mqtt_waypoint', ?)`,
-          [
-            wp.id,
-            tableNo,
-            wp.name,
-            wp.worldX,
-            wp.worldY,
-            'Khu Trong Nhà',
-            4,
-            'empty',
-            wp.id,
-            now,
-          ]
-        );
-      }
-    }
-
-    await this.persist();
-    console.log(`[SQLite Engine] Đã lưu ${waypoints.length} waypoint nhận từ MQTT vào SQLite và đồng bộ danh sách bàn.`);
+  public async saveWaypointsFromMqtt(_waypoints: SlamMapWaypointDto[]): Promise<void> {
+    // Waypoints nhận từ MQTT được Backend / ROS 2 xử lý và lưu trữ.
   }
+
+  // ==========================================
+  // DINING TABLES OPERATIONS
+  // Quản lý trên Backend API (/api/v1/tables)
+  // ==========================================
 
   public async getDiningTables(): Promise<DiningTableDto[]> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT id, table_no, name, world_x, world_y, zone, capacity, status, assigned_robot_code, waypoint_id FROM dining_tables ORDER BY table_no ASC`);
-    if (!res || res.length === 0 || !res[0].values) return [];
-
-    return res[0].values.map((row) => ({
-      id: String(row[0]),
-      tableNo: String(row[1]),
-      worldX: Number(row[3]),
-      worldY: Number(row[4]),
-      zone: String(row[5] || 'Khu Trong Nhà'),
-      capacity: Number(row[6] || 4),
-      status: (row[7] || 'empty') as any,
-      assignedRobotCode: row[8] ? String(row[8]) : null,
-      currentOrders: [],
-      orderTime: null,
-    }));
+    // Bàn ăn được quản lý tập trung tại Backend API (/api/v1/tables).
+    return [];
   }
 
   // ==========================================
-  // TRANSFER LOGS & ACTIVITY LOGS (SQLite)
+  // TRANSFER LOGS OPERATIONS
+  // Quản lý trên Backend CSDL (LogTransfers)
   // ==========================================
 
-  public async saveTransferLog(log: Partial<LogTransfer>): Promise<void> {
-    const db = await this.getDb();
-    const id = log.id || `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const now = new Date().toISOString();
-
-    db.run(
-      `INSERT INTO transfer_logs (id, transfer_request_id, robot_id, status_result, distance_travelled, error_notes, started_at, finished_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         status_result = excluded.status_result,
-         distance_travelled = excluded.distance_travelled,
-         error_notes = excluded.error_notes,
-         finished_at = excluded.finished_at`,
-      [
-        id,
-        log.transferRequestId || 'REQ-UNKNOWN',
-        log.robotId || 'AMR',
-        log.statusResult || 'completed',
-        log.distanceTravelled ?? 0,
-        log.errorNotes || null,
-        log.startedAt || now,
-        log.finishedAt || now,
-        log.createdAt || now,
-      ]
-    );
-
-    await this.persist();
+  public async saveTransferLog(_log: Partial<LogTransfer>): Promise<void> {
+    // Nhật ký chuyển món (LogTransfers) được lưu trực tiếp vào CSDL Backend qua MediatR/CQRS.
+    // Không ghi vào SQLite trình duyệt trên Frontend.
   }
 
-  public async getTransferLogs(limit = 100): Promise<LogTransfer[]> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT id, transfer_request_id, robot_id, status_result, distance_travelled, error_notes, started_at, finished_at, created_at FROM transfer_logs ORDER BY created_at DESC LIMIT ${limit}`);
-    if (!res || res.length === 0 || !res[0].values) return [];
-
-    return res[0].values.map((row) => ({
-      id: String(row[0]),
-      transferRequestId: String(row[1]),
-      robotId: String(row[2]),
-      statusResult: String(row[3]),
-      distanceTravelled: row[4] !== null ? Number(row[4]) : null,
-      errorNotes: row[5] ? String(row[5]) : null,
-      startedAt: String(row[6]),
-      finishedAt: row[7] ? String(row[7]) : null,
-      createdAt: String(row[8]),
-    }));
+  public async getTransferLogs(_limit = 100): Promise<LogTransfer[]> {
+    // Nhật ký chuyển hàng được truy xuất từ Backend API (/api/v1/tasks/{id}/logs).
+    return [];
   }
 
   // ==========================================
-  // STAFF DISPATCH & AMR TASKS (SQLite)
+  // STAFF DISPATCH & AMR TASKS OPERATIONS
+  // Quản lý trên Backend API (/api/v1/tasks/sequence/start)
   // ==========================================
 
-  public async recordDispatchTask(orderId: string, destinationTable: string, robotCode: string): Promise<string> {
-    const db = await this.getDb();
+  public async recordDispatchTask(_orderId: string, _destinationTable: string, _robotCode: string): Promise<string> {
+    // Điều phối nhiệm vụ được chuyển trực tiếp tới Backend API (TasksController / StartServiceSequenceCommand).
+    // Toàn bộ việc ghi nhận CSDL do Backend đảm nhiệm, không ghi bảng amr_tasks hoặc local_orders vào SQLite trên Frontend.
     const taskId = `TSK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const now = new Date().toISOString();
-
-    db.run(
-      `INSERT INTO amr_tasks (task_id, order_id, robot_code, task_type, pickup_station, dropoff_station, status, created_at)
-       VALUES (?, ?, ?, 'FoodDelivery', 'Bếp Trung Tâm', ?, 'Delivering', ?)`,
-      [taskId, orderId, robotCode, destinationTable, now]
-    );
-
-    db.run(
-      `INSERT INTO local_orders (order_id, order_code, customer_name, table_number, total_amount, items_summary, status, created_at)
-       VALUES (?, ?, ?, ?, 350000, 'Đơn món ra bếp', 'Serving', ?)
-       ON CONFLICT(order_id) DO UPDATE SET table_number = excluded.table_number, status = 'Serving'`,
-      [orderId, orderId, `Khách ${destinationTable}`, destinationTable, now]
-    );
-
-    db.run(
-      `UPDATE dining_tables SET status = 'serving', assigned_robot_code = ? WHERE table_no = ? OR name = ?`,
-      [robotCode, destinationTable.replace(/^Bàn\s*/i, ''), destinationTable]
-    );
-
-    await this.persist();
     return taskId;
   }
 
-  public async getRecentDispatchTasks(limit = 10): Promise<Array<{
+  public async getRecentDispatchTasks(_limit = 10): Promise<Array<{
     taskId: string;
     orderId: string;
     robotCode: string;
@@ -809,17 +443,8 @@ class SqliteService {
     status: string;
     createdAt: string;
   }>> {
-    const db = await this.getDb();
-    const res = db.exec(`SELECT task_id, order_id, robot_code, dropoff_station, status, created_at FROM amr_tasks ORDER BY created_at DESC LIMIT ${limit}`);
-    if (!res || res.length === 0 || !res[0].values) return [];
-    return res[0].values.map((row) => ({
-      taskId: String(row[0]),
-      orderId: String(row[1] || ''),
-      robotCode: String(row[2] || ''),
-      destination: String(row[3] || ''),
-      status: String(row[4] || 'Idle'),
-      createdAt: String(row[5] || ''),
-    }));
+    // Nhiệm vụ gần đây được quản lý tập trung tại Backend API (/api/v1/tasks).
+    return [];
   }
 
   // ==========================================
@@ -869,21 +494,13 @@ class SqliteService {
     exportedAt: string;
     stats: SqliteDbStats;
   }> {
-    const [robots, slamMap, waypoints, tables, transferLogs, stats] = await Promise.all([
-      this.getRobots(),
-      this.getSlamMap(),
-      this.getWaypoints(),
-      this.getDiningTables(),
-      this.getTransferLogs(200),
-      this.getStats(),
-    ]);
-
+    const stats = await this.getStats();
     return {
-      robots,
-      slamMap,
-      waypoints,
-      tables,
-      transferLogs,
+      robots: [],
+      slamMap: null,
+      waypoints: [],
+      tables: [],
+      transferLogs: [],
       exportedAt: new Date().toISOString(),
       stats,
     };
@@ -898,7 +515,6 @@ class SqliteService {
     if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
       try {
         const persisted = await navigator.storage.persist();
-        console.log(`[Storage Security] Trạng thái Persistent Storage: ${persisted ? 'ĐÃ ĐƯỢC BẢO VỆ VĨNH VIỄN (Chống tự dọn cache)' : 'Mặc định (Best-effort)'}`);
         return persisted;
       } catch (err) {
         console.warn('[Storage Security] Không thể yêu cầu Persistent Storage:', err);
@@ -940,31 +556,6 @@ class SqliteService {
 
   public async getStats(): Promise<SqliteDbStats> {
     const db = await this.getDb();
-    const countQuery = (table: string): number => {
-      try {
-        const res = db.exec(`SELECT COUNT(*) FROM ${table}`);
-        return res && res[0] && res[0].values ? Number(res[0].values[0][0]) : 0;
-      } catch {
-        return 0;
-      }
-    };
-
-    const robotsCount = countQuery('robots');
-    const waypointsCount = countQuery('waypoints');
-    const tablesCount = countQuery('dining_tables');
-    const transferLogsCount = countQuery('transfer_logs');
-
-    let hasMap = false;
-    let mapName: string | undefined;
-    try {
-      const mapRes = db.exec(`SELECT name FROM slam_maps LIMIT 1`);
-      if (mapRes && mapRes[0] && mapRes[0].values && mapRes[0].values.length > 0) {
-        hasMap = true;
-        mapName = String(mapRes[0].values[0][0]);
-      }
-    } catch {
-      // ignore
-    }
 
     let dbSizeBytes = 0;
     try {
@@ -976,13 +567,13 @@ class SqliteService {
     const persistInfo = await this.getStoragePersistenceInfo();
 
     return {
-      robotsCount,
-      hasMap,
-      mapName,
-      waypointsCount,
-      hasMqttWaypoints: waypointsCount > 0,
-      tablesCount,
-      transferLogsCount,
+      robotsCount: 0,
+      hasMap: false,
+      mapName: undefined,
+      waypointsCount: 0,
+      hasMqttWaypoints: false,
+      tablesCount: 0,
+      transferLogsCount: 0,
       dbSizeBytes,
       lastUpdated: new Date().toISOString(),
       isPersisted: persistInfo.isPersisted,
