@@ -60,6 +60,8 @@ interface TableNode {
   stationName?: string | null;
   mergedIntoTableId?: string | null;
   qrCodeUrl?: string | null;
+  isRestricted?: boolean;
+  aisleWidth?: number;
 }
 
 export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
@@ -1264,6 +1266,29 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
+  // Flow 3: Option B - Manual Handover & Return to Kitchen (TASK-19)
+  const [isSubmittingManualHandover, setIsSubmittingManualHandover] = useState(false);
+  const handleConfirmManualHandover = async () => {
+    if (!rerouteConflictModal) return;
+    setIsSubmittingManualHandover(true);
+    try {
+      await robotService.confirmNextTable(
+        rerouteConflictModal.taskId,
+        "Nhân viên KDS (Bàn giao thủ công)",
+        false,
+      );
+      showToast(
+        `Đã xác nhận bàn giao thủ công cho bàn ${rerouteConflictModal.newTableNo}. Robot tự động quay về quầy bếp!`,
+        "success",
+      );
+      setRerouteConflictModal(null);
+    } catch (err: any) {
+      showToast(err?.message || "Lỗi khi xác nhận bàn giao thủ công", "info");
+    } finally {
+      setIsSubmittingManualHandover(false);
+    }
+  };
+
   // Flow 3: HC-06 Confirm Second-Leg Autonomous Dispatch
   const handleConfirmSecondLeg = async () => {
     if (!rerouteConflictModal) return;
@@ -1606,6 +1631,14 @@ export const StaffKdsPage: React.FC = () => {
                             {table.status === "merged" && (
                               <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.5 rounded">
                                 Đã Gộp
+                              </span>
+                            )}
+                            {table.isRestricted && (
+                              <span
+                                className="text-[10px] text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-0.5"
+                                title="Bàn trong hành lang hẹp < 0.8m / góc khuất (kịch bản ví dụ Position S) - Yêu cầu điều phối qua Trạm Đệm trung gian"
+                              >
+                                <span>⚠️ Hẹp &lt;0.8m</span>
                               </span>
                             )}
                           </div>
@@ -2425,7 +2458,8 @@ export const StaffKdsPage: React.FC = () => {
                           <option key={t.id} value={t.name}>
                             {t.name} {t.zone ? `[${t.zone}]` : ""}{" "}
                             {t.stationName ? `• Trạm: ${t.stationName}` : ""}{" "}
-                            {t.status === "merged" ? "(Đã gộp)" : ""}
+                            {t.status === "merged" ? "(Đã gộp) " : ""}
+                            {t.isRestricted ? "⚠️ [Lối Hẹp < 0.8m]" : ""}
                           </option>
                         ))}
                       </select>
@@ -2478,7 +2512,8 @@ export const StaffKdsPage: React.FC = () => {
                           <option key={t.id} value={t.name}>
                             {t.name} {t.zone ? `[${t.zone}]` : ""}{" "}
                             {t.stationName ? `• Trạm: ${t.stationName}` : ""}{" "}
-                            {t.status === "merged" ? "(Đã gộp)" : ""}
+                            {t.status === "merged" ? "(Đã gộp) " : ""}
+                            {t.isRestricted ? "⚠️ [Lối Hẹp < 0.8m]" : ""}
                           </option>
                         ))}
                       </select>
@@ -3535,7 +3570,7 @@ export const StaffKdsPage: React.FC = () => {
                     • Áp dụng cho bàn ở hành lang hẹp &lt; 0.8m hoặc góc khuất
                     AMR không tiếp cận trực tiếp.
                     <br />• Robot AMR giao món tới{" "}
-                    <strong>Trạm Đệm (Point A)</strong>, nhân viên tiếp ứng bưng
+                    <strong>Trạm Đệm trung gian (ví dụ Point A, ST01, ST02...)</strong>, nhân viên tiếp ứng bưng
                     thủ công chặng cuối vào bàn cho khách.
                   </p>
                 </div>
@@ -3564,7 +3599,7 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Trạm Đệm Trung Gian (Point A) Khả Dụng
+                      Trạm Đệm Trung Gian Khả Dụng (ví dụ Point A, ST01, ST02...)
                     </label>
                     <select
                       value={stagingStationId}
@@ -3989,16 +4024,11 @@ export const StaffKdsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => {
-                  setRerouteConflictModal(null);
-                  showToast(
-                    `Đã chọn bàn giao thủ công từ ${rerouteConflictModal.oldTableNo} sang ${rerouteConflictModal.newTableNo}.`,
-                    "info",
-                  );
-                }}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer"
+                disabled={isSubmittingManualHandover}
+                onClick={handleConfirmManualHandover}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                1. Bàn Giao Thủ Công
+                {isSubmittingManualHandover ? "Đang Xử Lý..." : "1. Bàn Giao Thủ Công (Về Bếp)"}
               </button>
               <button
                 type="button"
