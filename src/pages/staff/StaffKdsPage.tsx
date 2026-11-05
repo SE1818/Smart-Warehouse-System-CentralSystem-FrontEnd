@@ -511,7 +511,7 @@ export const StaffKdsPage: React.FC = () => {
 
           const mappedTables: TableNode[] = tableList.map((t) => ({
 
-            id: t.tableNo || t.id,
+            id: t.id || t.tableNo || 'Table',
 
             tableNo: t.tableNo || t.id,
 
@@ -1576,7 +1576,7 @@ export const StaffKdsPage: React.FC = () => {
 
           setTables(updatedList.map((t) => ({
 
-            id: t.tableNo || t.id,
+            id: t.id || t.tableNo || 'Table',
 
             tableNo: t.tableNo || t.id,
 
@@ -1659,7 +1659,7 @@ export const StaffKdsPage: React.FC = () => {
 
           setTables(updatedList.map((t) => ({
 
-            id: t.tableNo || t.id,
+            id: t.id || t.tableNo || 'Table',
 
             tableNo: t.tableNo || t.id,
 
@@ -1751,7 +1751,11 @@ export const StaffKdsPage: React.FC = () => {
 
     try {
 
-      const res = await tableService.assignStation(assignStationTableId, assignStationTargetStationId || null);
+      const targetTable = tables.find((t) => t.id === assignStationTableId || t.tableNo === assignStationTableId);
+
+      const effectiveTableId = targetTable?.id || assignStationTableId;
+
+      const res = await tableService.assignStation(effectiveTableId, assignStationTargetStationId || null);
 
       if (res.success) {
 
@@ -1761,7 +1765,7 @@ export const StaffKdsPage: React.FC = () => {
 
           prev.map((t) =>
 
-            t.id === assignStationTableId
+            t.id === assignStationTableId || t.id === effectiveTableId
 
               ? {
 
@@ -3663,19 +3667,24 @@ export const StaffKdsPage: React.FC = () => {
 
                       </label>
 
-                      <input
-
-                        type="text"
-
+                      <select
                         value={tray1Table}
-
-                        onChange={(e) => setTray1Table(e.target.value)}
-
-                        placeholder="Click bàn trên map hoặc nhập..."
-
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
-
-                      />
+                        onChange={(e) => {
+                          setTray1Table(e.target.value);
+                          setActiveTrayTarget('tray2');
+                        }}
+                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Chọn Bàn Giao Khay 1 --</option>
+                        {tray1Table && !tables.some((t) => t.name === tray1Table) && (
+                          <option value={tray1Table}>{tray1Table}</option>
+                        )}
+                        {tables.map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
+                          </option>
+                        ))}
+                      </select>
 
                     </div>
 
@@ -3784,19 +3793,21 @@ export const StaffKdsPage: React.FC = () => {
 
                       </label>
 
-                      <input
-
-                        type="text"
-
+                      <select
                         value={tray2Table}
-
                         onChange={(e) => setTray2Table(e.target.value)}
-
-                        placeholder="Click bàn trên map hoặc nhập..."
-
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none"
-
-                      />
+                        className="w-full px-2.5 py-2 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Chọn Bàn Giao Khay 2 --</option>
+                        {tray2Table && !tables.some((t) => t.name === tray2Table) && (
+                          <option value={tray2Table}>{tray2Table}</option>
+                        )}
+                        {tables.map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
+                          </option>
+                        ))}
+                      </select>
 
                     </div>
 
@@ -4047,19 +4058,21 @@ export const StaffKdsPage: React.FC = () => {
 
                   <div className="relative">
 
-                    <input
-
-                      type="text"
-
+                    <select
                       value={destinationInput}
-
                       onChange={(e) => setDestinationInput(e.target.value)}
-
-                      placeholder="Ví dụ: Bàn 01, Bàn 02, VIP 01..."
-
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent placeholder:text-slate-400 placeholder:font-normal transition-all"
-
-                    />
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all cursor-pointer"
+                    >
+                      <option value="">-- Chọn Bàn Đích Đến --</option>
+                      {destinationInput && !tables.some((t) => t.name === destinationInput) && (
+                        <option value={destinationInput}>{destinationInput}</option>
+                      )}
+                      {tables.map((t) => (
+                        <option key={t.id} value={t.name}>
+                          {t.name} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
+                        </option>
+                      ))}
+                    </select>
 
                   </div>
 
