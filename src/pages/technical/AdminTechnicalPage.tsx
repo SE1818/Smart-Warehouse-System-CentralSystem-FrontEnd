@@ -16,6 +16,7 @@ import {
   X,
   Plus,
   Power,
+  Upload,
   LogOut,
 } from 'lucide-react';
 import { RobotMonitorPage } from './RobotMonitorPage';
@@ -38,6 +39,7 @@ import {
 } from '@/components/map/SlamFloorMapViewer';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/common/Pagination';
+import { MapStationManager } from '@/components/technical/MapStationManager';
 
 interface AMRNode {
   id: string;
@@ -74,7 +76,7 @@ interface MissionQueueItem {
 
 export const AdminTechnicalPage: React.FC = () => {
   // Navigation Sub-tabs
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'map-stations' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   const [selectedAmr, setSelectedAmr] = useState<AMRNode | null>(null);
   const [emergencyStop, setEmergencyStop] = useState(false);
@@ -655,6 +657,7 @@ export const AdminTechnicalPage: React.FC = () => {
         <div className="flex items-center gap-1.5 sm:gap-2">
           {[
             { id: 'dashboard', label: 'Dashboard', desc: 'Bản Đồ & Tổng Quan' },
+            { id: 'map-stations', label: 'Bản Đồ & Trạm (SLAM)', desc: 'Upload Sơ Đồ & Cấu Hình Waypoint' },
             { id: 'sqlite-sync', label: 'SQLite & VPS Sync', desc: 'CSDL Cục Bộ & Kênh Ngầm' },
             { id: 'robots', label: `Robots (${amrNodes.length})`, desc: 'Chi Tiết Đội Xe' },
             { id: 'missions', label: `Missions (${missions.length})`, desc: 'Hàng Đợi Lệnh' },
@@ -731,6 +734,21 @@ export const AdminTechnicalPage: React.FC = () => {
               {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
               {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
               <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs relative">
+                {/* Header Bar with Quick Upload Link */}
+                <div className="px-3 sm:px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-slate-800 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                    <span>Sơ Đồ Tầng SLAM 2D & Đội Xe</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubTab('map-stations')}
+                    className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>Nạp Bản Đồ & Trạm</span>
+                  </button>
+                </div>
                 {/* SLAM Map Viewer in Technical Mode */}
                 <div className="relative flex-1 min-h-[340px] sm:min-h-[480px] flex flex-col">
                   <SlamFloorMapViewer
@@ -1457,6 +1475,21 @@ export const AdminTechnicalPage: React.FC = () => {
               <div className="text-3xl font-black font-mono text-emerald-600">99.92%</div>
               <p className="text-xs text-slate-500">Chu kỳ sạc BMS LifePO4 đạt chuẩn</p>
             </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUBTAB: MAP & STATIONS SLAM MANAGEMENT */}
+        {/* ============================================================== */}
+        {activeSubTab === 'map-stations' && (
+          <div className="space-y-4">
+            <MapStationManager
+              tables={mapTables}
+              robots={mapRobots}
+              onMapUpdated={(updatedMap) => {
+                showToast(`Đã đồng bộ bản đồ ${updatedMap.name} (${updatedMap.stations?.length || 0} trạm)!`, 'success');
+              }}
+            />
           </div>
         )}
 
