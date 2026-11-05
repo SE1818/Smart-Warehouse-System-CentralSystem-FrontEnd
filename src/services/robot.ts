@@ -298,6 +298,54 @@ export const robotService = {
 
 
 
+  // Upload SLAM map image and waypoints file to Robot Service & persist to SQLite m_areas/m_stations
+
+  async uploadMap(formData: FormData): Promise<{ success: boolean; message: string; map: SlamMapResponse }> {
+
+    const response = await apiClient.post<{ success: boolean; message: string; map: SlamMapResponse }>(
+
+      '/v1/robots/map/upload',
+
+      formData,
+
+      {
+
+        headers: {
+
+          'Content-Type': 'multipart/form-data',
+
+        },
+
+      }
+
+    );
+
+    if (response.data && response.data.map) {
+
+      try {
+
+        await sqliteService.saveSlamMap(response.data.map);
+
+        if (response.data.map.waypoints && Array.isArray(response.data.map.waypoints)) {
+
+          await sqliteService.saveWaypointsFromMqtt(response.data.map.waypoints);
+
+        }
+
+      } catch (err) {
+
+        console.warn('[robotService] Lỗi lưu map sau khi upload vào SQLite:', err);
+
+      }
+
+    }
+
+    return response.data;
+
+  },
+
+
+
   // Get waypoints (Primary: BE API; Fallback: SQLite cache)
 
   async getWaypoints(): Promise<SlamMapWaypointDto[]> {
