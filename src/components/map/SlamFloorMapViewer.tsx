@@ -19,11 +19,11 @@ import {
   type WorldPoint,
 } from '@/utils/rosCoordinates';
 import {
+  robotService,
   type SlamMapResponse,
   type SlamMapStationDto,
   type SlamMapWaypointDto,
 } from '@/services/robot';
-import { sqliteService } from '@/services/sqliteService';
 
 export interface MapTableNode {
   id: string;
@@ -103,18 +103,18 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  // Active SLAM map fetched from Robot Service API / SQLite
+  // Active SLAM map fetched directly from Robot Service Backend API
   const [activeSlamMap, setActiveSlamMap] = useState<SlamMapResponse | null>(null);
   const [isLoadingMap, setIsLoadingMap] = useState<boolean>(false);
-  const [sqliteWaypoints, setSqliteWaypoints] = useState<SlamMapWaypointDto[]>([]);
+  const [apiWaypoints, setApiWaypoints] = useState<SlamMapWaypointDto[]>([]);
 
-  // Function to load waypoints saved in local SQLite
-  const loadSqliteWaypoints = useCallback(async () => {
+  // Function to load waypoints from Backend API
+  const loadWaypoints = useCallback(async () => {
     try {
-      const wps = await sqliteService.getWaypoints();
-      setSqliteWaypoints(wps);
+      const wps = await robotService.getWaypoints();
+      setApiWaypoints(wps);
     } catch (e) {
-      console.warn('Lỗi tải waypoints từ SQLite:', e);
+      console.warn('Lỗi tải waypoints:', e);
     }
   }, []);
 
@@ -150,42 +150,44 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       const customEvent = e as CustomEvent<SlamMapResponse>;
       if (customEvent.detail) {
         setActiveSlamMap(customEvent.detail);
-        void loadSqliteWaypoints();
+        void loadWaypoints();
       }
     };
     window.addEventListener('vora:slam-map-updated', handleSlamUpdate);
     return () => window.removeEventListener('vora:slam-map-updated', handleSlamUpdate);
-  }, [loadSqliteWaypoints]);
+  }, [loadWaypoints]);
 
-  // 1. Fetch SLAM map metadata from local SQLite cache
+  // 1. Fetch SLAM map metadata directly from Backend API
   const fetchActiveMap = useCallback(async () => {
     setIsLoadingMap(true);
     try {
-      // Try local SQLite first
-      const localMap = await sqliteService.getSlamMap();
-      if (localMap) {
-        setActiveSlamMap(localMap);
+      const remoteMap = await robotService.getActiveSlamMap();
+      if (remoteMap) {
+        setActiveSlamMap(remoteMap);
       }
-      await loadSqliteWaypoints();
+      await loadWaypoints();
     } catch (err) {
-      console.warn('Lỗi tải metadata SLAM Map từ SQLite:', err);
+      console.warn('[SlamFloorMapViewer] Lỗi tải metadata SLAM Map:', err);
     } finally {
       setIsLoadingMap(false);
     }
-  }, [loadSqliteWaypoints]);
+  }, [loadWaypoints]);
 
   useEffect(() => {
     void fetchActiveMap();
-    void loadSqliteWaypoints();
-  }, [fetchActiveMap, loadSqliteWaypoints]);
+    void loadWaypoints();
+  }, [fetchActiveMap, loadWaypoints]);
 
   // Dynamic Metadata derived from real Robot Service response or passed prop
   const effectiveMetadata: SlamMapMetadata = useMemo(() => {
     if (activeSlamMap) {
+      const hasExplicitOrigin =
+        (activeSlamMap.originX !== undefined && activeSlamMap.originX !== 0) ||
+        (activeSlamMap.originY !== undefined && activeSlamMap.originY !== 0);
       return {
         resolution: activeSlamMap.resolution > 0 ? activeSlamMap.resolution : metadata.resolution,
-        originX: activeSlamMap.originX ?? metadata.originX,
-        originY: activeSlamMap.originY ?? metadata.originY,
+        originX: hasExplicitOrigin ? activeSlamMap.originX! : metadata.originX,
+        originY: hasExplicitOrigin ? activeSlamMap.originY! : metadata.originY,
         width: activeSlamMap.width > 0 ? activeSlamMap.width : metadata.width,
         height: activeSlamMap.height > 0 ? activeSlamMap.height : metadata.height,
       };
@@ -210,8 +212,42 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     };
   }, [effectiveMapUrl]);
 
-  // 3. REAL TABLES: lấy bàn có tọa độ thực từ API / CSDL; ở mode simplified tự động bố trí sơ đồ trực quan nếu chưa có tọa độ
+  // 3. REAL TABLES: ở mode simplified (Staff KDS), tự động căn chỉnh và bố trí sơ đồ bàn trực quan, cân đối hoàn hảo trong khung bản đồ nhà hàng
   const resolvedTables = useMemo(() => {
+    if (mode === 'simplified') {
+      if (tables.length === 0) return [];
+
+      const mapW = effectiveMetadata.width || 800;
+      const mapH = effectiveMetadata.height || 600;
+
+      // Khu vực bàn ăn: chừa không gian phía trên cho Bếp (Y ~ 60)
+      const startX = 80;
+      const endX = mapW - 80;
+      const startY = 140;
+      const endY = mapH - 70;
+      const availableW = endX - startX;
+      const availableH = endY - startY;
+
+      const n = tables.length;
+      const cols = n <= 2 ? n : n <= 4 ? 2 : n <= 9 ? 3 : n <= 16 ? 4 : 5;
+      const rows = Math.ceil(n / cols);
+      const cellW = availableW / cols;
+      const cellH = availableH / Math.max(rows, 1);
+
+      return tables.map((t, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const px = startX + (col + 0.5) * cellW;
+        const py = startY + (row + 0.5) * cellH;
+        const worldPt = canvasPixelToRos(px, py, effectiveMetadata);
+        return {
+          ...t,
+          worldX: worldPt.x,
+          worldY: worldPt.y,
+        };
+      });
+    }
+
     const validTables = tables.filter((t) => typeof t.worldX === 'number' && typeof t.worldY === 'number');
     if (activeSlamMap?.tables && activeSlamMap.tables.length > 0) {
       const existingIds = new Set(validTables.map((t) => t.id));
@@ -227,49 +263,46 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         }));
       return [...validTables, ...backendTables];
     }
-    // Ở chế độ simplified (Staff), nếu chưa có tọa độ ROS thì tự động bố trí bàn theo sơ đồ trực quan
-    if (mode === 'simplified' && validTables.length === 0 && tables.length > 0) {
-      const cols = Math.min(Math.ceil(Math.sqrt(tables.length * 1.5)), 4);
-      return tables.map((t, index) => {
-        const col = index % cols;
-        const row = Math.floor(index / cols);
-        const wx = (col - (cols - 1) / 2) * 2.5 + 2.0;
-        const wy = (row - 1.0) * 2.5 + 2.0;
-        return {
-          ...t,
-          worldX: wx,
-          worldY: wy,
-        };
-      });
-    }
     return validTables;
-  }, [tables, activeSlamMap, mode]);
+  }, [tables, activeSlamMap, mode, effectiveMetadata]);
 
   // 4. REAL STATIONS (Lấy trực tiếp từ PostgreSQL qua activeSlamMap.stations)
   const resolvedStations: SlamMapStationDto[] = useMemo(() => {
-    return activeSlamMap?.stations || [];
-  }, [activeSlamMap]);
+    const list = activeSlamMap?.stations || [];
+    if (mode === 'simplified') {
+      // Ẩn các trạm sạc công nghiệp của kho bãi khỏi sơ đồ nhà hàng
+      return list.filter(
+        (s) => s.stationType?.toLowerCase() !== 'charging' && !s.name?.toLowerCase().includes('charger')
+      );
+    }
+    return list;
+  }, [activeSlamMap, mode]);
 
   // 4b. REAL WAYPOINTS (Chỉ hiển thị khi nhận từ MQTT ROS 2 / SQLite, KHÔNG tự ý xếp waypoint giả)
   const resolvedWaypoints: SlamMapWaypointDto[] = useMemo(() => {
     if (waypoints && waypoints.length > 0) return waypoints;
     if (activeSlamMap?.waypoints && activeSlamMap.waypoints.length > 0) return activeSlamMap.waypoints;
-    if (sqliteWaypoints && sqliteWaypoints.length > 0) return sqliteWaypoints;
+    if (apiWaypoints && apiWaypoints.length > 0) return apiWaypoints;
     return [];
-  }, [waypoints, activeSlamMap, sqliteWaypoints]);
+  }, [waypoints, activeSlamMap, apiWaypoints]);
 
-  // 5. REAL ROBOTS: render robot có tọa độ thực hoặc ở vị trí trạm chờ trong simplified mode
+  // 5. REAL ROBOTS: render robot có tọa độ thực hoặc ở vị trí sảnh trạm chờ trong simplified mode
   const resolvedRobots = useMemo(() => {
-    const valid = robots.filter((r) => typeof r.worldX === 'number' && typeof r.worldY === 'number');
-    if (mode === 'simplified' && valid.length === 0 && robots.length > 0) {
-      return robots.map((r, idx) => ({
-        ...r,
-        worldX: 1.0 + idx * 1.8,
-        worldY: 0.8,
-      }));
+    if (mode === 'simplified') {
+      return robots.map((r, idx) => {
+        const rPx = 110 + idx * 55;
+        const rPy = 60;
+        const pt = canvasPixelToRos(rPx, rPy, effectiveMetadata);
+        return {
+          ...r,
+          worldX: pt.x,
+          worldY: pt.y,
+        };
+      });
     }
+    const valid = robots.filter((r) => typeof r.worldX === 'number' && typeof r.worldY === 'number');
     return valid;
-  }, [robots, mode]);
+  }, [robots, mode, effectiveMetadata]);
 
   // Auto-fit Scale: Tự động tính hệ số tỷ lệ để vừa vặn hoàn hảo trong khung hiển thị bất kể thiết bị (Mobile/Tablet/Desktop)
   const autoScale = useMemo(() => {
@@ -640,35 +673,44 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     // LAYER 2: VECTOR FLOOR PLAN (STATIONS & TABLES)
     // =========================================================================
 
-    // 2.1 Stations
-    resolvedStations.forEach((st) => {
-      const stPx = rosToCanvasPixel(st.worldX, st.worldY, effectiveMetadata);
-      const isPickup = st.stationType.toLowerCase() === 'pickup' || st.stationType.toLowerCase() === 'kitchen';
-      ctx.fillStyle = isPickup ? '#0284c7' : '#eab308';
+    // 2.1 Stations (Technical mode only; in simplified mode dropoff stations are shown on tables)
+    if (mode !== 'simplified') {
+      resolvedStations.forEach((st) => {
+        const stPx = rosToCanvasPixel(st.worldX, st.worldY, effectiveMetadata);
+        const isPickup = st.stationType.toLowerCase() === 'pickup' || st.stationType.toLowerCase() === 'kitchen';
+        ctx.fillStyle = isPickup ? '#0284c7' : '#eab308';
+        ctx.beginPath();
+        ctx.roundRect(stPx.x - 30, stPx.y - 20, 60, 40, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(st.name, stPx.x, stPx.y + 3);
+      });
+    }
+
+    // 2.2 Kitchen location
+    const effKitchen = mode === 'simplified'
+      ? canvasPixelToRos((effectiveMetadata.width || 800) / 2, 60, effectiveMetadata)
+      : kitchenLocation;
+    if (effKitchen) {
+      const kPx = rosToCanvasPixel(effKitchen.x, effKitchen.y, effectiveMetadata);
+      ctx.fillStyle = '#0284c7';
       ctx.beginPath();
-      ctx.roundRect(stPx.x - 30, stPx.y - 20, 60, 40, 6);
+      ctx.roundRect(kPx.x - 65, kPx.y - 18, 130, 36, 8);
       ctx.fill();
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
+      ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(st.name, stPx.x, stPx.y + 3);
-    });
-
-    // 2.2 Kitchen location
-    if (kitchenLocation) {
-      const kPx = rosToCanvasPixel(kitchenLocation.x, kitchenLocation.y, effectiveMetadata);
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(kPx.x - 30, kPx.y - 20, 60, 40, 6);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('🍳 BẾP', kPx.x, kPx.y + 3);
+      ctx.fillText('🍳 BẾP TRUNG TÂM', kPx.x, kPx.y + 4);
     }
 
     // 2.3 Dining Tables
@@ -705,6 +747,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         } else if (table.status === 'occupied') {
           statusBadgeColor = '#10b981';
           tableBorder = '#10b981';
+        } else if (table.status === 'merged') {
+          statusBadgeColor = '#8b5cf6';
+          tableBorder = '#8b5cf6';
         }
 
         ctx.beginPath();
@@ -729,8 +774,26 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const shortName = table.name.replace(/^Bàn\s*/i, '');
-        ctx.fillText(`Bàn ${shortName}`, px.x, px.y);
+        let circleLabel = table.id;
+        if (table.name) {
+          const raw = table.name.replace(/^Bàn\s*/i, '').trim();
+          circleLabel = raw.includes('(') ? raw.split('(')[0].trim() : raw;
+        }
+        if (circleLabel.length > 8) {
+          circleLabel = circleLabel.slice(0, 7);
+        }
+        ctx.fillText(circleLabel, px.x, px.y);
+
+        // Sub-label below the circle for notes or zones
+        const isRestricted = (table.name && (table.name.includes('<') || table.name.includes('hẹp'))) || table.id.toUpperCase().includes('S');
+        ctx.save();
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = isSelected ? '#1d4ed8' : isRestricted ? '#d97706' : '#64748b';
+        const subText = isRestricted ? 'Lối hẹp' : (table.zone ? table.zone.replace('Khu ', '') : '');
+        if (subText) {
+          ctx.fillText(subText, px.x, px.y + radius + 11);
+        }
+        ctx.restore();
       } else {
         // Technical mode table rendering
         let fillColor = '#64748b';
