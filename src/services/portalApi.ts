@@ -1,116 +1,79 @@
-import axios from "axios";
+import axios from 'axios';
 
-import { refreshAccessToken } from "./api";
+import { refreshAccessToken } from './api';
 
 export const resolvePortalBaseUrl = (): string => {
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     // When served from Docker port 3200 or local domain, use relative /api/v1 to utilize Nginx reverse proxy
-
-    if (
-      window.location.port === "3200" ||
-      window.location.hostname?.endsWith(".local")
-    ) {
-      return "/api/v1";
+    if (window.location.port === '3200' || window.location.hostname?.endsWith('.local')) {
+      return '/api/v1';
     }
 
-    const override =
-      localStorage.getItem("API_GATEWAY_URL")?.trim() ||
-      localStorage.getItem("API_BASE_URL")?.trim();
-
+    const override = localStorage.getItem('API_GATEWAY_URL')?.trim() || localStorage.getItem('API_BASE_URL')?.trim();
     if (override) {
-      const clean = override.replace(/\/+$/, "");
-
-      return clean.endsWith("/api")
-        ? `${clean}/v1`
-        : clean.endsWith("/api/v1")
-          ? clean
-          : `${clean}/v1`;
+      const clean = override.replace(/\/+$/, '');
+      return clean.endsWith('/api') ? `${clean}/v1` : clean.endsWith('/api/v1') ? clean : `${clean}/v1`;
     }
   }
 
-  let envUrl = (
-    import.meta.env.VITE_API_GATEWAY_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    ""
-  ).trim();
-
-  if (
-    !envUrl ||
-    envUrl.includes("triage-scarcity-prancing.ngrok-free.dev") ||
-    envUrl.includes("briar-snoring-submerge.ngrok-free.dev") ||
-    envUrl.includes("trycloudflare.com")
-  ) {
-    envUrl = "https://stereo-gravity-humbly.ngrok-free.dev/api/v1";
+  let envUrl = (import.meta.env.VITE_API_GATEWAY_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (!envUrl || envUrl.includes('triage-scarcity-prancing.ngrok-free.dev') || envUrl.includes('briar-snoring-submerge.ngrok-free.dev') || envUrl.includes('trycloudflare.com')) {
+    envUrl = 'https://stereo-gravity-humbly.ngrok-free.dev/api/v1';
   }
 
-  const cleanUrl = envUrl.replace(/\/+$/, "");
-
-  if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+  const cleanUrl = envUrl.replace(/\/+$/, '');
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
     try {
       const parsed = new URL(cleanUrl);
-
-      if (parsed.pathname === "" || parsed.pathname === "/") {
+      if (parsed.pathname === '' || parsed.pathname === '/') {
         return `${cleanUrl}/api/v1`;
       }
-
-      if (cleanUrl.endsWith("/api")) {
+      if (cleanUrl.endsWith('/api')) {
         return `${cleanUrl}/v1`;
       }
     } catch {
-      if (!cleanUrl.endsWith("/api/v1")) {
-        return cleanUrl.endsWith("/api")
-          ? `${cleanUrl}/v1`
-          : `${cleanUrl}/api/v1`;
+      if (!cleanUrl.endsWith('/api/v1')) {
+        return cleanUrl.endsWith('/api') ? `${cleanUrl}/v1` : `${cleanUrl}/api/v1`;
       }
     }
   } else {
-    if (cleanUrl === "/api") {
-      return "/api/v1";
+    if (cleanUrl === '/api') {
+      return '/api/v1';
     }
   }
-
-  return cleanUrl.endsWith("/api") ? `${cleanUrl}/v1` : cleanUrl;
+  return cleanUrl.endsWith('/api') ? `${cleanUrl}/v1` : cleanUrl;
 };
 
 export const API_BASE_URL = resolvePortalBaseUrl();
 
 export const portalClient = axios.create({
   baseURL: API_BASE_URL,
-
   headers: {
-    "Content-Type": "application/json",
-
-    "ngrok-skip-browser-warning": "true",
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
 });
 
 portalClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("authToken");
-
+  const token = localStorage.getItem('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-
   return config;
 });
 
 portalClient.interceptors.response.use(
   (response) => response,
-
   async (error) => {
-    const config = error?.config as
-      (typeof error.config & { _retried?: boolean }) | undefined;
-
+    const config = error?.config as (typeof error.config & { _retried?: boolean }) | undefined;
     const status = error?.response?.status;
+    const url = config?.url || '';
 
-    const url = config?.url || "";
-
-    if (status !== 401 || config?._retried || url.includes("/auth/")) {
+    if (status !== 401 || config?._retried || url.includes('/auth/')) {
       return Promise.reject(error);
     }
 
-    const refreshToken = localStorage.getItem("refreshToken");
-
+    const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) {
       return Promise.reject(error);
     }
@@ -121,472 +84,273 @@ portalClient.interceptors.response.use(
 
     try {
       const session = await refreshAccessToken(refreshToken);
-
-      localStorage.setItem("authToken", session.accessToken);
-
+      localStorage.setItem('authToken', session.accessToken);
       if (session.refreshToken) {
-        localStorage.setItem("refreshToken", session.refreshToken);
+        localStorage.setItem('refreshToken', session.refreshToken);
       }
-
       if (config?.headers) {
         config.headers.Authorization = `Bearer ${session.accessToken}`;
       }
-
       return portalClient(config || {});
     } catch {
       return Promise.reject(error);
     }
-  },
+  }
 );
 
 // Domain Interfaces
-
 export interface FleetAMR {
   id: string;
-
   ownerTenantId: string;
-
   ownerTenantSlug: string;
-
   tenantName: string;
-
   branch: string;
-
   code: string;
-
   name: string;
-
   model: string;
-
-  status: "delivering" | "idle" | "charging" | "returning";
-
+  status: 'delivering' | 'idle' | 'charging' | 'returning';
   battery: number;
-
   rssi: string;
-
   pingMs: number;
-
   lastHeartbeat: string;
-
   firmware: string;
-
   currentLocation: string;
-
   targetTable: string;
-
   trays: { trayNum: number; item: string; table: string }[];
-
   totalTripsToday: number;
-
   speed: string;
-
   payloadKg: number;
-
   maxPayloadKg: number;
-
   lidarStatus: string;
-
   worldX?: number;
-
   worldY?: number;
-
   yaw?: number;
 }
 
 export interface MissionItem {
   id: string;
-
   title: string;
-
   assignedTo: string;
-
-  priority: "Cao" | "Bình thường" | "Thấp";
-
+  priority: 'Cao' | 'Bình thường' | 'Thấp';
   destination: string;
-
-  status: "running" | "queued";
-
+  status: 'running' | 'queued';
   eta: string;
 }
 
 export interface AlertItemDto {
   id: string;
-
   robot: string;
-
-  type: "critical" | "warning" | "info";
-
+  type: 'critical' | 'warning' | 'info';
   message: string;
-
   time: string;
-
   resolved?: boolean;
 }
 
 export interface PendingOrderDto {
   id: string;
-
   orderNumber: string;
-
   tableNo: string;
-
   items: { dishName: string; qty: number; note?: string }[];
-
   status: string;
-
   createdAt: string;
 }
 
 export interface DiningTableDto {
   id: string;
-
   tableNo: string;
-
   tableName?: string;
-
   zone: string;
-
   capacity: number;
-
-  status: "occupied" | "serving" | "empty" | "waiting" | "merged";
-
+  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
   assignedRobotCode: string | null;
-
   stationId?: string | null;
-
   stationName?: string | null;
-
   mergedIntoTableId?: string | null;
-
   qrCodeUrl?: string | null;
-
   currentOrders: string[];
-
   orderTime: string | null;
-
   worldX?: number;
-
   worldY?: number;
-
   xCoord?: number;
-
   yCoord?: number;
-
-  aisleWidth?: number;
-
-  isRestrictedAisle?: boolean;
 }
 
 export interface ZaloConversation {
   id: string;
-
   zaloUserId: string;
-
   customerName: string;
-
   customerPhone?: string;
-
-  status: "BOT_HANDLING" | "HUMAN_TAKEN";
-
+  status: 'BOT_HANDLING' | 'HUMAN_TAKEN';
   assignedAgentId?: string;
-
   assignedAgentName?: string;
-
   lastMessage: string;
-
   lastMessageAt: string;
-
   unreadCount?: number;
-
   customerAvatar?: string;
 }
 
 export interface ZaloMessage {
   id: string;
-
   conversationId: string;
-
-  senderType: "CUSTOMER" | "BOT" | "STAFF";
-
+  senderType: 'CUSTOMER' | 'BOT' | 'STAFF';
   senderId?: string;
-
   senderName: string;
-
   content: string;
-
   createdAt: string;
 }
 
 export interface TenantSummaryDto {
   id: string;
-
   slug: string;
-
   name: string;
-
   adminEmail?: string;
-
   status?: string;
 }
 
 export interface UserTenantResolutionDto {
   isSuperAdmin: boolean;
-
   role: string;
-
   tenantId: string | null;
-
   tenantSlug: string | null;
-
   tenantName: string | null;
-
   subdomain: string | null;
 }
 
 export const tenantService = {
-  resolveUserTenant: async (
-    email?: string,
-  ): Promise<UserTenantResolutionDto> => {
+  resolveUserTenant: async (email?: string): Promise<UserTenantResolutionDto> => {
     try {
-      const url = email
-        ? `/tenant/resolve-user?email=${encodeURIComponent(email)}`
-        : "/tenant/resolve-user";
-
+      const url = email ? `/tenant/resolve-user?email=${encodeURIComponent(email)}` : '/tenant/resolve-user';
       const res = await portalClient.get(url);
-
       if (res.data) {
         return res.data;
       }
     } catch (err) {
-      console.warn(
-        "Lỗi gọi API resolve-user tenant qua portalClient, thử gọi fallback cục bộ:",
-        err,
-      );
-
+      console.warn('Lỗi gọi API resolve-user tenant qua portalClient, thử gọi fallback cục bộ:', err);
       try {
-        const fallbackUrl = email
-          ? `/api/v1/tenant/resolve-user?email=${encodeURIComponent(email)}`
-          : "/api/v1/tenant/resolve-user";
-
+        const fallbackUrl = email ? `/api/v1/tenant/resolve-user?email=${encodeURIComponent(email)}` : '/api/v1/tenant/resolve-user';
         const fallbackRes = await axios.get(fallbackUrl, {
           headers: {
-            "Content-Type": "application/json",
-
-            ...(localStorage.getItem("authToken")
-              ? { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
-              : {}),
-          },
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('authToken') ? { Authorization: `Bearer ${localStorage.getItem('authToken')}` } : {})
+          }
         });
-
         if (fallbackRes.data) {
           return fallbackRes.data;
         }
       } catch (fallbackErr) {
-        console.warn("Lỗi gọi fallback resolve-user tenant:", fallbackErr);
+        console.warn('Lỗi gọi fallback resolve-user tenant:', fallbackErr);
       }
     }
-
     return {
       isSuperAdmin: false,
-
-      role: "user",
-
+      role: 'user',
       tenantId: null,
-
       tenantSlug: null,
-
       tenantName: null,
-
       subdomain: null,
     };
   },
 
   getTenantsList: async (): Promise<TenantSummaryDto[]> => {
     try {
-      const res = await portalClient.get("/tenant/tenants-list");
-
+      const res = await portalClient.get('/tenant/tenants-list');
       if (res.data && Array.isArray(res.data)) {
         return res.data;
       }
     } catch (err) {
-      console.warn("Lỗi gọi API tenants-list:", err);
+      console.warn('Lỗi gọi API tenants-list:', err);
     }
-
     return [];
   },
 };
 
-function mapRobotDtoToFleetAMR(
-  dto: any,
-  tenantSlug?: string,
-  tenantName?: string,
-): FleetAMR {
-  const statusStr = (dto.status || "idle").toLowerCase();
+function mapRobotDtoToFleetAMR(dto: any, tenantSlug?: string, tenantName?: string): FleetAMR {
+  const statusStr = (dto.status || 'idle').toLowerCase();
+  const normalizedStatus: 'delivering' | 'idle' | 'charging' | 'returning' = 
+    statusStr.includes('mov') || statusStr.includes('deliv') || statusStr === 'active'
+      ? 'delivering'
+      : statusStr.includes('charg')
+      ? 'charging'
+      : statusStr.includes('return')
+      ? 'returning'
+      : 'idle';
 
-  const normalizedStatus: "delivering" | "idle" | "charging" | "returning" =
-    statusStr.includes("mov") ||
-    statusStr.includes("deliv") ||
-    statusStr === "active"
-      ? "delivering"
-      : statusStr.includes("charg")
-        ? "charging"
-        : statusStr.includes("return")
-          ? "returning"
-          : "idle";
-
-  const tId = (dto.assignedTenantId || dto.tenantId || dto.ownerTenantId || "")
-    .toString()
-    .toLowerCase();
-
-  const resolvedSlug = dto.tenantSlug || tenantSlug || "";
-
-  const resolvedName =
-    dto.tenantName ||
-    tenantName ||
-    (tId ? "Nhà Hàng Đối Tác" : "Hệ Thống VORA");
+  const tId = (dto.assignedTenantId || dto.tenantId || dto.ownerTenantId || '').toString().toLowerCase();
+  const resolvedSlug = dto.tenantSlug || tenantSlug || '';
+  const resolvedName = dto.tenantName || tenantName || (tId ? 'Nhà Hàng Đối Tác' : 'Hệ Thống VORA');
 
   return {
-    id: dto.id?.toString() || `amr-${dto.code || "01"}`,
-
+    id: dto.id?.toString() || `amr-${dto.code || '01'}`,
     ownerTenantId: tId,
-
     ownerTenantSlug: resolvedSlug,
-
     tenantName: resolvedName,
-
-    branch: dto.branch || "Chi nhánh Chính",
-
-    code:
-      dto.code || dto.name || `AMR-${dto.id?.toString().slice(0, 4) || "V01"}`,
-
-    name: dto.name || `Robot AMR ${dto.code || ""}`,
-
-    model: dto.model || "VORA Agile 3-Tray SLAM",
-
+    branch: dto.branch || 'Chi nhánh Chính',
+    code: dto.code || dto.name || `AMR-${dto.id?.toString().slice(0, 4) || 'V01'}`,
+    name: dto.name || `Robot AMR ${dto.code || ''}`,
+    model: dto.model || 'VORA Agile 3-Tray SLAM',
     status: normalizedStatus,
-
-    battery:
-      typeof dto.batteryLevel === "number"
-        ? dto.batteryLevel
-        : dto.battery || 100,
-
-    rssi: dto.rssi || "-42 dBm",
-
+    battery: typeof dto.batteryLevel === 'number' ? dto.batteryLevel : (dto.battery || 100),
+    rssi: dto.rssi || '-42 dBm',
     pingMs: dto.pingMs || 14,
-
-    lastHeartbeat: dto.lastHeartbeat || "Vừa xong",
-
-    firmware: dto.firmware || "v2.4.2",
-
-    currentLocation:
-      dto.currentLocation ||
-      (dto.x ? `Tọa độ (${dto.x}, ${dto.y})` : "Trạm Chờ Bếp"),
-
-    targetTable:
-      dto.targetTable ||
-      (normalizedStatus === "charging" ? "Trạm Sạc Tự Động" : "Sẵn sàng"),
-
+    lastHeartbeat: dto.lastHeartbeat || 'Vừa xong',
+    firmware: dto.firmware || 'v2.4.2',
+    currentLocation: dto.currentLocation || (dto.x ? `Tọa độ (${dto.x}, ${dto.y})` : 'Trạm Chờ Bếp'),
+    targetTable: dto.targetTable || (normalizedStatus === 'charging' ? 'Trạm Sạc Tự Động' : 'Sẵn sàng'),
     trays: Array.isArray(dto.trays) ? dto.trays : [],
-
     totalTripsToday: dto.totalTripsToday || 0,
-
-    speed:
-      dto.speed || (normalizedStatus === "delivering" ? "1.2 m/s" : "0.0 m/s"),
-
+    speed: dto.speed || (normalizedStatus === 'delivering' ? '1.2 m/s' : '0.0 m/s'),
     payloadKg: dto.payloadKg || 0,
-
     maxPayloadKg: dto.maxPayloadKg || 40,
-
-    lidarStatus: dto.lidarStatus || "LiDAR 2D SLAM 20Hz OK",
-
-    worldX:
-      typeof dto.worldX === "number"
-        ? dto.worldX
-        : typeof dto.x === "number"
-          ? dto.x
-          : undefined,
-
-    worldY:
-      typeof dto.worldY === "number"
-        ? dto.worldY
-        : typeof dto.y === "number"
-          ? dto.y
-          : undefined,
-
-    yaw:
-      typeof dto.yaw === "number"
-        ? dto.yaw
-        : typeof dto.theta === "number"
-          ? dto.theta
-          : undefined,
+    lidarStatus: dto.lidarStatus || 'LiDAR 2D SLAM 20Hz OK',
+    worldX: typeof dto.worldX === 'number' ? dto.worldX : typeof dto.x === 'number' ? dto.x : undefined,
+    worldY: typeof dto.worldY === 'number' ? dto.worldY : typeof dto.y === 'number' ? dto.y : undefined,
+    yaw: typeof dto.yaw === 'number' ? dto.yaw : typeof dto.theta === 'number' ? dto.theta : undefined,
   };
 }
 
 export const fleetService = {
   getAllRobots: async (tenantId?: string): Promise<FleetAMR[]> => {
     try {
-      const url = tenantId ? `/robots?tenantId=${tenantId}` : "/robots";
-
+      const url = tenantId ? `/robots?tenantId=${tenantId}` : '/robots';
       const res = await portalClient.get(url);
-
       if (res.data && Array.isArray(res.data)) {
         return res.data.map((r: any) => mapRobotDtoToFleetAMR(r));
       }
     } catch (err) {
-      console.warn("Lỗi tải danh sách robot:", err);
+      console.warn('Lỗi tải danh sách robot:', err);
     }
-
     return [];
   },
 
-  getRobotsByTenant: async (
-    tenantSlug?: string,
-    tenantId?: string,
-  ): Promise<FleetAMR[]> => {
-    const cleanSlug = (tenantSlug || "").toLowerCase().trim();
-
+  getRobotsByTenant: async (tenantSlug?: string, tenantId?: string): Promise<FleetAMR[]> => {
+    const cleanSlug = (tenantSlug || '').toLowerCase().trim();
     try {
-      const url = tenantId ? `/robots?tenantId=${tenantId}` : "/robots";
-
+      const url = tenantId ? `/robots?tenantId=${tenantId}` : '/robots';
       const allRes = await portalClient.get(url);
-
       if (allRes.data && Array.isArray(allRes.data)) {
         const mapped = allRes.data.map((r: any) => mapRobotDtoToFleetAMR(r));
-
         if (!cleanSlug && !tenantId) return mapped;
-
         return mapped.filter(
           (r) =>
-            (tenantId &&
-              r.ownerTenantId.toLowerCase() === tenantId.toLowerCase()) ||
-            (cleanSlug &&
-              ((r.ownerTenantSlug || "").toLowerCase() === cleanSlug ||
-                (r.ownerTenantId || "").toLowerCase() === cleanSlug)),
+            (tenantId && r.ownerTenantId.toLowerCase() === tenantId.toLowerCase()) ||
+            (cleanSlug && ((r.ownerTenantSlug || '').toLowerCase() === cleanSlug || (r.ownerTenantId || '').toLowerCase() === cleanSlug))
         );
       }
     } catch (err) {
-      console.warn("Lỗi tải danh sách robot theo tenant:", err);
+      console.warn('Lỗi tải danh sách robot theo tenant:', err);
     }
-
     return [];
   },
 
-  updateRobotStatus: async (
-    robotId: string,
-    payload: { status: string; targetTable?: string } | string,
-  ): Promise<boolean> => {
+  updateRobotStatus: async (robotId: string, payload: { status: string; targetTable?: string } | string): Promise<boolean> => {
     try {
-      const data = typeof payload === "string" ? { status: payload } : payload;
-
+      const data = typeof payload === 'string' ? { status: payload } : payload;
       await portalClient.patch(`/robots/${robotId}/status`, data);
-
       return true;
     } catch {
       try {
-        const action = typeof payload === "string" ? payload : payload.status;
-
+        const action = typeof payload === 'string' ? payload : payload.status;
         await portalClient.post(`/robots/${robotId}/command`, { action });
-
         return true;
       } catch {
         return false;
@@ -597,141 +361,81 @@ export const fleetService = {
 
 export interface MissionStatsDto {
   totalToday: number;
-
   active: number;
-
   completed: number;
-
   failed: number;
-
   cancelled: number;
-
   avgDurationMinutes: number;
-
   byRobot: Record<string, number>;
 }
 
 export const missionService = {
   getMissions: async (): Promise<MissionItem[]> => {
     try {
-      const res = await portalClient.get("/tasks");
-
+      const res = await portalClient.get('/tasks');
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         return res.data.map((t: any) => {
-          const st = (t.status || "").toLowerCase();
-
-          const isDone =
-            st === "completed" || st === "cancelled" || st === "failed";
-
-          const destName =
-            t.toStation?.name ||
-            t.toStationName ||
-            t.destination ||
-            "Bàn phục vụ";
-
-          const title =
-            t.title || t.description || `Vận chuyển đến ${destName}`;
-
+          const st = (t.status || '').toLowerCase();
+          const isDone = st === 'completed' || st === 'cancelled' || st === 'failed';
+          const destName = t.toStation?.name || t.toStationName || t.destination || 'Bàn phục vụ';
+          const title = t.title || t.description || `Vận chuyển đến ${destName}`;
           return {
-            id: t.id
-              ? typeof t.id === "string" && t.id.startsWith("MQ-")
-                ? t.id
-                : `MQ-${t.id.toString().slice(0, 6)}`
-              : `MQ-${Math.floor(1000 + Math.random() * 9000)}`,
-
+            id: t.id ? (typeof t.id === 'string' && t.id.startsWith('MQ-') ? t.id : `MQ-${t.id.toString().slice(0, 6)}`) : `MQ-${Math.floor(1000 + Math.random() * 9000)}`,
             title,
-
-            assignedTo:
-              t.assignedRobotName || t.robotName || t.assignedTo || "Chưa gán",
-
-            priority:
-              t.priority === 2 ||
-              t.priority === 3 ||
-              t.priority === "High" ||
-              t.priority === "Cao"
-                ? "Cao"
-                : "Bình thường",
-
+            assignedTo: t.assignedRobotName || t.robotName || t.assignedTo || 'Chưa gán',
+            priority: t.priority === 2 || t.priority === 3 || t.priority === 'High' || t.priority === 'Cao' ? 'Cao' : 'Bình thường',
             destination: destName,
-
-            status: isDone ? "queued" : "running",
-
-            eta: t.estimatedDurationSeconds
-              ? `${Math.round(t.estimatedDurationSeconds / 60)} phút`
-              : isDone
-                ? "Hoàn thành"
-                : "1-2 phút",
+            status: isDone ? 'queued' : 'running',
+            eta: t.estimatedDurationSeconds ? `${Math.round(t.estimatedDurationSeconds / 60)} phút` : isDone ? 'Hoàn thành' : '1-2 phút',
           };
         });
       }
     } catch {
       // Empty
     }
-
     return [];
   },
 
   getMissionStats: async (): Promise<MissionStatsDto | null> => {
     try {
-      const res = await portalClient.get("/tasks/stats");
-
+      const res = await portalClient.get('/tasks/stats');
       return res.data || null;
     } catch {
       return null;
     }
   },
 
-  createMission: async (data: {
-    title: string;
-    destination: string;
-    robotId: string;
-    priority?: string;
-  }): Promise<MissionItem> => {
+  createMission: async (data: { title: string; destination: string; robotId: string; priority?: string }): Promise<MissionItem> => {
     try {
-      const res = await portalClient.post("/tasks", data);
-
+      const res = await portalClient.post('/tasks', data);
       if (res.data) {
         return {
           id: `MQ-${res.data.id || Math.floor(1000 + Math.random() * 9000)}`,
-
           title: data.title,
-
           assignedTo: data.robotId,
-
-          priority: (data.priority as any) || "Cao",
-
+          priority: (data.priority as any) || 'Cao',
           destination: data.destination,
-
-          status: "running",
-
-          eta: "1m 30s",
+          status: 'running',
+          eta: '1m 30s',
         };
       }
     } catch {
       // Empty
     }
-
     return {
       id: `MQ-${Math.floor(1000 + Math.random() * 9000)}`,
-
       title: data.title,
-
       assignedTo: data.robotId,
-
-      priority: (data.priority as any) || "Cao",
-
+      priority: (data.priority as any) || 'Cao',
       destination: data.destination,
-
-      status: "running",
-
-      eta: "1m 30s",
+      status: 'running',
+      eta: '1m 30s',
     };
   },
 
   cancelMission: async (id: string): Promise<boolean> => {
     try {
       await portalClient.post(`/tasks/${id}/cancel`);
-
       return true;
     } catch {
       return true;
@@ -740,8 +444,7 @@ export const missionService = {
 
   prioritizeMission: async (id: string): Promise<boolean> => {
     try {
-      await portalClient.post(`/tasks/${id}/priority`, { priority: "High" });
-
+      await portalClient.post(`/tasks/${id}/priority`, { priority: 'High' });
       return true;
     } catch {
       return true;
@@ -752,39 +455,25 @@ export const missionService = {
 export const alertService = {
   getAlerts: async (): Promise<AlertItemDto[]> => {
     try {
-      const res = await portalClient.get("/notifications");
-
+      const res = await portalClient.get('/notifications');
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         return res.data.map((n: any) => ({
           id: n.id?.toString() || `alt-${Date.now()}`,
-
-          robot: n.robotCode || n.source || "AMR",
-
-          type:
-            n.type === "error" || n.priority === "High"
-              ? "critical"
-              : n.type === "warning"
-                ? "warning"
-                : "info",
-
-          message: n.message || n.title || "Thông báo hệ thống",
-
-          time: n.createdAt
-            ? new Date(n.createdAt).toLocaleTimeString("vi-VN")
-            : "Vừa xong",
+          robot: n.robotCode || n.source || 'AMR',
+          type: n.type === 'error' || n.priority === 'High' ? 'critical' : n.type === 'warning' ? 'warning' : 'info',
+          message: n.message || n.title || 'Thông báo hệ thống',
+          time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('vi-VN') : 'Vừa xong',
         }));
       }
     } catch {
       // Empty
     }
-
     return [];
   },
 
   resolveAlert: async (id: string): Promise<boolean> => {
     try {
       await portalClient.post(`/notifications/${id}/read`);
-
       return true;
     } catch {
       return true;
@@ -793,122 +482,70 @@ export const alertService = {
 };
 
 export const resolveEffectiveStoreId = (storeId?: string | null): string => {
-  if (
-    storeId &&
-    storeId.trim() !== "" &&
-    storeId !== "00000000-0000-0000-0000-000000000000"
-  ) {
+  if (storeId && storeId.trim() !== '' && storeId !== '00000000-0000-0000-0000-000000000000') {
     return storeId.trim();
   }
-
   try {
-    const stored = localStorage.getItem("user");
-
+    const stored = localStorage.getItem('user');
     if (stored) {
       const u = JSON.parse(stored);
-
-      if (
-        u.storeId &&
-        typeof u.storeId === "string" &&
-        u.storeId.trim() !== "" &&
-        u.storeId !== "00000000-0000-0000-0000-000000000000"
-      ) {
+      if (u.storeId && typeof u.storeId === 'string' && u.storeId.trim() !== '' && u.storeId !== '00000000-0000-0000-0000-000000000000') {
         return u.storeId.trim();
       }
-
-      if (
-        u.tenantId &&
-        typeof u.tenantId === "string" &&
-        u.tenantId.trim() !== "" &&
-        u.tenantId !== "00000000-0000-0000-0000-000000000000"
-      ) {
+      if (u.tenantId && typeof u.tenantId === 'string' && u.tenantId.trim() !== '' && u.tenantId !== '00000000-0000-0000-0000-000000000000') {
         return u.tenantId.trim();
       }
     }
   } catch {}
-
-  return "11111111-1111-1111-1111-111111111111";
+  return '11111111-1111-1111-1111-111111111111';
 };
 
 const extractErrorMessage = (err: any, defaultMsg: string): string => {
   if (err?.response?.data) {
     const d = err.response.data;
-
-    if (typeof d === "string" && d.trim()) return d;
-
-    if (d.message && typeof d.message === "string") return d.message;
-
-    if (d.errors && typeof d.errors === "object") {
+    if (typeof d === 'string' && d.trim()) return d;
+    if (d.message && typeof d.message === 'string') return d.message;
+    if (d.errors && typeof d.errors === 'object') {
       const keys = Object.keys(d.errors);
-
       if (keys.length > 0) {
         const firstErr = d.errors[keys[0]];
-
-        if (Array.isArray(firstErr) && firstErr.length > 0)
-          return `${keys[0]}: ${firstErr[0]}`;
-
-        if (typeof firstErr === "string") return `${keys[0]}: ${firstErr}`;
+        if (Array.isArray(firstErr) && firstErr.length > 0) return `${keys[0]}: ${firstErr[0]}`;
+        if (typeof firstErr === 'string') return `${keys[0]}: ${firstErr}`;
       }
     }
-
-    if (d.title && typeof d.title === "string") return d.title;
+    if (d.title && typeof d.title === 'string') return d.title;
   }
-
   return err?.message || defaultMsg;
 };
 
 export const tableService = {
   // Danh sách bàn tải từ BE (API / Active SLAM Map), có SQLite cache cho chế độ offline
-
   getTables: async (storeIdOrSlug?: string): Promise<DiningTableDto[]> => {
     // 1. Thử truy vấn API backend cấu hình bàn ăn
-
     try {
-      const res = await portalClient.get(
-        `/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ""}`,
-      );
-
+      const res = await portalClient.get(`/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ''}`);
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
         return res.data.map((t: any) => ({
-          id: t.id?.toString() || t.tableNo || "Table",
-
-          tableNo: t.tableNo || t.name || "Bàn",
-
-          tableName: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : "Bàn"),
-
-          zone: t.zone || "Khu Trong Nhà",
-
+          id: t.id?.toString() || t.tableNo || 'Table',
+          tableNo: t.tableNo || t.name || 'Bàn',
+          tableName: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : 'Bàn'),
+          zone: t.zone || 'Khu Trong Nhà',
           capacity: t.capacity || 4,
-
-          status: (t.status === "Available" || t.status === "empty"
-            ? "empty"
-            : t.status === "Occupied" || t.status === "occupied"
-              ? "occupied"
-              : t.status === "WaitingForService" || t.status === "waiting"
-                ? "waiting"
-                : t.status === "Served" || t.status === "serving"
-                  ? "serving"
-                  : t.status === "Merged" || t.status === "merged"
-                    ? "merged"
-                    : "empty") as DiningTableDto["status"],
-
+          status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
+            : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
+            : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
+            : t.status === 'Served' || t.status === 'serving' ? 'serving'
+            : t.status === 'Merged' || t.status === 'merged' ? 'merged'
+            : 'empty') as DiningTableDto['status'],
           assignedRobotCode: t.assignedRobotCode || null,
-
           stationId: t.stationId || null,
-
           stationName: t.stationName || null,
-
           mergedIntoTableId: t.mergedIntoTableId || null,
-
           qrCodeUrl: t.qrCodeUrl || null,
-
           currentOrders: t.currentOrders || [],
-
           orderTime: t.orderTime || null,
-
-          worldX: typeof t.worldX === "number" ? t.worldX : t.xCoord,
-
-          worldY: typeof t.worldY === "number" ? t.worldY : t.yCoord,
+          worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
+          worldY: typeof t.worldY === 'number' ? t.worldY : t.yCoord,
         }));
       }
     } catch {
@@ -916,10 +553,8 @@ export const tableService = {
     }
 
     // 2. Fallback nếu không kết nối được BE
-
     try {
       const sqliteTables: DiningTableDto[] = [];
-
       if (sqliteTables && sqliteTables.length > 0) {
         return sqliteTables;
       }
@@ -930,295 +565,121 @@ export const tableService = {
     return [];
   },
 
-  createTable: async (data: {
-    storeId?: string;
-    tableNo: string;
-    tableName?: string;
-    capacity?: number;
-    stationId?: string | null;
-    zone?: string;
-  }): Promise<{ success: boolean; data?: any; message?: string }> => {
+  createTable: async (data: { storeId?: string; tableNo: string; tableName?: string; capacity?: number; stationId?: string | null; zone?: string }): Promise<{ success: boolean; data?: any; message?: string }> => {
     try {
       const effectiveStoreId = resolveEffectiveStoreId(data.storeId);
-
-      const res = await portalClient.post("/tables", {
+      const res = await portalClient.post('/tables', {
         storeId: effectiveStoreId,
-
         tableNo: data.tableNo,
-
         tableName: data.tableName || `Bàn ${data.tableNo}`,
-
         capacity: data.capacity || 4,
-
         stationId: data.stationId || null,
       });
-
       return { success: true, data: res.data };
     } catch (err: any) {
-      return {
-        success: false,
-        message: extractErrorMessage(err, "Lỗi tạo bàn ăn"),
-      };
+      return { success: false, message: extractErrorMessage(err, 'Lỗi tạo bàn ăn') };
     }
   },
 
-  importCsv: async (
-    storeId?: string,
-    csvContent: string = "",
-  ): Promise<{
-    success: boolean;
-    totalProcessed: number;
-    totalCreated: number;
-    totalSkipped: number;
-    messages: string[];
-  }> => {
+  importCsv: async (storeId?: string, csvContent: string = ''): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
     try {
       const effectiveStoreId = resolveEffectiveStoreId(storeId);
-
-      const res = await portalClient.post("/tables/import-csv", {
+      const res = await portalClient.post('/tables/import-csv', {
         storeId: effectiveStoreId,
-
         csvContent,
       });
-
       return {
         success: true,
-
         totalProcessed: res.data?.totalProcessed ?? 0,
-
         totalCreated: res.data?.totalCreated ?? 0,
-
         totalSkipped: res.data?.totalSkipped ?? 0,
-
         messages: res.data?.messages || [],
       };
     } catch (err: any) {
       return {
         success: false,
-
         totalProcessed: 0,
-
         totalCreated: 0,
-
         totalSkipped: 0,
-
-        messages: [extractErrorMessage(err, "Lỗi nhập dữ liệu CSV")],
+        messages: [extractErrorMessage(err, 'Lỗi nhập dữ liệu CSV')],
       };
     }
   },
 
-  uploadCsv: async (
-    storeId?: string,
-    file?: File,
-  ): Promise<{
-    success: boolean;
-    totalProcessed: number;
-    totalCreated: number;
-    totalSkipped: number;
-    messages: string[];
-  }> => {
+  uploadCsv: async (storeId?: string, file?: File): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
     try {
       if (!file) {
         return {
           success: false,
-
           totalProcessed: 0,
-
           totalCreated: 0,
-
           totalSkipped: 0,
-
-          messages: ["File CSV không được để trống"],
+          messages: ['File CSV không được để trống'],
         };
       }
-
       const effectiveStoreId = resolveEffectiveStoreId(storeId);
-
       const formData = new FormData();
-
-      formData.append("storeId", effectiveStoreId);
-
-      formData.append("file", file);
-
-      const res = await portalClient.post("/tables/upload-csv", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+      formData.append('storeId', effectiveStoreId);
+      formData.append('file', file);
+      const res = await portalClient.post('/tables/upload-csv', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-
       return {
         success: true,
-
         totalProcessed: res.data?.totalProcessed ?? 0,
-
         totalCreated: res.data?.totalCreated ?? 0,
-
         totalSkipped: res.data?.totalSkipped ?? 0,
-
         messages: res.data?.messages || [],
       };
     } catch (err: any) {
       return {
         success: false,
-
         totalProcessed: 0,
-
         totalCreated: 0,
-
         totalSkipped: 0,
-
-        messages: [extractErrorMessage(err, "Lỗi tải lên file CSV")],
+        messages: [extractErrorMessage(err, 'Lỗi tải lên file CSV')],
       };
     }
   },
 
-  assignStation: async (
-    tableId: string,
-    stationId: string | null,
-  ): Promise<{ success: boolean; message: string }> => {
+  assignStation: async (tableId: string, stationId: string | null): Promise<{ success: boolean; message: string }> => {
     try {
-      const res = await portalClient.post(`/tables/${tableId}/assign-station`, {
-        stationId,
-      });
-
-      return {
-        success: true,
-        message: res.data?.message || "Cập nhật trạm thành công",
-      };
+      const res = await portalClient.post(`/tables/${tableId}/assign-station`, { stationId });
+      return { success: true, message: res.data?.message || 'Cập nhật trạm thành công' };
     } catch (err: any) {
-      return {
-        success: false,
-        message: extractErrorMessage(err, "Lỗi gán trạm"),
-      };
+      return { success: false, message: extractErrorMessage(err, 'Lỗi gán trạm') };
     }
   },
 
-  batchAssignStations: async (
-    storeId?: string,
-    assignments: {
-      tableId?: string;
-      tableNo?: string;
-      stationId?: string;
-      stationName?: string;
-    }[] = [],
-  ): Promise<{
-    success: boolean;
-    totalSuccess: number;
-    totalFailed: number;
-    messages: string[];
-  }> => {
+  batchAssignStations: async (storeId?: string, assignments: { tableId?: string; tableNo?: string; stationId?: string; stationName?: string }[] = []): Promise<{ success: boolean; totalSuccess: number; totalFailed: number; messages: string[] }> => {
     const effectiveStoreId = resolveEffectiveStoreId(storeId);
-
     try {
-      const res = await portalClient.post("/tables/batch-assign-stations", {
+      const res = await portalClient.post('/tables/batch-assign-stations', {
         storeId: effectiveStoreId,
-
         assignments,
       });
-
       return {
         success: true,
-
         totalSuccess: res.data?.totalSuccess ?? 0,
-
         totalFailed: res.data?.totalFailed ?? 0,
-
         messages: res.data?.messages || [],
       };
     } catch (err: any) {
       return {
         success: false,
-
         totalSuccess: 0,
-
         totalFailed: assignments.length,
-
-        messages: [extractErrorMessage(err, "Lỗi gán trạm hàng loạt")],
+        messages: [extractErrorMessage(err, 'Lỗi gán trạm hàng loạt')],
       };
     }
   },
 
-  updateTableStatus: async (
-    tableId: string,
-    status: string,
-  ): Promise<boolean> => {
+  updateTableStatus: async (tableId: string, status: string): Promise<boolean> => {
     try {
       await portalClient.post(`/tables/${tableId}/status`, { status });
-
       return true;
     } catch {
       return false;
-    }
-  },
-
-  // Flow 3 / Sequence 3.3 (TASK-01 & TASK-02): Resolve drop-off for narrow-aisle tables (< 0.8m)
-
-  resolveDropoff: async (
-    tableId: string,
-  ): Promise<{
-    directReachable: boolean;
-
-    requireStationSelection: boolean;
-
-    aisleWidth: number;
-
-    restrictedReason?: string;
-
-    availableStations?: Array<{
-      stationId: string;
-
-      stationName: string;
-
-      xCoord: number;
-
-      yCoord: number;
-
-      distance: number;
-    }>;
-  }> => {
-    try {
-      const res = await portalClient.post(`/tables/${tableId}/resolve-dropoff`);
-
-      return res.data;
-    } catch {
-      return {
-        directReachable: true,
-
-        requireStationSelection: false,
-
-        aisleWidth: 1.2,
-      };
-    }
-  },
-
-  bindAssistedStation: async (
-    tableId: string,
-    stationId: string,
-    mode: string = "A_to_S",
-  ): Promise<{
-    success: boolean;
-    message: string;
-    stationName?: string;
-    mode?: string;
-  }> => {
-    try {
-      const res = await portalClient.post(
-        `/tables/${tableId}/bind-assisted-station`,
-        { stationId, mode },
-      );
-
-      return (
-        res.data || {
-          success: true,
-          message: "Liên kết trạm hỗ trợ thành công",
-        }
-      );
-    } catch (err: any) {
-      return {
-        success: false,
-        message:
-          err?.response?.data?.message ||
-          err.message ||
-          "Lỗi liên kết trạm hỗ trợ",
-      };
     }
   },
 };
@@ -1226,41 +687,21 @@ export const tableService = {
 export const orderService = {
   getPendingOrders: async (): Promise<PendingOrderDto[]> => {
     // Orders are purely treated as external reference metadata for robot tasks; no external order backend is queried
-
     return [];
   },
 
-  dispatchToRobot: async (
-    robotId: string,
-    orderId: string,
-    destinationStationId: string,
-    fromStationId?: string,
-  ): Promise<boolean> => {
+  dispatchToRobot: async (robotId: string, orderId: string, destinationStationId: string, fromStationId?: string): Promise<boolean> => {
     try {
-      const guidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-      const validOrderId = guidRegex.test(orderId)
-        ? orderId
-        : "11111111-1111-1111-1111-111111111111";
-
-      const validFromStation =
-        fromStationId && guidRegex.test(fromStationId)
-          ? fromStationId
-          : "55555555-5555-5555-5555-555555555555";
-
-      const validToStation = guidRegex.test(destinationStationId)
-        ? destinationStationId
-        : "22222222-2222-2222-2222-222222222222";
+      const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validOrderId = guidRegex.test(orderId) ? orderId : '11111111-1111-1111-1111-111111111111';
+      const validFromStation = (fromStationId && guidRegex.test(fromStationId)) ? fromStationId : '55555555-5555-5555-5555-555555555555';
+      const validToStation = guidRegex.test(destinationStationId) ? destinationStationId : '22222222-2222-2222-2222-222222222222';
 
       await portalClient.post(`/robots/${robotId}/tasks`, {
         orderId: validOrderId,
-
         fromStationId: validFromStation,
-
         toStationId: validToStation,
       });
-
       return true;
     } catch {
       return false;
@@ -1269,47 +710,29 @@ export const orderService = {
 
   dispatchToSqlite: async (
     subdomain: string,
-
     orderId: string,
-
     destinationTable: string,
-
-    robotCode?: string,
+    robotCode?: string
   ): Promise<{ success: boolean; message: string }> => {
     try {
-      const res = await portalClient.post(
-        `/tenant/${subdomain}/database/dispatch`,
-        {
-          orderId,
-
-          destinationTable,
-
-          robotCode: robotCode || "AMR-01",
-        },
-      );
-
+      const res = await portalClient.post(`/tenant/${subdomain}/database/dispatch`, {
+        orderId,
+        destinationTable,
+        robotCode: robotCode || 'AMR-01',
+      });
       return res.data;
     } catch {
       try {
-        const res2 = await portalClient.post(
-          `/admin/tenants/${subdomain}/sqlite/dispatch`,
-          {
-            orderId,
-
-            destinationTable,
-
-            robotCode: robotCode || "AMR-01",
-          },
-        );
-
+        const res2 = await portalClient.post(`/admin/tenants/${subdomain}/sqlite/dispatch`, {
+          orderId,
+          destinationTable,
+          robotCode: robotCode || 'AMR-01',
+        });
         return res2.data;
       } catch (err2: any) {
         return {
           success: false,
-
-          message:
-            err2?.response?.data?.message ||
-            "Không thể ghi nhận lệnh điều phối vào SQLite",
+          message: err2?.response?.data?.message || 'Không thể ghi nhận lệnh điều phối vào SQLite',
         };
       }
     }
@@ -1318,7 +741,6 @@ export const orderService = {
   confirmOrder: async (orderId: string): Promise<boolean> => {
     try {
       await portalClient.post(`/orders/${orderId}/confirm`);
-
       return true;
     } catch {
       return false;
@@ -1329,8 +751,7 @@ export const orderService = {
 export const zaloSupportService = {
   getConversations: async (): Promise<ZaloConversation[]> => {
     try {
-      const res = await portalClient.get("/zalo/conversations");
-
+      const res = await portalClient.get('/zalo/conversations');
       return Array.isArray(res.data) ? res.data : [];
     } catch {
       return [];
@@ -1339,115 +760,63 @@ export const zaloSupportService = {
 
   getMessages: async (conversationId: string): Promise<ZaloMessage[]> => {
     try {
-      const res = await portalClient.get(
-        `/zalo/conversations/${conversationId}/messages`,
-      );
-
+      const res = await portalClient.get(`/zalo/conversations/${conversationId}/messages`);
       return Array.isArray(res.data) ? res.data : [];
     } catch {
       return [];
     }
   },
 
-  assignToMe: async (
-    conversationId: string,
-    agentId: string,
-    agentName: string,
-  ): Promise<ZaloConversation> => {
+  assignToMe: async (conversationId: string, agentId: string, agentName: string): Promise<ZaloConversation> => {
     try {
-      const res = await portalClient.post(
-        `/zalo/conversations/${conversationId}/assign`,
-        { agentId, agentName },
-      );
-
+      const res = await portalClient.post(`/zalo/conversations/${conversationId}/assign`, { agentId, agentName });
       if (res.data) return res.data;
     } catch {
       // Empty
     }
-
     return {
       id: conversationId,
-
-      zaloUserId: "zalo_user",
-
-      customerName: "Khách Hàng Zalo",
-
-      status: "HUMAN_TAKEN",
-
+      zaloUserId: 'zalo_user',
+      customerName: 'Khách Hàng Zalo',
+      status: 'HUMAN_TAKEN',
       assignedAgentId: agentId,
-
       assignedAgentName: agentName,
-
-      lastMessage: "Đang tiếp nhận hỗ trợ",
-
-      lastMessageAt: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      lastMessage: 'Đang tiếp nhận hỗ trợ',
+      lastMessageAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     };
   },
 
   handoffToBot: async (conversationId: string): Promise<ZaloConversation> => {
     try {
-      const res = await portalClient.post(
-        `/zalo/conversations/${conversationId}/handoff-bot`,
-      );
-
+      const res = await portalClient.post(`/zalo/conversations/${conversationId}/handoff-bot`);
       if (res.data) return res.data;
     } catch {
       // Empty
     }
-
     return {
       id: conversationId,
-
-      zaloUserId: "zalo_user",
-
-      customerName: "Khách Hàng Zalo",
-
-      status: "BOT_HANDLING",
-
-      lastMessage: "Đã chuyển lại cho Bot AI",
-
-      lastMessageAt: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      zaloUserId: 'zalo_user',
+      customerName: 'Khách Hàng Zalo',
+      status: 'BOT_HANDLING',
+      lastMessage: 'Đã chuyển lại cho Bot AI',
+      lastMessageAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     };
   },
 
-  sendStaffMessage: async (
-    conversationId: string,
-    content: string,
-    agentName: string,
-  ): Promise<ZaloMessage> => {
-    const timeStr = new Date().toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
+  sendStaffMessage: async (conversationId: string, content: string, agentName: string): Promise<ZaloMessage> => {
+    const timeStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     try {
-      const res = await portalClient.post(
-        `/zalo/conversations/${conversationId}/messages`,
-        { content, agentName },
-      );
-
+      const res = await portalClient.post(`/zalo/conversations/${conversationId}/messages`, { content, agentName });
       if (res.data) return res.data;
     } catch {
       // Empty
     }
-
     return {
-      id: "msg-" + Date.now(),
-
+      id: 'msg-' + Date.now(),
       conversationId,
-
-      senderType: "STAFF",
-
+      senderType: 'STAFF',
       senderName: agentName,
-
       content,
-
       createdAt: timeStr,
     };
   },
@@ -1456,57 +825,35 @@ export const zaloSupportService = {
 export const storeService = {
   async registerStore(data: {
     storeName: string;
-
     ownerName: string;
-
     ownerEmail: string;
-
     phoneNumber: string;
-
     areaId: string;
-
     areaName: string;
-
     stationId: string;
-
     stationName: string;
-
     imageUrl?: string;
   }): Promise<{ message?: string }> {
     try {
-      const res = await portalClient.post<{ message?: string }>(
-        "/stores/register",
-        data,
-      );
-
+      const res = await portalClient.post<{ message?: string }>('/stores/register', data);
       return res.data;
     } catch {
-      return {
-        message: "Đăng ký cửa hàng thành công! Đang chờ Admin xác nhận.",
-      };
+      return { message: 'Đăng ký cửa hàng thành công! Đang chờ Admin xác nhận.' };
     }
   },
 
   async uploadStoreImage(file: File): Promise<{ imageUrl: string }> {
     const formData = new FormData();
-
-    formData.append("file", file);
-
+    formData.append('file', file);
     try {
-      const res = await portalClient.post<{ url?: string; imageUrl?: string }>(
-        "/files/upload",
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
-      );
-
-      return {
-        imageUrl:
-          res.data?.url || res.data?.imageUrl || URL.createObjectURL(file),
-      };
+      const res = await portalClient.post<{ url?: string; imageUrl?: string }>('/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return { imageUrl: res.data?.url || res.data?.imageUrl || URL.createObjectURL(file) };
     } catch {
       return { imageUrl: URL.createObjectURL(file) };
     }
   },
 };
+
+
