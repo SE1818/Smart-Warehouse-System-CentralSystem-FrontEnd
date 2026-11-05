@@ -2779,6 +2779,11 @@ export const StaffKdsPage: React.FC = () => {
                 <label className="text-xs font-semibold text-slate-700 block">
                   Chọn AMR cụ thể để giao món:
                 </label>
+                {robots.length === 0 ? (
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 text-center">
+                    Chưa có robot nào được gán cho quán này.
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {robots.map((r) => {
                     const isSelected = manualSelectedRobot === r.code;
@@ -2809,6 +2814,7 @@ export const StaffKdsPage: React.FC = () => {
                     );
                   })}
                 </div>
+                )}
               </div>
             )}
             {/* DISPATCH ACTION BUTTON */}
