@@ -107,25 +107,8 @@ interface TableNode {
 
 }
 
-export const DEFAULT_RESTAURANT_TABLES: TableNode[] = [
-  { id: 'T01', tableNo: 'T01', name: 'Bàn 01', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
-  { id: 'T02', tableNo: 'T02', name: 'Bàn 02', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
-  { id: 'T03', tableNo: 'T03', name: 'Bàn 03', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
-  { id: 'T04', tableNo: 'T04', name: 'Bàn 04', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
-  { id: 'T05', tableNo: 'T05', name: 'Bàn 05', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
-  { id: 'T06', tableNo: 'T06', name: 'Bàn 06', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
-  { id: 'T07', tableNo: 'T07', name: 'Bàn 07', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
-  { id: 'T08', tableNo: 'T08', name: 'Bàn 08', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
-  { id: 'T09', tableNo: 'T09', name: 'Bàn 09', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
-  { id: 'T10', tableNo: 'T10', name: 'Bàn 10', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
-  { id: 'T11', tableNo: 'T11', name: 'Bàn 11', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
-  { id: 'T12', tableNo: 'T12', name: 'Bàn 12', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
-  { id: 'VIP01', tableNo: 'VIP01', name: 'Bàn VIP 01', zone: 'Phòng VIP', status: 'empty', guestsCount: 8, stationName: 'Trạm VIP' },
-  { id: 'VIP02', tableNo: 'VIP02', name: 'Bàn VIP 02', zone: 'Phòng VIP', status: 'empty', guestsCount: 8, stationName: 'Trạm VIP' },
-];
-
-export const mergeWithDefaultTables = (backendTables?: any[]): TableNode[] => {
-  const mappedBackend: TableNode[] = (backendTables || []).map((t) => ({
+export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
+  return (backendTables || []).map((t) => ({
     id: t.id ? t.id.toString() : t.tableNo || 'Table',
     tableNo: t.tableNo || t.id,
     name: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : `Bàn ${t.id}`),
@@ -141,25 +124,10 @@ export const mergeWithDefaultTables = (backendTables?: any[]): TableNode[] => {
     worldX: t.worldX,
     worldY: t.worldY,
   }));
-
-  const existingKeys = new Set(
-    mappedBackend.flatMap((t) => [
-      (t.tableNo || '').toLowerCase(),
-      (t.name || '').toLowerCase(),
-      (t.id || '').toLowerCase()
-    ])
-  );
-
-  const missingDefaults = DEFAULT_RESTAURANT_TABLES.filter(
-    (dt) =>
-      !existingKeys.has((dt.tableNo || '').toLowerCase()) &&
-      !existingKeys.has((dt.name || '').toLowerCase()) &&
-      !existingKeys.has((dt.id || '').toLowerCase())
-  );
-
-  return [...mappedBackend, ...missingDefaults];
 };
 
+// Backward-compatible alias for any residual imports
+export const mergeWithDefaultTables = mapBackendTables;
 export interface TrayItem {
 
   dishName: string;
@@ -204,9 +172,9 @@ export const StaffKdsPage: React.FC = () => {
 
   // Staff Move Request Form (Order ID & Destination Table)
 
-  const [orderInputId, setOrderInputId] = useState<string>('ORD-101');
+  const [orderInputId, setOrderInputId] = useState<string>('');
 
-  const [destinationInput, setDestinationInput] = useState<string>('Bàn 01');
+  const [destinationInput, setDestinationInput] = useState<string>('');
 
   // Mode: Single Table vs 2-Tray Sequence (DS-07 Multi-Table)
 
@@ -214,13 +182,13 @@ export const StaffKdsPage: React.FC = () => {
 
   // 2-Tray Multi-Table Sequence Setup (Khay 1 & Khay 2)
 
-  const [tray1Table, setTray1Table] = useState<string>('Bàn 01');
+  const [tray1Table, setTray1Table] = useState<string>('');
 
-  const [tray1OrderId, setTray1OrderId] = useState<string>('ORD-101');
+  const [tray1OrderId, setTray1OrderId] = useState<string>('');
 
-  const [tray2Table, setTray2Table] = useState<string>('Bàn 02');
+  const [tray2Table, setTray2Table] = useState<string>('');
 
-  const [tray2OrderId, setTray2OrderId] = useState<string>('ORD-102');
+  const [tray2OrderId, setTray2OrderId] = useState<string>('');
 
   // Active focused tray target when clicking tables on map/grid: 'tray1' | 'tray2'
   const [activeTrayTarget, setActiveTrayTarget] = useState<'tray1' | 'tray2'>('tray1');
@@ -451,7 +419,7 @@ export const StaffKdsPage: React.FC = () => {
   const [robots, setRobots] = useState<RobotFleetItem[]>([]);
 
   // Tables State - Loaded from tableService API with comprehensive restaurant defaults
-  const [tables, setTables] = useState<TableNode[]>(DEFAULT_RESTAURANT_TABLES);
+  const [tables, setTables] = useState<TableNode[]>([]);
 
   // Load Real Data on Mount
 
@@ -531,10 +499,12 @@ export const StaffKdsPage: React.FC = () => {
 
         // 2. Fetch real tables for this store
         const tableList = await tableService.getTables(sub);
-        const fullTables = mergeWithDefaultTables(tableList);
+        const fullTables = mapBackendTables(tableList);
         setTables(fullTables);
         if (fullTables.length > 0) {
           setSelectedTableId(fullTables[0].id);
+          setTray1Table(fullTables[0].name);
+          setTray2Table(fullTables.length > 1 ? fullTables[1].name : fullTables[0].name);
         }
 
         // 3. Fetch real pending orders for KDS
@@ -1475,7 +1445,7 @@ export const StaffKdsPage: React.FC = () => {
 
         // Refresh tables list
         const updatedList = await tableService.getTables(_subdomain);
-        const fullList = mergeWithDefaultTables(updatedList);
+        const fullList = mapBackendTables(updatedList);
         setTables(fullList);
         setSelectedTableId(newTableNo.trim());
 
@@ -1522,7 +1492,7 @@ export const StaffKdsPage: React.FC = () => {
 
         // Refresh tables list
         const updatedList = await tableService.getTables(_subdomain);
-        setTables(mergeWithDefaultTables(updatedList));
+        setTables(mapBackendTables(updatedList));
 
       } else {
 
