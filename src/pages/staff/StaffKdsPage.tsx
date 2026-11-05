@@ -107,6 +107,59 @@ interface TableNode {
 
 }
 
+export const DEFAULT_RESTAURANT_TABLES: TableNode[] = [
+  { id: 'T01', tableNo: 'T01', name: 'Bàn 01', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
+  { id: 'T02', tableNo: 'T02', name: 'Bàn 02', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
+  { id: 'T03', tableNo: 'T03', name: 'Bàn 03', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
+  { id: 'T04', tableNo: 'T04', name: 'Bàn 04', zone: 'Khu Trong Nhà', status: 'empty', guestsCount: 4, stationName: 'Trạm 1 (Bàn 1-4)' },
+  { id: 'T05', tableNo: 'T05', name: 'Bàn 05', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
+  { id: 'T06', tableNo: 'T06', name: 'Bàn 06', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
+  { id: 'T07', tableNo: 'T07', name: 'Bàn 07', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
+  { id: 'T08', tableNo: 'T08', name: 'Bàn 08', zone: 'Khu Trung Tâm', status: 'empty', guestsCount: 4, stationName: 'Trạm 2 (Bàn 5-8)' },
+  { id: 'T09', tableNo: 'T09', name: 'Bàn 09', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
+  { id: 'T10', tableNo: 'T10', name: 'Bàn 10', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
+  { id: 'T11', tableNo: 'T11', name: 'Bàn 11', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
+  { id: 'T12', tableNo: 'T12', name: 'Bàn 12', zone: 'Khu Ngoài Trời', status: 'empty', guestsCount: 6, stationName: 'Trạm 3 (Bàn 9-12)' },
+  { id: 'VIP01', tableNo: 'VIP01', name: 'Bàn VIP 01', zone: 'Phòng VIP', status: 'empty', guestsCount: 8, stationName: 'Trạm VIP' },
+  { id: 'VIP02', tableNo: 'VIP02', name: 'Bàn VIP 02', zone: 'Phòng VIP', status: 'empty', guestsCount: 8, stationName: 'Trạm VIP' },
+];
+
+export const mergeWithDefaultTables = (backendTables?: any[]): TableNode[] => {
+  const mappedBackend: TableNode[] = (backendTables || []).map((t) => ({
+    id: t.id ? t.id.toString() : t.tableNo || 'Table',
+    tableNo: t.tableNo || t.id,
+    name: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : `Bàn ${t.id}`),
+    zone: t.zone || 'Khu Trong Nhà',
+    status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
+    guestsCount: t.capacity || 4,
+    currentOrders: t.currentOrders || [],
+    assignedRobot: t.assignedRobotCode || null,
+    stationId: t.stationId,
+    stationName: t.stationName,
+    mergedIntoTableId: t.mergedIntoTableId,
+    qrCodeUrl: t.qrCodeUrl,
+    worldX: t.worldX,
+    worldY: t.worldY,
+  }));
+
+  const existingKeys = new Set(
+    mappedBackend.flatMap((t) => [
+      (t.tableNo || '').toLowerCase(),
+      (t.name || '').toLowerCase(),
+      (t.id || '').toLowerCase()
+    ])
+  );
+
+  const missingDefaults = DEFAULT_RESTAURANT_TABLES.filter(
+    (dt) =>
+      !existingKeys.has((dt.tableNo || '').toLowerCase()) &&
+      !existingKeys.has((dt.name || '').toLowerCase()) &&
+      !existingKeys.has((dt.id || '').toLowerCase())
+  );
+
+  return [...mappedBackend, ...missingDefaults];
+};
+
 export interface TrayItem {
 
   dishName: string;
@@ -397,9 +450,8 @@ export const StaffKdsPage: React.FC = () => {
 
   const [robots, setRobots] = useState<RobotFleetItem[]>([]);
 
-  // Tables State - Loaded from tableService API
-
-  const [tables, setTables] = useState<TableNode[]>([]);
+  // Tables State - Loaded from tableService API with comprehensive restaurant defaults
+  const [tables, setTables] = useState<TableNode[]>(DEFAULT_RESTAURANT_TABLES);
 
   // Load Real Data on Mount
 
@@ -478,47 +530,11 @@ export const StaffKdsPage: React.FC = () => {
         }
 
         // 2. Fetch real tables for this store
-
         const tableList = await tableService.getTables(sub);
-
-        if (tableList.length > 0) {
-
-          const mappedTables: TableNode[] = tableList.map((t) => ({
-
-            id: t.id || t.tableNo || 'Table',
-
-            tableNo: t.tableNo || t.id,
-
-            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
-
-            zone: t.zone || '',
-
-            status: t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : t.status === 'merged' ? 'merged' : 'empty',
-
-            guestsCount: t.capacity || 4,
-
-            currentOrders: t.currentOrders || [],
-
-            assignedRobot: t.assignedRobotCode || null,
-
-            stationId: t.stationId,
-
-            stationName: t.stationName,
-
-            mergedIntoTableId: t.mergedIntoTableId,
-
-            qrCodeUrl: t.qrCodeUrl,
-
-            worldX: t.worldX,
-
-            worldY: t.worldY,
-
-          }));
-
-          setTables(mappedTables);
-
-          setSelectedTableId(mappedTables[0].id);
-
+        const fullTables = mergeWithDefaultTables(tableList);
+        setTables(fullTables);
+        if (fullTables.length > 0) {
+          setSelectedTableId(fullTables[0].id);
         }
 
         // 3. Fetch real pending orders for KDS
@@ -1458,46 +1474,10 @@ export const StaffKdsPage: React.FC = () => {
         setIsCreateTableModalOpen(false);
 
         // Refresh tables list
-
         const updatedList = await tableService.getTables(_subdomain);
-
-        if (updatedList.length > 0) {
-
-          setTables(updatedList.map((t) => ({
-
-            id: t.id || t.tableNo || 'Table',
-
-            tableNo: t.tableNo || t.id,
-
-            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
-
-            zone: t.zone || '',
-
-            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
-
-            guestsCount: t.capacity || 4,
-
-            currentOrders: t.currentOrders || [],
-
-            assignedRobot: t.assignedRobotCode || null,
-
-            stationId: t.stationId,
-
-            stationName: t.stationName,
-
-            mergedIntoTableId: t.mergedIntoTableId,
-
-            qrCodeUrl: t.qrCodeUrl,
-
-            worldX: t.worldX,
-
-            worldY: t.worldY,
-
-          })));
-
-          setSelectedTableId(newTableNo.trim());
-
-        }
+        const fullList = mergeWithDefaultTables(updatedList);
+        setTables(fullList);
+        setSelectedTableId(newTableNo.trim());
 
       } else {
 
@@ -1541,44 +1521,8 @@ export const StaffKdsPage: React.FC = () => {
         showToast(`Nhập thành công ${res.totalCreated} bàn ăn!`, 'success');
 
         // Refresh tables list
-
         const updatedList = await tableService.getTables(_subdomain);
-
-        if (updatedList.length > 0) {
-
-          setTables(updatedList.map((t) => ({
-
-            id: t.id || t.tableNo || 'Table',
-
-            tableNo: t.tableNo || t.id,
-
-            name: t.tableName || `Bàn ${t.tableNo || t.id}`,
-
-            zone: t.zone || '',
-
-            status: (t.status === 'merged' ? 'merged' : t.status === 'serving' ? 'serving' : t.status === 'occupied' ? 'occupied' : t.status === 'waiting' ? 'waiting' : 'empty') as TableNode['status'],
-
-            guestsCount: t.capacity || 4,
-
-            currentOrders: t.currentOrders || [],
-
-            assignedRobot: t.assignedRobotCode || null,
-
-            stationId: t.stationId,
-
-            stationName: t.stationName,
-
-            mergedIntoTableId: t.mergedIntoTableId,
-
-            qrCodeUrl: t.qrCodeUrl,
-
-            worldX: t.worldX,
-
-            worldY: t.worldY,
-
-          })));
-
-        }
+        setTables(mergeWithDefaultTables(updatedList));
 
       } else {
 
@@ -3528,13 +3472,13 @@ export const StaffKdsPage: React.FC = () => {
                         }}
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
                       >
-                        <option value="">-- Chọn Bàn Giao Khay 1 --</option>
+                        <option value="">-- Chọn Bàn Giao Khay 1 (Toàn bộ bàn) --</option>
                         {tray1Table && !tables.some((t) => t.name === tray1Table) && (
                           <option value={tray1Table}>{tray1Table}</option>
                         )}
                         {tables.map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
+                            {t.name} {t.zone ? `[${t.zone}]` : ''} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
                           </option>
                         ))}
                       </select>
@@ -3564,48 +3508,6 @@ export const StaffKdsPage: React.FC = () => {
                       />
 
                     </div>
-
-                  </div>
-
-                  {/* Suggestion chips for Tray 1 - Dynamic from tables */}
-                  <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
-
-                    <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
-
-                    {(tables.length > 0
-                      ? tables.slice(0, 6).map((t) => t.name)
-                      : ['Bàn 01', 'Bàn 02', 'Bàn 03', 'Bàn 04']
-                    ).map((tbl) => (
-
-                      <button
-
-                        key={tbl}
-
-                        type="button"
-
-                        onClick={() => {
-
-                          setTray1Table(tbl);
-
-                          setActiveTrayTarget('tray2');
-
-                        }}
-
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${tray1Table === tbl
-
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-
-                          }`}
-
-                      >
-
-                        {tbl}
-
-                      </button>
-
-                    ))}
 
                   </div>
 
@@ -3651,13 +3553,13 @@ export const StaffKdsPage: React.FC = () => {
                         onChange={(e) => setTray2Table(e.target.value)}
                         className="w-full px-2.5 py-2 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
                       >
-                        <option value="">-- Chọn Bàn Giao Khay 2 --</option>
+                        <option value="">-- Chọn Bàn Giao Khay 2 (Toàn bộ bàn) --</option>
                         {tray2Table && !tables.some((t) => t.name === tray2Table) && (
                           <option value={tray2Table}>{tray2Table}</option>
                         )}
                         {tables.map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
+                            {t.name} {t.zone ? `[${t.zone}]` : ''} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
                           </option>
                         ))}
                       </select>
@@ -3687,48 +3589,6 @@ export const StaffKdsPage: React.FC = () => {
                       />
 
                     </div>
-
-                  </div>
-
-                  {/* Suggestion chips for Tray 2 - Dynamic from tables */}
-                  <div className="flex items-center gap-1 pt-0.5 overflow-x-auto">
-
-                    <span className="text-[10px] text-slate-400 shrink-0">Bàn gợi ý:</span>
-
-                    {(tables.length > 0
-                      ? tables.slice(0, 6).map((t) => t.name)
-                      : ['Bàn 02', 'Bàn 03', 'Bàn 04', 'Bàn 05']
-                    ).map((tbl) => (
-
-                      <button
-
-                        key={tbl}
-
-                        type="button"
-
-                        onClick={() => {
-
-                          setTray2Table(tbl);
-
-                          setActiveTrayTarget('tray1');
-
-                        }}
-
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer shrink-0 ${tray2Table === tbl
-
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-
-                          }`}
-
-                      >
-
-                        {tbl}
-
-                      </button>
-
-                    ))}
 
                   </div>
 
@@ -3916,78 +3776,16 @@ export const StaffKdsPage: React.FC = () => {
                       onChange={(e) => setDestinationInput(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/50 hover:bg-white font-mono text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all cursor-pointer"
                     >
-                      <option value="">-- Chọn Bàn Đích Đến --</option>
+                      <option value="">-- Chọn Bàn Đích Đến (Toàn bộ bàn) --</option>
                       {destinationInput && !tables.some((t) => t.name === destinationInput) && (
                         <option value={destinationInput}>{destinationInput}</option>
                       )}
                       {tables.map((t) => (
                         <option key={t.id} value={t.name}>
-                          {t.name} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
+                          {t.name} {t.zone ? `[${t.zone}]` : ''} {t.stationName ? `• Trạm: ${t.stationName}` : ''} {t.status === 'merged' ? '(Đã gộp)' : ''}
                         </option>
                       ))}
                     </select>
-
-                  </div>
-
-                  {/* Quick Table Suggestion Chips */}
-
-                  <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto pb-0.5">
-
-                    <span className="text-[10px] text-slate-400 font-medium shrink-0">Chọn nhanh:</span>
-
-                    {(tables.length > 0
-
-                      ? tables.slice(0, 7)
-
-                      : [
-
-                        { id: '01', name: 'Bàn 01' },
-
-                        { id: '02', name: 'Bàn 02' },
-
-                        { id: '03', name: 'Bàn 03' },
-
-                        { id: '04', name: 'Bàn 04' },
-
-                        { id: '05', name: 'Bàn 05' },
-
-                        { id: '06', name: 'Bàn 06' },
-
-                        { id: 'VIP', name: 'Bàn VIP 01' },
-
-                      ]
-
-                    ).map((tbl) => (
-
-                      <button
-
-                        key={tbl.id}
-
-                        type="button"
-
-                        onClick={() => {
-
-                          setDestinationInput(tbl.name);
-
-                          setSelectedTableId(tbl.id);
-
-                        }}
-
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all border cursor-pointer shrink-0 ${destinationInput === tbl.name
-
-                          ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
-
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-
-                          }`}
-
-                      >
-
-                        {tbl.name}
-
-                      </button>
-
-                    ))}
 
                   </div>
 
