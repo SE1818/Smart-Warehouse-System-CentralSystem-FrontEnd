@@ -35,6 +35,8 @@ export interface MapTableNode {
   assignedRobot?: string | null;
   worldX?: number; // Tọa độ thực mét từ ROS / CSDL
   worldY?: number;
+  canvasX?: number;
+  canvasY?: number;
 }
 
 export interface MapRobotItem {
@@ -48,6 +50,8 @@ export interface MapRobotItem {
   worldY?: number;
   yaw?: number;
   targetTable?: string;
+  canvasX?: number;
+  canvasY?: number;
 }
 
 export interface SlamFloorMapViewerProps {
@@ -77,7 +81,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   mapImageUrl = '',
   className = '',
   kitchenLocation,
-  mode = 'technical',
+  mode = 'simplified',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -242,6 +246,8 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         const worldPt = canvasPixelToRos(px, py, effectiveMetadata);
         return {
           ...t,
+          canvasX: px,
+          canvasY: py,
           worldX: worldPt.x,
           worldY: worldPt.y,
         };
@@ -295,6 +301,8 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         const pt = canvasPixelToRos(rPx, rPy, effectiveMetadata);
         return {
           ...r,
+          canvasX: rPx,
+          canvasY: rPy,
           worldX: pt.x,
           worldY: pt.y,
         };
@@ -372,8 +380,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     const hitRadiusPixel = mode === 'simplified' ? 28 : 22;
 
     for (const table of resolvedTables) {
-      if (table.worldX !== undefined && table.worldY !== undefined) {
-        const tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+      let tablePx: { x: number; y: number } | null = null;
+      if (mode === 'simplified' && table.canvasX !== undefined && table.canvasY !== undefined) {
+        tablePx = { x: table.canvasX, y: table.canvasY };
+      } else if (table.worldX !== undefined && table.worldY !== undefined) {
+        tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+      }
+      if (tablePx) {
         const dist = Math.hypot(rawPx - tablePx.x, rawPy - tablePx.y);
         if (dist <= hitRadiusPixel) {
           foundTable = table;
@@ -560,8 +573,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     // 2. Hit test dining tables
     const hitRadiusPixel = mode === 'simplified' ? 32 : 25;
     for (const table of resolvedTables) {
-      if (table.worldX !== undefined && table.worldY !== undefined) {
-        const tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+      let tablePx: { x: number; y: number } | null = null;
+      if (mode === 'simplified' && table.canvasX !== undefined && table.canvasY !== undefined) {
+        tablePx = { x: table.canvasX, y: table.canvasY };
+      } else if (table.worldX !== undefined && table.worldY !== undefined) {
+        tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+      }
+      if (tablePx) {
         const dist = Math.hypot(rawPx - tablePx.x, rawPy - tablePx.y);
         if (dist <= hitRadiusPixel) {
           if (onSelectTable) {
@@ -715,8 +733,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
     // 2.3 Dining Tables
     resolvedTables.forEach((table) => {
-      if (table.worldX === undefined || table.worldY === undefined) return;
-      const px = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+      let px: { x: number; y: number } | null = null;
+      if (mode === 'simplified' && table.canvasX !== undefined && table.canvasY !== undefined) {
+        px = { x: table.canvasX, y: table.canvasY };
+      } else if (table.worldX !== undefined && table.worldY !== undefined) {
+        px = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+      }
+      if (!px) return;
       const isSelected = table.id === selectedTableId;
       const isHovered = hoveredTable?.id === table.id;
 
@@ -905,8 +928,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     // LAYER 3: DYNAMIC REALTIME LAYER (ROBOTS)
     // =========================================================================
     resolvedRobots.forEach((robot) => {
-      if (robot.worldX === undefined || robot.worldY === undefined) return;
-      const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
+      let robotPx: { x: number; y: number } | null = null;
+      if (mode === 'simplified' && robot.canvasX !== undefined && robot.canvasY !== undefined) {
+        robotPx = { x: robot.canvasX, y: robot.canvasY };
+      } else if (robot.worldX !== undefined && robot.worldY !== undefined) {
+        robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
+      }
+      if (!robotPx) return;
       const isDelivering = robot.status === 'delivering';
 
       // Laser trajectory path
