@@ -198,6 +198,12 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({ classN
             <span className="text-[10px] text-emerald-400/80 font-mono">(Mã hóa chống xem F12)</span>
           </div>
 
+          {/* Edge Single-Tenant SQLite Schema Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium bg-emerald-950/40 text-emerald-300 border-emerald-500/30">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>SQLite Edge: Sạch (Không chứa store_id / tenant_id - Tự động bổ sung khi đẩy lên Supabase)</span>
+          </div>
+
           {/* Persistent Storage Badge */}
           <div
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium ${

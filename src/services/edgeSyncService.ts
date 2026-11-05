@@ -29,9 +29,12 @@ class EdgeSyncService {
   private connectionState: SyncConnectionState = 'disconnected';
   private edgeNodeCode = 'VORA-EDGE-LOCAL-01';
   private tenantSlug = 'launuong-saigon';
+  private tenantId = '11111111-1111-1111-1111-111111111111';
+  private storeId = '11111111-1111-1111-1111-111111111111';
   private lastSyncedAt: string | null = null;
   private totalSyncs = 0;
   private isAutoSyncStarted = false;
+  private backgroundIntervalId: any = null;
 
   constructor() {
     this.readTenantConfig();
@@ -44,13 +47,88 @@ class EdgeSyncService {
         if (stored) {
           const u = JSON.parse(stored);
           if (u.subdomain) this.tenantSlug = u.subdomain;
+          if (u.tenantId) this.tenantId = u.tenantId;
+          if (u.storeId) this.storeId = u.storeId;
         }
         const edgeCode = localStorage.getItem('EDGE_NODE_CODE');
         if (edgeCode) this.edgeNodeCode = edgeCode;
+        const savedTenantId = localStorage.getItem('TENANT_ID');
+        if (savedTenantId) this.tenantId = savedTenantId;
+        const savedStoreId = localStorage.getItem('STORE_ID');
+        if (savedStoreId) this.storeId = savedStoreId;
       } catch {
         // ignore
       }
     }
+  }
+
+  /**
+   * Enriches outgoing sync records with TenantId and StoreId before transmitting to Supabase.
+   * Ensures local SQLite remains completely clean of store_id / tenant_id columns.
+   */
+  public enrichPayloadWithTenantContext(data: any): any {
+    if (!data) return data;
+    this.readTenantConfig();
+
+    if (Array.isArray(data)) {
+      return data.map((item) => ({
+        ...item,
+        tenant_id: this.tenantId,
+        store_id: this.storeId,
+        tenantId: this.tenantId,
+        storeId: this.storeId,
+      }));
+    }
+
+    if (typeof data === 'object') {
+      const enriched: any = { ...data };
+      if (Array.isArray(enriched.tables)) {
+        enriched.tables = enriched.tables.map((t: any) => ({
+          ...t,
+          tenant_id: this.tenantId,
+          store_id: this.storeId,
+          tenantId: this.tenantId,
+          storeId: this.storeId,
+        }));
+      }
+      if (Array.isArray(enriched.transferLogs)) {
+        enriched.transferLogs = enriched.transferLogs.map((l: any) => ({
+          ...l,
+          tenant_id: this.tenantId,
+          store_id: this.storeId,
+          tenantId: this.tenantId,
+          storeId: this.storeId,
+        }));
+      }
+      if (Array.isArray(enriched.robots)) {
+        enriched.robots = enriched.robots.map((r: any) => ({
+          ...r,
+          assigned_tenant_id: this.tenantId,
+          assignedTenantId: this.tenantId,
+        }));
+      }
+      return enriched;
+    }
+
+    return data;
+  }
+
+  /**
+   * Strips out store_id and tenant_id from incoming cloud data before saving to local SQLite.
+   */
+  public stripTenantContext(data: any): any {
+    if (!data) return data;
+    if (Array.isArray(data)) {
+      return data.map((item) => {
+        const { tenant_id, store_id, tenantId, storeId, assigned_tenant_id, assignedTenantId, ...rest } = item;
+        return rest;
+      });
+    }
+    if (typeof data === 'object') {
+      const { tenant_id, store_id, tenantId, storeId, assigned_tenant_id, assignedTenantId, ...rest } = data;
+      return rest;
+    }
+    return data;
   }
 
   public getConnectionState(): SyncConnectionState {
@@ -138,6 +216,17 @@ class EdgeSyncService {
       this.notifyStateChanged();
       console.log('[EdgeSync Background] Đã kết nối ngầm tới VPS Tracking Hub thành công. Sẵn sàng nhận lệnh đồng bộ từ SuperAdmin.');
       await this.announceEdgeNode();
+
+      // Launch automatic background connectivity & sync keeper (30s heartbeat loop)
+      if (!this.backgroundIntervalId && typeof window !== 'undefined') {
+        this.backgroundIntervalId = setInterval(async () => {
+          if (this.connectionState === 'connected') {
+            await this.announceEdgeNode();
+          } else if (this.connectionState === 'disconnected') {
+            void this.startEdgeSync();
+          }
+        }, 30000);
+      }
     } catch (err) {
       console.warn('[EdgeSync Background] Chưa thể kết nối tới VPS Hub:', err);
       this.connectionState = 'disconnected';
@@ -226,6 +315,9 @@ class EdgeSyncService {
           (dataPayload.transferLogs?.length || 0);
       }
 
+      // Automatically enrich with TenantId and StoreId for Supabase ingestion
+      const enrichedPayload = this.enrichPayloadWithTenantContext(dataPayload);
+
       const responsePayload: EdgeSyncResponse = {
         requestId: request.requestId || `req-${Date.now()}`,
         edgeNodeCode: this.edgeNodeCode,
@@ -233,7 +325,7 @@ class EdgeSyncService {
         dataType,
         status: 'success',
         recordCount,
-        data: dataPayload,
+        data: enrichedPayload,
         sqliteDumpBase64,
         syncedAt: new Date().toISOString(),
       };
@@ -308,6 +400,7 @@ class EdgeSyncService {
   public async triggerManualSyncToVps(dataType: 'all' | 'robots' | 'map' | 'transfer_logs' | 'waypoints' = 'all'): Promise<boolean> {
     try {
       const dump = await sqliteService.dumpAllDataJson();
+      const enrichedDump = this.enrichPayloadWithTenantContext(dump);
       const payload: EdgeSyncResponse = {
         requestId: `manual-${Date.now()}`,
         edgeNodeCode: this.edgeNodeCode,
@@ -319,7 +412,7 @@ class EdgeSyncService {
           (dump.waypoints?.length || 0) +
           (dump.tables?.length || 0) +
           (dump.transferLogs?.length || 0),
-        data: dump,
+        data: enrichedDump,
         syncedAt: new Date().toISOString(),
       };
 
