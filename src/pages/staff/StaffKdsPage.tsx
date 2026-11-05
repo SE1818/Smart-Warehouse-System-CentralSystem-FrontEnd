@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 
@@ -321,55 +321,13 @@ export const StaffKdsPage: React.FC = () => {
   const [isSubmittingSecondLeg, setIsSubmittingSecondLeg] = useState<boolean>(false);
 
   const [recentSqliteTasks, setRecentSqliteTasks] = useState<Array<{
-
     taskId: string;
-
     orderId: string;
-
     destination: string;
-
     robotCode: string;
-
     status: string;
-
     time: string;
-
-  }>>([
-
-    {
-
-      taskId: 'TSK-1001',
-
-      orderId: 'ORD-103',
-
-      destination: 'Bàn 05',
-
-      robotCode: 'AMR-01',
-
-      status: 'Delivering',
-
-      time: '11:45',
-
-    },
-
-    {
-
-      taskId: 'TSK-1000',
-
-      orderId: 'ORD-098',
-
-      destination: 'Bàn 02',
-
-      robotCode: 'AMR-02',
-
-      status: 'Completed',
-
-      time: '11:15',
-
-    },
-
-  ]);
-
+  }>>([]);
   // Pending Orders from Ordering Microservice
 
   const [pendingOrders, setPendingOrders] = useState<PendingOrderDto[]>([]);
@@ -4167,7 +4125,12 @@ export const StaffKdsPage: React.FC = () => {
 
             <div className="space-y-2">
 
-              {recentSqliteTasks.map((task) => (
+              {recentSqliteTasks.length === 0 ? (
+                <div className="py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                  Chưa có lệnh điều phối nào trong ca làm việc.
+                </div>
+              ) : (
+                recentSqliteTasks.map((task) => (
 
                 <div
 
@@ -4219,7 +4182,7 @@ export const StaffKdsPage: React.FC = () => {
 
                 </div>
 
-              ))}
+              )))}
 
             </div>
 
