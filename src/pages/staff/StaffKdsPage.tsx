@@ -1527,13 +1527,22 @@ export const StaffKdsPage: React.FC = () => {
 
       let res;
 
+      let storeIdToUse = '';
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (u.storeId) storeIdToUse = u.storeId;
+        }
+      } catch {}
+
       if (importCsvMode === 'upload' && importCsvFile) {
 
-        res = await tableService.uploadCsv('00000000-0000-0000-0000-000000000000', importCsvFile);
+        res = await tableService.uploadCsv(storeIdToUse, importCsvFile);
 
       } else {
 
-        res = await tableService.importCsv('00000000-0000-0000-0000-000000000000', importCsvContent);
+        res = await tableService.importCsv(storeIdToUse, importCsvContent);
 
       }
 

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { sqliteService } from './sqliteService';
+
 import { refreshAccessToken } from './api';
 
 export const resolvePortalBaseUrl = (): string => {
@@ -515,14 +515,14 @@ export const tableService = {
       // Backend /tables chưa có hoặc offline
     }
 
-    // 2. Fallback đọc từ local SQLite cache nếu không kết nối được BE
+    // 2. Fallback nếu không kết nối được BE
     try {
-      const sqliteTables = await sqliteService.getDiningTables();
+      const sqliteTables: DiningTableDto[] = [];
       if (sqliteTables && sqliteTables.length > 0) {
         return sqliteTables;
       }
     } catch (err) {
-      console.warn('Lỗi tải danh sách bàn từ SQLite:', err);
+      // Offline fallback
     }
 
     return [];
@@ -531,7 +531,7 @@ export const tableService = {
   createTable: async (data: { storeId?: string; tableNo: string; tableName?: string; capacity?: number; stationId?: string | null; zone?: string }): Promise<{ success: boolean; data?: any; message?: string }> => {
     try {
       const res = await portalClient.post('/tables', {
-        storeId: data.storeId || '00000000-0000-0000-0000-000000000000',
+        storeId: (data.storeId && data.storeId !== '00000000-0000-0000-0000-000000000000') ? data.storeId : undefined,
         tableNo: data.tableNo,
         tableName: data.tableName || `Bàn ${data.tableNo}`,
         capacity: data.capacity || 4,
@@ -546,7 +546,7 @@ export const tableService = {
   importCsv: async (storeId: string, csvContent: string): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
     try {
       const res = await portalClient.post('/tables/import-csv', {
-        storeId: storeId || '00000000-0000-0000-0000-000000000000',
+        storeId: (storeId && storeId !== '00000000-0000-0000-0000-000000000000') ? storeId : undefined,
         csvContent,
       });
       return {
@@ -570,7 +570,9 @@ export const tableService = {
   uploadCsv: async (storeId: string, file: File): Promise<{ success: boolean; totalProcessed: number; totalCreated: number; totalSkipped: number; messages: string[] }> => {
     try {
       const formData = new FormData();
-      formData.append('storeId', storeId || '00000000-0000-0000-0000-000000000000');
+      if (storeId && storeId !== '00000000-0000-0000-0000-000000000000') {
+        formData.append('storeId', storeId);
+      }
       formData.append('file', file);
       const res = await portalClient.post('/tables/upload-csv', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -603,9 +605,12 @@ export const tableService = {
   },
 
   batchAssignStations: async (storeId: string, assignments: { tableId?: string; tableNo?: string; stationId?: string; stationName?: string }[]): Promise<{ success: boolean; totalSuccess: number; totalFailed: number; messages: string[] }> => {
+    const effectiveStoreId = (storeId && storeId !== '00000000-0000-0000-0000-000000000000')
+      ? storeId
+      : '11111111-1111-1111-1111-111111111111';
     try {
       const res = await portalClient.post('/tables/batch-assign-stations', {
-        storeId: storeId || '00000000-0000-0000-0000-000000000000',
+        storeId: effectiveStoreId,
         assignments,
       });
       return {
