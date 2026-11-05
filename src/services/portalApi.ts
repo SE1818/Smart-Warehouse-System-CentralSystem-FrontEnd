@@ -642,6 +642,24 @@ export const tableService = {
     }
   },
 
+  resolveDropoff: async (tableId: string): Promise<any> => {
+    try {
+      const res = await portalClient.get(`/tables/${tableId}/resolve-dropoff`);
+      return res.data;
+    } catch {
+      return null;
+    }
+  },
+
+  bindAssistedStation: async (tableId: string, stationId: string, mode: string = 'assisted_dropoff'): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await portalClient.post(`/tables/${tableId}/bind-assisted-station`, { stationId, mode });
+      return { success: true, message: res.data?.message || 'Liên kết trạm đệm thành công' };
+    } catch (err: any) {
+      return { success: false, message: extractErrorMessage(err, 'Lỗi liên kết trạm đệm') };
+    }
+  },
+
   assignStation: async (tableId: string, stationId: string | null): Promise<{ success: boolean; message: string }> => {
     try {
       const res = await portalClient.post(`/tables/${tableId}/assign-station`, { stationId });
