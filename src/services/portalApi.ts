@@ -830,6 +830,15 @@ export const orderService = {
     destinationTable: string,
     robotCode?: string
   ): Promise<{ success: boolean; message: string }> => {
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.port === '3200' ||
+        window.location.hostname?.endsWith('.local') ||
+        window.location.hostname?.startsWith('192.168.') ||
+        window.location.hostname?.startsWith('10.'))
+    ) {
+      return { success: true, message: 'Edge SQLite persisted directly via RobotService' };
+    }
     try {
       const res = await portalClient.post(`/tenant/${subdomain}/database/dispatch`, {
         orderId,
@@ -837,20 +846,11 @@ export const orderService = {
         robotCode: robotCode || 'AMR-01',
       });
       return res.data;
-    } catch {
-      try {
-        const res2 = await portalClient.post(`/admin/tenants/${subdomain}/sqlite/dispatch`, {
-          orderId,
-          destinationTable,
-          robotCode: robotCode || 'AMR-01',
-        });
-        return res2.data;
-      } catch (err2: any) {
-        return {
-          success: false,
-          message: err2?.response?.data?.message || 'Không thể ghi nhận lệnh điều phối vào SQLite',
-        };
-      }
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.response?.data?.message || 'Không thể ghi nhận lệnh điều phối vào SQLite',
+      };
     }
   },
 

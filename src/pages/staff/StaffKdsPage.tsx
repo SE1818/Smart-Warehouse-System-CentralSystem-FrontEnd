@@ -37,7 +37,13 @@ import {
   resolveEffectiveStoreId,
   type PendingOrderDto,
 } from "@/services/portalApi";
-import { robotService, type CargoTrayAssignmentDto } from "@/services/robot";
+import {
+  robotService,
+  type CargoTrayAssignmentDto,
+  type TransferAuditDto,
+  type TransferCommandStatusDto,
+  type LogTransferCommandDto,
+} from "@/services/robot";
 import { sqliteService } from "@/services/sqliteService";
 import apiClient from "@/services/api";
 import { useRobotStore } from "@/stores/robotStore";
@@ -108,6 +114,33 @@ export const formatTableShortCode = (table?: TableNode | null): string => {
     return `T${numMatch[0].padStart(2, "0")}`;
   }
   return "Bàn";
+};
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const formatShortTaskCode = (id?: string | null): string => {
+  if (!id) return "TSK";
+  if (UUID_REGEX.test(id)) return `TSK-${id.slice(0, 8).toUpperCase()}`;
+  return id;
+};
+
+const normalizeTaskKey = (id?: string | null): string => {
+  if (!id) return "";
+  const clean = id.trim().toLowerCase();
+  return clean.startsWith("tsk-") ? clean.slice(4) : clean;
+};
+
+const formatTransferStatusLabel = (raw?: string | null): string => {
+  const s = (raw || "").toLowerCase();
+  if (s === "pending") return "Chờ lệnh";
+  if (s === "assigned") return "Đã gán khay";
+  if (s === "in_transit" || s === "in_progress" || s === "moving" || s === "delivering") {
+    return "Đang giao";
+  }
+  if (s === "arrived") return "Chờ lấy món";
+  if (s === "delivered" || s === "completed") return "Hoàn tất";
+  if (s === "cancelled") return "Đã hủy";
+  return raw || "Hoàn tất";
 };
 export interface TrayItem {
   dishName: string;
@@ -210,39 +243,37 @@ export const StaffKdsPage: React.FC = () => {
     );
   }, [activeSequence, liveRobots]);
 
-  // Normalized realtime robot status from SignalR
+  // Normalized realtime robot status from SQLite + SignalR
   const liveRobotStatus = useMemo(() => {
     if (!activeSequence) return "idle";
+    if (activeSequence.status === "completed" || missionPhase === "returning") return "returning";
+    if (missionPhase === "arrived") return "arrived";
+    if (missionPhase === "moving") return "in_transit";
     if (activeRobot?.status) {
       return activeRobot.status.toLowerCase().replace(/[\s-]/g, "_");
     }
-    if (missionPhase === "moving") return "in_transit";
-    if (missionPhase === "arrived") return "arrived";
-    if (missionPhase === "returning") return "returning";
     return "idle";
   }, [activeSequence, activeRobot, missionPhase]);
 
   // Active workflow step calculation (1 = Xuất Bếp, 2 = Đến Bàn, 3 = Trả Món, 4 = Về Bếp)
   const currentWorkflowStep = useMemo(() => {
     if (!activeSequence) return 1;
-    if (activeSequence.status === "completed") return 4;
-    if (liveRobotStatus === "in_transit" || liveRobotStatus === "moving" || missionPhase === "moving") return 2;
-    if (liveRobotStatus === "arrived" || missionPhase === "arrived") return 3;
-    if (liveRobotStatus === "returning" || missionPhase === "returning") return 4;
+    if (activeSequence.status === "completed" || missionPhase === "returning") return 4;
+    if (missionPhase === "arrived") return 3;
+    if (missionPhase === "moving") return 2;
+    if (liveRobotStatus === "arrived") return 3;
+    if (liveRobotStatus === "returning") return 4;
     return 2;
   }, [activeSequence, liveRobotStatus, missionPhase]);
 
-  // Only allow table transfer when robot is actively in_transit via SignalR
+  // Only allow table transfer when robot is actively in_transit via SignalR/SQLite
   const isRobotInTransit = useMemo(() => {
     return (
-      isSignalRConnected &&
       activeSequence !== null &&
       activeSequence.status === "in_progress" &&
-      (liveRobotStatus === "in_transit" ||
-       liveRobotStatus === "moving" ||
-       currentWorkflowStep === 2)
+      currentWorkflowStep === 2
     );
-  }, [isSignalRConnected, activeSequence, liveRobotStatus, currentWorkflowStep]);
+  }, [activeSequence, currentWorkflowStep]);
 
   // Cleanup transit timer on unmount
   useEffect(() => {
@@ -251,6 +282,10 @@ export const StaffKdsPage: React.FC = () => {
     };
   }, []);
   const [isConfirmingTable, setIsConfirmingTable] = useState<boolean>(false);
+  const [liveTaskAudit, setLiveTaskAudit] = useState<TransferAuditDto | null>(null);
+  const [modalTaskAudit, setModalTaskAudit] = useState<TransferAuditDto | null>(null);
+  const [modalCmdStatuses, setModalCmdStatuses] = useState<TransferCommandStatusDto[]>([]);
+  const [modalCmdLog, setModalCmdLog] = useState<LogTransferCommandDto | null>(null);
   // Mid-Transit Table Reroute Modal State
   const [isRerouteModalOpen, setIsRerouteModalOpen] = useState<boolean>(false);
   const [rerouteLegIndex, setRerouteLegIndex] = useState<number>(0);
@@ -495,10 +530,13 @@ export const StaffKdsPage: React.FC = () => {
           const cachedSeqStr = localStorage.getItem("vora_active_sequence");
           if (cachedSeqStr) {
             const cachedSeq = JSON.parse(cachedSeqStr);
-            if (cachedSeq && cachedSeq.status !== "completed") {
+            const hasFakeLeg = Array.isArray(cachedSeq?.legs) && cachedSeq.legs.some((l: any) => String(l?.taskId || "").startsWith("seq-task-"));
+            if (hasFakeLeg) {
+              localStorage.removeItem("vora_active_sequence");
+            } else if (cachedSeq && cachedSeq.status !== "completed") {
               setActiveSequence(cachedSeq);
               if (cachedSeq.status === "in_progress") {
-                setMissionPhase(cachedSeq.currentLegIndex === 0 ? "moving" : "arrived");
+                setMissionPhase("moving");
               }
             }
           }
@@ -509,7 +547,10 @@ export const StaffKdsPage: React.FC = () => {
           if (cachedTasksStr) {
             const cachedTasks = JSON.parse(cachedTasksStr);
             if (Array.isArray(cachedTasks) && cachedTasks.length > 0) {
-              setRecentSqliteTasks(cachedTasks);
+              const validCached = cachedTasks.filter(
+                (ct: any) => ct?.taskId && !String(ct.taskId).startsWith("seq-task-") && !String(ct.taskId).startsWith("SEQ-"),
+              );
+              setRecentSqliteTasks(validCached);
             }
           }
         } catch {}
@@ -517,41 +558,69 @@ export const StaffKdsPage: React.FC = () => {
         // Fetch real tasks from backend SQLite to guarantee 100% data persistence on reload
         try {
           const tasksRes = await apiClient.get<any[]>("/v1/tasks");
-          if (tasksRes.data && Array.isArray(tasksRes.data) && tasksRes.data.length > 0) {
-            const mappedTasks = tasksRes.data.map((t: any) => ({
-              taskId: t.id ? (t.id.length > 12 ? `TSK-${t.id.slice(0, 8)}` : t.id) : `TSK-${Date.now()}`,
-              orderId: t.orderId || t.orderNumber || "ORD-01",
+          if (tasksRes.data && Array.isArray(tasksRes.data)) {
+            const sortedRaw = [...tasksRes.data].sort(
+              (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+            );
+            const mappedTasks = sortedRaw.slice(0, 15).map((t: any) => ({
+              taskId: String(t.id),
+              orderId: t.orderId ? String(t.orderId).slice(0, 8).toUpperCase() : "ORD-01",
               robotCode: t.robotCode || t.robotName || (mappedRobots[0]?.code ?? "AMR-01"),
-              destination: t.destinationTableNo || (t.toStationId ? `Trạm ${t.toStationId.slice(0, 4)}` : "Bàn 01"),
-              status: t.status || "in_transit",
+              destination: t.destinationTableNo || (t.toStationId ? `Trạm ${String(t.toStationId).slice(0, 4)}` : "Bàn 01"),
+              status: t.status || "completed",
               time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Vừa xong",
               rawTask: t,
             }));
             setRecentSqliteTasks(mappedTasks);
             localStorage.setItem("vora_recent_tasks", JSON.stringify(mappedTasks));
 
-            // If activeSequence is null but backend has active tasks, reconstruct active sequence
-            const activeTasks = tasksRes.data.filter((t: any) => t.status === "in_transit" || t.status === "assigned");
+            // Reconstruct active sequence from backend SQLite active tasks
+            const activeStatuses = new Set(["in_transit", "in_progress", "arrived", "assigned", "pending"]);
+            const activeTasks = [...tasksRes.data]
+              .filter((t: any) => activeStatuses.has(String(t.status || "").toLowerCase()))
+              .sort((a: any, b: any) => (a.cargoLevel || 1) - (b.cargoLevel || 1));
+
             if (activeTasks.length > 0) {
-              const activeRobotItem = mappedRobots[0];
+              const busyRobot =
+                mappedRobots.find((r) => r.status === "delivering") ||
+                mappedRobots[0];
+              const currentIdx = Math.max(
+                0,
+                activeTasks.findIndex((t: any) => {
+                  const st = String(t.status || "").toLowerCase();
+                  return st === "arrived" || st === "in_transit" || st === "in_progress";
+                }),
+              );
+              const curTaskStatus = String(activeTasks[currentIdx]?.status || "").toLowerCase();
               const reconstructed = {
-                sequenceId: `SEQ-${activeTasks[0].id.slice(0, 8)}`,
-                robotCode: activeRobotItem?.code || "AMR-01",
-                robotName: activeRobotItem?.name || "Robot AMR",
-                currentLegIndex: 0,
-                legs: activeTasks.map((t: any, idx: number) => ({
-                  cargoLevel: t.cargoLevel || (idx + 1),
-                  tableNo: t.destinationTableNo || `Bàn ${idx + 1}`,
-                  orderId: t.orderId || `ORD-0${idx + 1}`,
-                  status: (t.status === "in_transit" ? "delivering" : "pending") as "pending" | "delivering" | "completed",
-                  taskId: t.id,
-                })),
+                sequenceId: `SEQ-${String(activeTasks[0].id).slice(0, 4).toUpperCase()}`,
+                robotCode: busyRobot?.code || "AMR-01",
+                robotName: busyRobot?.name || "Robot AMR",
+                currentLegIndex: currentIdx,
+                legs: activeTasks.map((t: any, idx: number) => {
+                  const st = String(t.status || "").toLowerCase();
+                  return {
+                    cargoLevel: t.cargoLevel || idx + 1,
+                    tableNo: t.destinationTableNo || `Bàn ${idx + 1}`,
+                    orderId: t.orderId ? String(t.orderId).slice(0, 8).toUpperCase() : `ORD-0${idx + 1}`,
+                    status: (st === "in_transit" || st === "in_progress" || st === "arrived"
+                      ? "delivering"
+                      : "pending") as "pending" | "delivering" | "completed",
+                    taskId: String(t.id),
+                  };
+                }),
                 status: "in_progress" as const,
-                startTime: activeTasks[0].createdAt || new Date().toISOString(),
+                startTime: activeTasks[0].createdAt
+                  ? new Date(activeTasks[0].createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+                  : new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
               };
               setActiveSequence(reconstructed);
-              setMissionPhase("moving");
+              setMissionPhase(curTaskStatus === "arrived" ? "arrived" : "moving");
               localStorage.setItem("vora_active_sequence", JSON.stringify(reconstructed));
+            } else {
+              setActiveSequence(null);
+              setMissionPhase("idle");
+              localStorage.removeItem("vora_active_sequence");
             }
           }
         } catch (err) {
@@ -565,6 +634,152 @@ export const StaffKdsPage: React.FC = () => {
     };
     initKds();
   }, []);
+
+  // Poll real Edge SQLite audit & lifecycle state for current active leg (no fake client timer)
+  useEffect(() => {
+    if (!activeSequence || activeSequence.status !== "in_progress") {
+      setLiveTaskAudit(null);
+      return;
+    }
+    const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+    if (!currentLeg?.taskId || !UUID_REGEX.test(currentLeg.taskId)) return;
+
+    let cancelled = false;
+    const syncLegFromSqlite = async () => {
+      const audit = await robotService.getTaskAuditHistory(currentLeg.taskId);
+      if (cancelled || !audit) return;
+      setLiveTaskAudit(audit);
+
+      const reqStatus = (audit.request?.status || "").toLowerCase();
+      if (reqStatus === "arrived") {
+        setMissionPhase((prev) => (prev === "arrived" ? prev : "arrived"));
+        setRobots((prev) =>
+          prev.map((r) =>
+            r.code === activeSequence.robotCode
+              ? { ...r, status: "delivering", currentZone: `Đã đến ${currentLeg.tableNo}` }
+              : r,
+          ),
+        );
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(currentLeg.taskId)
+              ? { ...rt, status: "arrived" }
+              : rt,
+          ),
+        );
+      } else if (
+        reqStatus === "in_transit" ||
+        reqStatus === "in_progress" ||
+        reqStatus === "pending" ||
+        reqStatus === "assigned"
+      ) {
+        setMissionPhase((prev) => (prev === "moving" ? prev : "moving"));
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(currentLeg.taskId)
+              ? { ...rt, status: reqStatus }
+              : rt,
+          ),
+        );
+      } else if (reqStatus === "completed" || reqStatus === "delivered") {
+        // Sync if confirmed externally (e.g. hardware button via MQTT)
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(currentLeg.taskId)
+              ? { ...rt, status: "completed" }
+              : rt,
+          ),
+        );
+        setActiveSequence((prev) => {
+          if (!prev || prev.status !== "in_progress") return prev;
+          const isLast = prev.currentLegIndex >= prev.legs.length - 1;
+          const updatedLegs = [...prev.legs];
+          updatedLegs[prev.currentLegIndex] = { ...updatedLegs[prev.currentLegIndex], status: "completed" };
+          if (!isLast) {
+            updatedLegs[prev.currentLegIndex + 1] = { ...updatedLegs[prev.currentLegIndex + 1], status: "delivering" };
+            setMissionPhase("moving");
+            return { ...prev, currentLegIndex: prev.currentLegIndex + 1, legs: updatedLegs };
+          }
+          setMissionPhase("returning");
+          return { ...prev, currentLegIndex: prev.legs.length, legs: updatedLegs, status: "completed" };
+        });
+      }
+    };
+
+    syncLegFromSqlite();
+    const interval = setInterval(syncLegFromSqlite, 1200);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeSequence?.sequenceId, activeSequence?.status, activeSequence?.currentLegIndex]);
+
+  // Poll robot return-to-kitchen completion from Edge SQLite
+  useEffect(() => {
+    if (missionPhase !== "returning") return;
+    let cancelled = false;
+    const checkRobotIdle = async () => {
+      try {
+        const list = await robotService.listRobots();
+        if (cancelled || !Array.isArray(list)) return;
+        const targetCode = activeSequence?.robotCode;
+        const matched = list.find(
+          (r) => !targetCode || r.name === targetCode || r.id === targetCode || r.name.includes(targetCode),
+        );
+        if (matched && String(matched.status || "").toLowerCase() === "idle") {
+          setMissionPhase("idle");
+          setRobots((prev) =>
+            prev.map((r) =>
+              !targetCode || r.code === targetCode || r.id === matched.id
+                ? { ...r, status: "idle", currentZone: "Bếp Trung Tâm", battery: Math.round(matched.battery ?? r.battery) }
+                : r,
+            ),
+          );
+        }
+      } catch {}
+    };
+    const interval = setInterval(checkRobotIdle, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [missionPhase, activeSequence?.robotCode]);
+
+  // Load full 7-table SQLite audit records when opening Task Detail Modal
+  useEffect(() => {
+    if (!selectedTaskDetail?.taskId || !UUID_REGEX.test(selectedTaskDetail.taskId)) {
+      setModalTaskAudit(null);
+      setModalCmdStatuses([]);
+      setModalCmdLog(null);
+      return;
+    }
+    let cancelled = false;
+    const loadAudit = async () => {
+      const audit = await robotService.getTaskAuditHistory(selectedTaskDetail.taskId);
+      if (cancelled) return;
+      setModalTaskAudit(audit);
+      const firstCmdId = audit?.commands?.[0]?.id;
+      if (firstCmdId) {
+        const [statuses, cmdLog] = await Promise.all([
+          robotService.getCommandStatusHistory(firstCmdId),
+          robotService.getCommandExecutionLog(firstCmdId),
+        ]);
+        if (!cancelled) {
+          setModalCmdStatuses(statuses);
+          setModalCmdLog(cmdLog);
+        }
+      } else {
+        setModalCmdStatuses([]);
+        setModalCmdLog(null);
+      }
+    };
+    loadAudit();
+    const interval = selectedTaskDetail.isLive ? setInterval(loadAudit, 1500) : null;
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [selectedTaskDetail?.taskId, selectedTaskDetail?.isLive]);
 
   // Selected Table Object
   const currentSelectedTable: TableNode = tables.find(
@@ -700,7 +915,7 @@ export const StaffKdsPage: React.FC = () => {
     setIsAssignStationModalOpen(true);
   };
 
-  // Robot Mission Queue: Active sequence legs + recent/queued missions
+  // Robot Mission Queue: Active sequence legs + recent/queued missions (Zero duplicates)
   const missionQueueTasks = useMemo(() => {
     const list: Array<{
       taskId: string;
@@ -721,9 +936,9 @@ export const StaffKdsPage: React.FC = () => {
     if (activeSequence) {
       activeSequence.legs.forEach((leg, idx) => {
         const isCurrentLeg = activeSequence.currentLegIndex === idx;
-        const isPassedLeg = activeSequence.currentLegIndex > idx;
+        const isPassedLeg = activeSequence.currentLegIndex > idx || activeSequence.status === "completed";
         let legStep = 1;
-        let legStatus = "Chờ giao";
+        let legStatus = "Đã gán khay";
         if (isPassedLeg) {
           legStep = 4;
           legStatus = "Hoàn tất";
@@ -733,9 +948,9 @@ export const StaffKdsPage: React.FC = () => {
             currentWorkflowStep === 1
               ? "Nạp tại bếp"
               : currentWorkflowStep === 2
-                ? "Đang di chuyển"
+                ? "Đang giao"
                 : currentWorkflowStep === 3
-                  ? "Đang trả món"
+                  ? "Chờ lấy món"
                   : "Về bếp";
         }
 
@@ -746,7 +961,7 @@ export const StaffKdsPage: React.FC = () => {
         );
 
         list.push({
-          taskId: leg.taskId || `${activeSequence.sequenceId}-${idx + 1}`,
+          taskId: leg.taskId,
           missionId: activeSequence.sequenceId,
           legIndex: idx,
           trayLevel: (leg.cargoLevel || idx + 1) as 1 | 2,
@@ -758,33 +973,63 @@ export const StaffKdsPage: React.FC = () => {
           status: legStatus,
           workflowStep: legStep,
           time: activeSequence.startTime || "Vừa xong",
-          isLive: isCurrentLeg,
+          isLive: isCurrentLeg && activeSequence.status === "in_progress",
         });
       });
     }
 
-    // 2. Add recent tasks that are not already in activeSequence:
+    // 2. Add recent SQLite tasks that are not already in activeSequence:
     recentSqliteTasks.forEach((rt) => {
-      if (!list.some((l) => l.taskId === rt.taskId)) {
+      if (!rt?.taskId || String(rt.taskId).startsWith("seq-task-") || String(rt.taskId).startsWith("SEQ-")) {
+        return;
+      }
+      const rtKey = normalizeTaskKey(rt.taskId);
+      const alreadyInList = list.some((l) => {
+        const lKey = normalizeTaskKey(l.taskId);
+        if (lKey && rtKey && (lKey === rtKey || lKey.startsWith(rtKey) || rtKey.startsWith(lKey))) {
+          return true;
+        }
+        if (
+          activeSequence?.status === "in_progress" &&
+          l.tableNo.toLowerCase() === String(rt.destination || "").toLowerCase() &&
+          l.orderId === rt.orderId
+        ) {
+          return true;
+        }
+        return false;
+      });
+
+      if (!alreadyInList) {
         const matchedTable = tables.find(
           (t) =>
-            t.name.toLowerCase() === rt.destination.toLowerCase() ||
+            t.name.toLowerCase() === String(rt.destination || "").toLowerCase() ||
             t.tableNo === rt.destination,
         );
+        const rawSt = String(rt.status || "").toLowerCase();
+        const wfStep =
+          rawSt === "arrived"
+            ? 3
+            : rawSt === "in_transit" ||
+                rawSt === "in_progress" ||
+                rawSt === "pending" ||
+                rawSt === "assigned" ||
+                rawSt === "delivering"
+              ? 2
+              : 4;
         list.push({
           taskId: rt.taskId,
-          missionId: rt.taskId.split("-")[0] || "SEQ",
+          missionId: formatShortTaskCode(rt.taskId),
           legIndex: 0,
-          trayLevel: rt.taskId.endsWith("-2") ? 2 : 1,
+          trayLevel: (rt.rawTask?.cargoLevel === 2 ? 2 : 1) as 1 | 2,
           tableNo: rt.destination,
           stationName:
             matchedTable?.stationName || matchedTable?.stationId || undefined,
           robotCode: rt.robotCode,
           orderId: rt.orderId,
-          status: rt.status === "Delivering" ? "Đang giao" : "Hoàn tất",
-          workflowStep: rt.status === "Delivering" ? 2 : 4,
+          status: formatTransferStatusLabel(rt.status),
+          workflowStep: wfStep,
           time: rt.time || "Gần đây",
-          isLive: false,
+          isLive: wfStep < 4,
         });
       }
     });
@@ -954,6 +1199,7 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
+      setLiveTaskAudit(null);
       setMissionPhase("moving");
 
       setActiveSequence({
@@ -966,17 +1212,11 @@ export const StaffKdsPage: React.FC = () => {
         startTime: timeStr,
       });
 
-      // Tự động mô phỏng cập bến sau 4s di chuyển
-      transitTimerRef.current = setTimeout(() => {
-        setMissionPhase("arrived");
-        setRobots((prev) =>
-          prev.map((r) =>
-            r.code === effectiveRobot.code
-              ? { ...r, status: "delivering", currentZone: `Đã đến ${legs[0].tableNo}` }
-              : r,
-          ),
-        );
-      }, 4000);
+      if (legs[0]?.taskId && UUID_REGEX.test(legs[0].taskId)) {
+        robotService.getTaskAuditHistory(legs[0].taskId).then((audit) => {
+          if (audit) setLiveTaskAudit(audit);
+        });
+      }
 
       // 4. Update Robot & Tables
       setRobots((prev) =>
@@ -996,16 +1236,21 @@ export const StaffKdsPage: React.FC = () => {
         ),
       );
 
-      // 5. Thêm vào nhật ký điều phối gần đây
+      // 5. Thêm vào nhật ký điều phối gần đây bằng đúng ID bản ghi SQLite (không sinh ID phụ gây trùng)
       const newRecentEntries = legs.map((leg, idx) => ({
-        taskId: `${seqCode}-${idx + 1}`,
+        taskId: leg.taskId,
         orderId: leg.orderId,
         destination: leg.tableNo,
         robotCode: effectiveRobot.code,
-        status: idx === 0 ? "Delivering" : "Pending",
+        status: idx === 0 ? "in_transit" : "assigned",
         time: timeStr,
+        rawTask: result.createdTasks?.[idx],
       }));
-      setRecentSqliteTasks((prev) => [...newRecentEntries, ...prev.slice(0, 5 - newRecentEntries.length)]);
+      setRecentSqliteTasks((prev) => {
+        const newKeys = new Set(newRecentEntries.map((e) => normalizeTaskKey(e.taskId)));
+        const filteredPrev = prev.filter((p) => !newKeys.has(normalizeTaskKey(p.taskId)));
+        return [...newRecentEntries, ...filteredPrev].slice(0, 15);
+      });
 
       // 6. Cập nhật lượt xuất phát gần nhất
       const destSummary = legs.map((l) => l.tableNo).join(" ➔ ");
@@ -1022,60 +1267,69 @@ export const StaffKdsPage: React.FC = () => {
 
       if (legs.length === 1) {
         showToast(
-          `Đã xuất lệnh ${seqCode}: ${effectiveRobot.code} đang giao tới ${legs[0].tableNo}!`,
+          `Đã ghi SQLite & xuất lệnh ${seqCode}: ${effectiveRobot.code} đang di chuyển tới ${legs[0].tableNo}!`,
           "success",
         );
       } else {
         showToast(
-          `Đã xuất lệnh chuỗi 2 bàn ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, sau đó tiếp tục giao tiếp Khay 2 tới ${table2}!`,
+          `Đã ghi SQLite & xuất chuỗi 2 bàn ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, tiếp theo Khay 2 tới ${table2}!`,
           "success",
         );
       }
     } catch (err) {
       console.warn("Lỗi xuất lệnh điều phối:", err);
-      showToast("Đã phát lệnh điều phối robot giao món!", "success");
+      showToast("Không thể xuất lệnh điều phối robot!", "info");
     } finally {
       setIsDispatching(false);
     }
   };
 
-
-
-  // Dual Confirmation Handler: Physical Button on Robot OR Web Console
+  // Single Confirmation Handler: Confirm Tray Pickup & Advance / Return to Kitchen
   const handleConfirmNextTable = async (viaHardwareButton: boolean = false) => {
     if (!activeSequence) return;
     setIsConfirmingTable(true);
     try {
       const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
-      await robotService.confirmNextTable(
+      const confirmRes = await robotService.confirmNextTable(
         currentLeg.taskId,
-        viaHardwareButton
-          ? "Nút Bấm Trên Robot"
-          : "Nhân Viên Bếp (Web)",
+        viaHardwareButton ? "Nút Bấm Trên Robot" : "Nhân Viên Bếp (Web)",
         viaHardwareButton,
       );
 
+      if (!confirmRes.success) {
+        showToast(confirmRes.message || "Không thể xác nhận hoàn tất chặng giao món!", "info");
+        return;
+      }
+
       if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
+
+      // Cập nhật bàn vừa trả món sang Có Khách (occupied)
+      setTables((prev) =>
+        prev.map((t) =>
+          t.name.toLowerCase() === currentLeg.tableNo.toLowerCase()
+            ? { ...t, status: "occupied", assignedRobot: null }
+            : t,
+        ),
+      );
+
       const isLastLeg = activeSequence.currentLegIndex >= activeSequence.legs.length - 1;
       if (!isLastLeg) {
-        // Chuyển sang Chặng tiếp theo: Robot tiếp tục di chuyển
+        // Chuyển sang Chặng tiếp theo: Backend Simulator thực thi di chuyển thật sang bàn kế
         const nextLeg = activeSequence.legs[activeSequence.currentLegIndex + 1];
+        setLiveTaskAudit(null);
         setMissionPhase("moving");
-        transitTimerRef.current = setTimeout(() => {
-          setMissionPhase("arrived");
-          setRobots((prev) =>
-            prev.map((r) =>
-              r.code === activeSequence.robotCode
-                ? { ...r, status: "delivering", currentZone: `Đã đến ${nextLeg.tableNo}` }
-                : r,
-            ),
-          );
-        }, 4000);
+
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) => {
+            const k = normalizeTaskKey(rt.taskId);
+            if (k === normalizeTaskKey(currentLeg.taskId)) return { ...rt, status: "completed" };
+            if (k === normalizeTaskKey(nextLeg.taskId)) return { ...rt, status: "in_transit" };
+            return rt;
+          }),
+        );
 
         showToast(
-          viaHardwareButton
-            ? `[Nút Trên Robot] Khách ${currentLeg.tableNo} đã nhận món! Robot tiếp tục di chuyển tới ${nextLeg.tableNo}`
-            : `Đã xác nhận lấy món tại ${currentLeg.tableNo}! Robot tiếp tục di chuyển tới ${nextLeg.tableNo}`,
+          `Đã xác nhận lấy món tại ${currentLeg.tableNo}! Robot đang di chuyển tiếp tới ${nextLeg.tableNo}.`,
           "success",
         );
         setActiveSequence((prev) => {
@@ -1102,23 +1356,18 @@ export const StaffKdsPage: React.FC = () => {
           ),
         );
       } else {
-        // Hoàn tất toàn bộ lượt giao: Robot quay về Bếp
+        // Hoàn tất toàn bộ lượt giao: Robot thực thi lệnh move_to_kitchen quay về Bếp
         setMissionPhase("returning");
-        transitTimerRef.current = setTimeout(() => {
-          setMissionPhase("idle");
-          setRobots((prev) =>
-            prev.map((r) =>
-              r.code === activeSequence.robotCode
-                ? { ...r, status: "idle", currentZone: "Bếp Trung Tâm" }
-                : r,
-            ),
-          );
-        }, 4000);
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(currentLeg.taskId)
+              ? { ...rt, status: "completed" }
+              : rt,
+          ),
+        );
 
         showToast(
-          viaHardwareButton
-            ? `[Nút Trên Robot] Khách ${currentLeg.tableNo} đã nhận món! Đã hoàn tất lượt giao, robot đang quay về Bếp.`
-            : `Đã xác nhận lấy món tại ${currentLeg.tableNo}! Đã hoàn tất lượt giao, robot đang quay về Bếp.`,
+          `Đã xác nhận lấy món tại ${currentLeg.tableNo}! Hoàn tất lượt giao, robot đang tự động quay về Bếp.`,
           "success",
         );
         setActiveSequence((prev) => {
@@ -1143,7 +1392,7 @@ export const StaffKdsPage: React.FC = () => {
       }
     } catch (err) {
       console.warn("Lỗi xác nhận món bàn tiếp theo:", err);
-      showToast("Đã xác nhận lấy món thành công!", "success");
+      showToast("Không thể xác nhận hoàn tất chặng giao món!", "info");
     } finally {
       setIsConfirmingTable(false);
     }
@@ -2258,12 +2507,18 @@ export const StaffKdsPage: React.FC = () => {
                     className={`text-[10px] font-mono font-bold px-3 py-1 rounded-full border shadow-2xs ${
                       activeSequence.status === "completed"
                         ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
-                        : "bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse"
+                        : missionPhase === "arrived"
+                          ? "bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse"
+                          : "bg-blue-500/25 text-cyan-200 border-cyan-400/40 animate-pulse"
                     }`}
                   >
                     {activeSequence.status === "completed"
-                      ? "Hoàn tất toàn chuỗi ✓"
-                      : `Đang giao: Chặng ${activeSequence.currentLegIndex + 1}/2`}
+                      ? missionPhase === "returning"
+                        ? "Đang quay về Bếp..."
+                        : "Hoàn tất toàn chuỗi ✓"
+                      : missionPhase === "arrived"
+                        ? `Chờ lấy món: Chặng ${activeSequence.currentLegIndex + 1}/${activeSequence.legs.length}`
+                        : `Đang giao: Chặng ${activeSequence.currentLegIndex + 1}/${activeSequence.legs.length}`}
                   </span>
                 </div>
               </div>
@@ -2290,7 +2545,7 @@ export const StaffKdsPage: React.FC = () => {
                   {/* Dynamic Leg Steps */}
                   {activeSequence.legs.map((leg, idx) => {
                     const isCompleted = leg.status === "completed";
-                    const isCurrent = activeSequence.currentLegIndex === idx;
+                    const isCurrent = activeSequence.currentLegIndex === idx && activeSequence.status === "in_progress";
                     return (
                       <div
                         key={leg.taskId || idx}
@@ -2298,9 +2553,9 @@ export const StaffKdsPage: React.FC = () => {
                           isCompleted
                             ? "bg-emerald-500/20 border-emerald-500/40"
                             : isCurrent
-                              ? idx === 0
-                                ? "bg-blue-600/40 border-cyan-400 ring-2 ring-cyan-400/40 shadow-lg shadow-blue-500/20"
-                                : "bg-indigo-600/40 border-indigo-400 ring-2 ring-indigo-400/40 shadow-lg shadow-indigo-500/20"
+                              ? missionPhase === "arrived"
+                                ? "bg-amber-500/25 border-amber-400 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/20"
+                                : "bg-blue-600/40 border-cyan-400 ring-2 ring-cyan-400/40 shadow-lg shadow-blue-500/20"
                               : "bg-white/5 border-white/10 opacity-60"
                         }`}
                       >
@@ -2318,17 +2573,20 @@ export const StaffKdsPage: React.FC = () => {
                               isCompleted
                                 ? "text-emerald-400 font-bold"
                                 : isCurrent
-                                  ? "text-cyan-300 font-extrabold animate-pulse"
+                                  ? missionPhase === "arrived"
+                                    ? "text-amber-300 font-extrabold animate-pulse"
+                                    : "text-cyan-300 font-extrabold animate-pulse"
                                   : "text-slate-400"
                             }`}
                           >
                             {isCompleted
                               ? "Đã lấy món ✓"
                               : isCurrent
-                                ? "Đang tới bàn..."
-                                : `Chờ chặng ${idx}`}
+                                ? missionPhase === "arrived"
+                                  ? "Đang chờ lấy món!"
+                                  : "Đang di chuyển tới bàn..."
+                                : `Chờ chặng ${idx + 1}`}
                           </div>
-
                         </div>
                       </div>
                     );
@@ -2338,7 +2596,9 @@ export const StaffKdsPage: React.FC = () => {
                   <div
                     className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
                       activeSequence.status === "completed"
-                        ? "bg-emerald-500/20 border-emerald-500/40"
+                        ? missionPhase === "returning"
+                          ? "bg-cyan-500/20 border-cyan-400/50 ring-1 ring-cyan-400/40"
+                          : "bg-emerald-500/20 border-emerald-500/40"
                         : "bg-white/5 border-white/10 opacity-60"
                     }`}
                   >
@@ -2350,29 +2610,117 @@ export const StaffKdsPage: React.FC = () => {
                         Về Bếp
                       </div>
                     </div>
-                    <div className="text-[9px] font-mono mt-1 text-slate-400">
+                    <div className="text-[9px] font-mono mt-1 text-slate-300">
                       {activeSequence.status === "completed"
-                        ? "Đã về bãi ✓"
+                        ? missionPhase === "returning"
+                          ? "Đang về trạm bếp..."
+                          : "Đã về bãi (idle) ✓"
                         : "Tự động quay về"}
                     </div>
                   </div>
                 </div>
               </div>
-              {/* DUAL CONFIRMATION TERMINAL */}
+
+              {/* SINGLE CONFIRMATION & REALTIME SQLITE TRANSFER LIFECYCLE TERMINAL */}
               {activeSequence.status === "in_progress" ? (
                 <div className="p-4 rounded-xl bg-gradient-to-b from-blue-950/70 to-slate-900/95 border border-cyan-500/40 space-y-3.5 relative z-10 shadow-xl">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-white/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-white/10">
                     <span className="flex items-center gap-2 text-xs font-black text-cyan-300 uppercase tracking-wide">
                       <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-                      <span>XÁC NHẬN TRẢ MÓN TẠI BÀN HOẶC TỪ XA</span>
+                      <span>
+                        {missionPhase === "arrived"
+                          ? "XÁC NHẬN ĐÃ LẤY MÓN TẠI BÀN"
+                          : "TIẾN TRÌNH ĐIỀU PHỐI & DI CHUYỂN TỰ ĐỘNG"}
+                      </span>
                     </span>
-                    <span className="text-[11px] font-mono font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-400/30 flex items-center gap-1">
-                      <span>Đang Dừng Tại:</span>
+                    <span
+                      className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                        missionPhase === "arrived"
+                          ? "text-amber-300 bg-amber-500/20 border-amber-400/40"
+                          : "text-cyan-200 bg-blue-500/25 border-cyan-400/40"
+                      }`}
+                    >
+                      <span>{missionPhase === "arrived" ? "Đang Chờ Lấy Tại:" : "Đang Di Chuyển Tới:"}</span>
                       <strong className="text-white">
                         {activeSequence.legs[activeSequence.currentLegIndex]?.tableNo || activeSequence.legs[0]?.tableNo}
                       </strong>
                     </span>
                   </div>
+
+                  {/* Live 5-Stage SQLite Transfer Lifecycle Strip */}
+                  {(() => {
+                    const reqSt = (liveTaskAudit?.request?.status || (missionPhase === "arrived" ? "arrived" : "in_transit")).toLowerCase();
+                    const cmdItem = liveTaskAudit?.commands?.[0];
+                    const cmdSt = (cmdItem?.status || (missionPhase === "arrived" ? "executed" : "executing")).toLowerCase();
+                    const respCount = liveTaskAudit?.responses?.length ?? 1;
+                    const latestResp = liveTaskAudit?.responses?.[0];
+                    const logSt = (liveTaskAudit?.transferLog?.statusResult || reqSt).toLowerCase();
+
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[10px] font-mono">
+                        <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
+                          <div className="text-[9px] text-emerald-300 font-bold uppercase">1. Request &amp; Status</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">{reqSt}</div>
+                          <div className="text-[9px] text-slate-300 truncate">
+                            {liveTaskAudit?.statusHistory?.length ?? 2} mốc t_transfer_status
+                          </div>
+                        </div>
+
+                        <div
+                          className={`p-2 rounded-lg border ${
+                            cmdSt === "executed"
+                              ? "bg-emerald-500/15 border-emerald-400/30"
+                              : "bg-blue-500/20 border-cyan-400/40"
+                          }`}
+                        >
+                          <div className="text-[9px] text-cyan-300 font-bold uppercase">2. Command &amp; Log</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">
+                            {cmdItem?.commandType || "move_to_table"}
+                          </div>
+                          <div className="text-[9px] text-slate-300 truncate">status: {cmdSt}</div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
+                          <div className="text-[9px] text-emerald-300 font-bold uppercase">3. Response</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">
+                            {latestResp?.status || (missionPhase === "arrived" ? "arrived" : "in_transit")}
+                          </div>
+                          <div className="text-[9px] text-slate-300 truncate">
+                            {respCount} bản ghi{latestResp?.currentX != null ? ` (${latestResp.currentX},${latestResp.currentY})` : ""}
+                          </div>
+                        </div>
+
+                        <div
+                          className={`p-2 rounded-lg border ${
+                            missionPhase === "arrived"
+                              ? "bg-amber-500/15 border-amber-400/40"
+                              : "bg-blue-500/20 border-cyan-400/40"
+                          }`}
+                        >
+                          <div className="text-[9px] text-cyan-300 font-bold uppercase">4. Log Transfer</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">{logSt}</div>
+                          <div className="text-[9px] text-slate-300 truncate">t_log_transfers</div>
+                        </div>
+
+                        <div
+                          className={`p-2 rounded-lg border col-span-2 sm:col-span-1 ${
+                            missionPhase === "arrived"
+                              ? "bg-amber-500/25 border-amber-400 ring-1 ring-amber-400/50"
+                              : "bg-slate-800/80 border-white/10 opacity-75"
+                          }`}
+                        >
+                          <div className="text-[9px] text-amber-300 font-bold uppercase">5. Trả Món</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">
+                            {missionPhase === "arrived" ? "Đang chờ lấy" : "Chưa tới bàn"}
+                          </div>
+                          <div className="text-[9px] text-slate-300 truncate">
+                            {missionPhase === "arrived" ? "Sẵn sàng xác nhận" : "Đang di chuyển..."}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Tray Guidance Banner */}
                   <div
                     className={`p-3 rounded-xl border flex items-start gap-3 transition-all ${
@@ -2395,14 +2743,14 @@ export const StaffKdsPage: React.FC = () => {
                         <span className="text-[10px] font-black tracking-wider uppercase">
                           {activeSequence.legs.length === 1
                             ? `GIAO MÓN TỚI BÀN ${activeSequence.legs[0]?.tableNo}`
-                            : `CHẶNG ${activeSequence.currentLegIndex + 1}: TRẢ MÓN BÀN ${activeSequence.legs[activeSequence.currentLegIndex]?.tableNo}`}
+                            : `CHẶNG ${activeSequence.currentLegIndex + 1}: GIAO MÓN BÀN ${activeSequence.legs[activeSequence.currentLegIndex]?.tableNo}`}
                         </span>
                         <span className="text-[9px] font-mono px-2 py-0.5 rounded-md bg-white/10 font-bold">
                           Chặng {activeSequence.currentLegIndex + 1}/{activeSequence.legs.length}
                         </span>
                       </div>
                       <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
-                        <span>Chỉ lấy món ở:</span>
+                        <span>Khay phục vụ:</span>
                         <span
                           className={`px-2 py-0.5 rounded-md font-mono font-black text-xs ${
                             (activeSequence.legs[activeSequence.currentLegIndex]?.cargoLevel ?? 1) === 1
@@ -2414,93 +2762,68 @@ export const StaffKdsPage: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-300 leading-normal">
-                        {activeSequence.legs.length === 1 ? (
-                          <>Khách tại bàn <strong>{activeSequence.legs[0]?.tableNo}</strong> nhận món xong, bấm nút trên thân robot (hoặc bếp xác nhận) để xe tự động quay về trạm bếp.</>
+                        {missionPhase === "moving" ? (
+                          <>
+                            Robot đang thực thi lệnh điều hướng tới trạm dừng của bàn{" "}
+                            <strong>{activeSequence.legs[activeSequence.currentLegIndex]?.tableNo}</strong>. Khi xe cập trạm, trạng thái sẽ chuyển sang{" "}
+                            <strong>Chờ lấy món</strong> để xác nhận.
+                          </>
+                        ) : activeSequence.legs.length === 1 ? (
+                          <>
+                            Robot đã dừng tại bàn <strong>{activeSequence.legs[0]?.tableNo}</strong>. Sau khi lấy món xong, bấm nút xác nhận bên dưới để xe tự động quay về trạm bếp.
+                          </>
                         ) : activeSequence.currentLegIndex === 0 ? (
                           <>
-                            Khách tại bàn <strong>{activeSequence.legs[0]?.tableNo}</strong> nhận món ở Khay 1.
-                            Sau khi lấy món, bấm nút trên robot để xe tiếp tục tới bàn <strong>{activeSequence.legs[1]?.tableNo}</strong>.
+                            Robot đã dừng tại bàn <strong>{activeSequence.legs[0]?.tableNo}</strong>. Sau khi lấy món ở Khay 1, bấm xác nhận để xe đi tiếp tới bàn{" "}
+                            <strong>{activeSequence.legs[1]?.tableNo}</strong>.
                           </>
                         ) : (
                           <>
-                            Khay 1 đã giao xong. Sau khi bàn <strong>{activeSequence.legs[1]?.tableNo}</strong> nhận khay 2, robot sẽ tự động quay về trạm bếp.
+                            Khay 1 đã giao xong. Sau khi bàn <strong>{activeSequence.legs[1]?.tableNo}</strong> nhận Khay 2, bấm xác nhận để robot quay về trạm bếp.
                           </>
                         )}
                       </p>
                     </div>
                   </div>
-                  {/* Phân định 2 kênh xác nhận: Kênh 1 (Tại Bàn) & Kênh 2 (Tại Bếp) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {/* Kênh 1: Tại Bàn */}
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex flex-col justify-between space-y-2">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase flex items-center gap-1">
-                            <Cpu className="w-3.5 h-3.5" />
-                            Kênh 1 • Bấm Nút Trên Robot
-                          </span>
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30 font-bold">
-                            Mặc Định
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">
-                          Khách hoặc nhân viên tại bàn {activeSequence.legs[activeSequence.currentLegIndex]?.tableNo} nhấc món xong và ấn nút trên thân xe robot.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={isConfirmingTable}
-                        onClick={() => handleConfirmNextTable(true)}
-                        className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer border border-emerald-400/50"
-                        title="Nhân viên hoặc khách bấm nút trên robot"
-                      >
-                        {isConfirmingTable ? (
+
+                  {/* SINGLE UNIFIED CONFIRMATION BUTTON */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      disabled={isConfirmingTable || missionPhase === "moving"}
+                      onClick={() => handleConfirmNextTable(false)}
+                      className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all border ${
+                        isConfirmingTable || missionPhase === "moving"
+                          ? "bg-slate-800/90 text-slate-300 border-cyan-500/30 cursor-not-allowed"
+                          : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-98 text-white shadow-lg shadow-emerald-500/25 border-emerald-400/60 cursor-pointer"
+                      }`}
+                    >
+                      {isConfirmingTable ? (
+                        <>
                           <RotateCcw className="w-4 h-4 animate-spin text-white" />
-                        ) : (
-                          <Cpu className="w-4 h-4 text-amber-300" />
-                        )}
-                        <span>
-                          {activeSequence.currentLegIndex >= activeSequence.legs.length - 1
-                            ? "Bấm Nút Trên Robot (Xong Lượt)"
-                            : "Bấm Nút Trên Robot (Đi Tiếp)"}
-                        </span>
-                      </button>
-                    </div>
-                    {/* Kênh 2: Tại Bếp */}
-                    <div className="p-3 rounded-xl bg-slate-900/80 border border-blue-500/30 flex flex-col justify-between space-y-2">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono font-bold text-blue-400 uppercase flex items-center gap-1">
-                            <Radio className="w-3.5 h-3.5" />
-                            Kênh 2 • Tại Bếp (Web KDS)
+                          <span>Đang ghi nhận hoàn tất vào SQLite...</span>
+                        </>
+                      ) : missionPhase === "moving" ? (
+                        <>
+                          <RotateCcw className="w-4 h-4 animate-spin text-cyan-300" />
+                          <span>
+                            Robot đang di chuyển tới{" "}
+                            {activeSequence.legs[activeSequence.currentLegIndex]?.tableNo}... (Chờ cập trạm để xác nhận)
                           </span>
-                          <span className="text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 font-bold">
-                            Ghi Đè
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-white" />
+                          <span>
+                            {activeSequence.currentLegIndex >= activeSequence.legs.length - 1
+                              ? "Xác Nhận Đã Lấy Món • Cho Xe Quay Về Bếp"
+                              : `Xác Nhận Đã Lấy Món • Đi Tiếp Tới ${activeSequence.legs[activeSequence.currentLegIndex + 1]?.tableNo || "Bàn Tiếp Theo"}`}
                           </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-1 leading-snug">
-                          Dùng khi khách chưa bấm nút trên xe. Bếp quan sát rồi xác nhận điều phối từ xa.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={isConfirmingTable}
-                        onClick={() => handleConfirmNextTable(false)}
-                        className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 transition-all cursor-pointer border border-blue-400/50"
-                      >
-                        {isConfirmingTable ? (
-                          <RotateCcw className="w-4 h-4 animate-spin text-white" />
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                        )}
-                        <span>
-                          {activeSequence.currentLegIndex >= activeSequence.legs.length - 1
-                            ? "Xác Nhận (Web): Xe Quay Về Bếp"
-                            : `Xác Nhận (Web): Đến ${activeSequence.legs[activeSequence.currentLegIndex + 1]?.tableNo || "Bàn Tiếp Theo"}`}
-                        </span>
-                      </button>
-                    </div>
+                        </>
+                      )}
+                    </button>
                   </div>
+
                   {/* Operational Override & Obstacle Control */}
                   <div className="pt-2 border-t border-white/10 flex justify-end">
                     <button
@@ -2522,11 +2845,13 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-xs text-emerald-300 flex items-center justify-between">
+                <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-xs text-emerald-300 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     <span className="font-bold">
-                      Toàn bộ lượt giao đã phục vụ thành công! Xe đã quay về trạm an toàn.
+                      {missionPhase === "returning"
+                        ? "Đã xác nhận trả món! Robot đang thực thi lệnh move_to_kitchen tự động quay về Bếp..."
+                        : "Toàn bộ lượt giao đã phục vụ thành công! Xe đã quay về trạm bếp an toàn (idle)."}
                     </span>
                   </div>
                   <button
@@ -2536,7 +2861,7 @@ export const StaffKdsPage: React.FC = () => {
                       setMissionPhase("idle");
                       setActiveSequence(null);
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold border border-emerald-400/30 transition-all cursor-pointer shadow-xs"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold border border-emerald-400/30 transition-all cursor-pointer shadow-xs shrink-0"
                   >
                     Tạo Lượt Mới
                   </button>
@@ -3155,8 +3480,11 @@ export const StaffKdsPage: React.FC = () => {
                           >
                             Khay {task.trayLevel}
                           </span>
-                          <span className="font-mono font-extrabold text-xs text-slate-900">
-                            #{task.taskId}
+                          <span
+                            className="font-mono font-extrabold text-xs text-slate-900"
+                            title={task.taskId}
+                          >
+                            #{formatShortTaskCode(task.taskId)}
                           </span>
                           <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                             🤖 {task.robotCode}
@@ -4255,7 +4583,9 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 font-heading flex items-center gap-2">
-                    <span>Tiến Trình Nhiệm Vụ #{selectedTaskDetail.taskId}</span>
+                    <span title={selectedTaskDetail.taskId}>
+                      Tiến Trình Nhiệm Vụ #{formatShortTaskCode(selectedTaskDetail.taskId)}
+                    </span>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                         selectedTaskDetail.trayLevel === 1
@@ -4519,6 +4849,105 @@ export const StaffKdsPage: React.FC = () => {
                 })()}
               </div>
             </div>
+
+            {/* LIVE SQLITE TRANSFER AUDIT RECORDS (7 TABLES) */}
+            {modalTaskAudit && (
+              <div className="p-3.5 rounded-2xl bg-slate-900 text-slate-100 border border-slate-700 space-y-2.5 text-[11px] font-mono">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-700">
+                  <span className="font-bold text-cyan-300 uppercase tracking-wide flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Nhật Ký Chuỗi Bản Ghi SQLite (Edge DB)</span>
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-400/30">
+                    t_transfer_requests: {modalTaskAudit.request.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* 1. Transfer Status History */}
+                  <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                    <div className="text-[10px] font-bold text-emerald-300">
+                      1. t_transfer_status ({modalTaskAudit.statusHistory.length} mốc)
+                    </div>
+                    <div className="space-y-0.5 max-h-24 overflow-y-auto text-[10px] text-slate-300">
+                      {modalTaskAudit.statusHistory.map((st) => (
+                        <div key={st.id} className="truncate">
+                          • {st.previousStatus || "init"} ➔ <strong className="text-white">{st.newStatus}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Transfer Command + Command Status + Log Command */}
+                  <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                    <div className="text-[10px] font-bold text-cyan-300">
+                      2. t_transfer_commands ({modalTaskAudit.commands.length})
+                    </div>
+                    <div className="space-y-0.5 text-[10px] text-slate-300">
+                      {modalTaskAudit.commands.length > 0 ? (
+                        modalTaskAudit.commands.slice(0, 2).map((cmd) => (
+                          <div key={cmd.id} className="truncate">
+                            • {cmd.commandType} • <strong className="text-white">{cmd.status}</strong>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-slate-400">Chưa có command</div>
+                      )}
+                      {modalCmdStatuses.length > 0 && (
+                        <div className="text-slate-400 truncate">
+                          cmd_status: {modalCmdStatuses.map((cs) => cs.newStatus).join(" ➔ ")}
+                        </div>
+                      )}
+                      {modalCmdLog && (
+                        <div className="text-emerald-300 truncate">
+                          log_cmd: {modalCmdLog.executionResult}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Transfer Responses */}
+                  <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                    <div className="text-[10px] font-bold text-amber-300">
+                      3. t_transfer_responses ({modalTaskAudit.responses.length} phản hồi)
+                    </div>
+                    <div className="space-y-0.5 max-h-20 overflow-y-auto text-[10px] text-slate-300">
+                      {modalTaskAudit.responses.slice(0, 3).map((r) => (
+                        <div key={r.id} className="truncate">
+                          • <strong className="text-white">{r.status}</strong>{" "}
+                          {r.currentX != null ? `(${r.currentX},${r.currentY})` : ""}{" "}
+                          {r.batteryAtResponse != null ? `• Pin ${r.batteryAtResponse}%` : ""}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 4. Log Transfer */}
+                  <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                    <div className="text-[10px] font-bold text-indigo-300">
+                      4. t_log_transfers
+                    </div>
+                    {modalTaskAudit.transferLog ? (
+                      <div className="space-y-0.5 text-[10px] text-slate-300">
+                        <div>
+                          • Kết quả: <strong className="text-white">{modalTaskAudit.transferLog.statusResult}</strong>
+                        </div>
+                        <div className="truncate">
+                          • Bắt đầu: {new Date(modalTaskAudit.transferLog.startedAt).toLocaleTimeString("vi-VN")}
+                        </div>
+                        {modalTaskAudit.transferLog.finishedAt && (
+                          <div className="truncate text-emerald-300">
+                            • Kết thúc: {new Date(modalTaskAudit.transferLog.finishedAt).toLocaleTimeString("vi-VN")}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 text-[10px]">Chưa có t_log_transfers</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Quick Actions Footer inside Detail Modal */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">

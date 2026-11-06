@@ -426,80 +426,79 @@ export const robotService = {
 
 
   // Start Multi-table 2-tray sequence dispatch (DS-07 / WF-04)
-
   async startServiceSequence(request: StartServiceSequenceRequest): Promise<ServiceSequenceResult> {
-
     try {
       const response = await apiClient.post<ServiceSequenceResult>('/v1/tasks/sequence/start', request);
       return response.data;
     } catch (err: any) {
-      console.warn('[robotService] Lỗi gọi API sequence/start:', err);
-      if (err?.response?.data?.message) {
-        return {
-          success: false,
-          message: err.response.data.message,
-          robotId: request.robotId || '',
-          robotName: '',
-          totalStops: 0,
-          createdTasks: []
-        };
-      }
-      // Chỉ fallback offline khi mất kết nối mạng
-      const offlineTasks = request.trayAssignments.map((tray, idx) => ({
-        id: `seq-task-${Date.now()}-${idx + 1}`,
-        robotId: request.robotId || 'amr-01',
-        cargoLevel: tray.cargoLevel,
-        status: idx === 0 ? 'in_progress' : 'pending',
-        toStationId: tray.toStationId || `station-${tray.destinationTableNo}`,
-        destinationTableNo: tray.destinationTableNo,
-        orderReference: tray.orderReference
-      }));
-
+      console.error('[robotService] Lỗi gọi API sequence/start:', err);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.title ||
+        err?.message ||
+        'Không thể kết nối máy chủ điều phối Robot (Edge SQLite).';
       return {
-        success: true,
-        message: `[Offline] Đã phát lệnh chuỗi giao ${request.trayAssignments.length} chặng tới ${request.trayAssignments.map(t => t.destinationTableNo).join(', ')}`,
-        robotId: request.robotId || 'amr-01',
-        robotName: 'AMR-01',
-        totalStops: request.trayAssignments.length,
-        createdTasks: offlineTasks
+        success: false,
+        message: errMsg,
+        robotId: request.robotId || '',
+        robotName: '',
+        totalStops: 0,
+        createdTasks: []
       };
     }
   },
 
-  // Confirm Next Table or Return Home (Dual Confirmation: Physical ESP32 Button or Web Console)
-
+  // Confirm Next Table or Return Home
   async confirmNextTable(taskId: string, confirmedBy: string = 'Staff Web KDS', viaHardwareButton: boolean = false): Promise<ConfirmNextTableResponse> {
-
     try {
-
       const response = await apiClient.post<ConfirmNextTableResponse>(`/v1/tasks/${taskId}/confirm-next-table`, {
-
         confirmedBy,
-
         viaHardwareButton
-
       });
-
       return response.data;
-
-    } catch (err) {
-
-      console.warn('[robotService] Lỗi gọi API confirm-next-table, fallback mô phỏng:', err);
-
+    } catch (err: any) {
+      console.error('[robotService] Lỗi gọi API confirm-next-table:', err);
       return {
-
-        success: true,
-
-        message: 'Đã xác nhận lấy món thành công',
-
-        nextAction: 'next_table',
-
+        success: false,
+        message: err?.response?.data?.message || 'Không thể xác nhận hoàn tất chặng giao món.',
+        nextAction: 'return_to_kitchen',
         completedCargoLevel: 1
-
       };
-
     }
+  },
 
+  // Fetch live Transfer Audit Trail from SQLite (Request, StatusHistory, Commands, Responses, LogTransfer)
+  async getTaskAuditHistory(taskId: string): Promise<TransferAuditDto | null> {
+    const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!guidRegex.test(taskId)) return null;
+    try {
+      const response = await apiClient.get<TransferAuditDto>(`/v1/tasks/${taskId}/history`);
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
+  async getCommandStatusHistory(commandId: string): Promise<TransferCommandStatusDto[]> {
+    const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!guidRegex.test(commandId)) return [];
+    try {
+      const response = await apiClient.get<TransferCommandStatusDto[]>(`/v1/tasks/commands/${commandId}/history`);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getCommandExecutionLog(commandId: string): Promise<LogTransferCommandDto | null> {
+    const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!guidRegex.test(commandId)) return null;
+    try {
+      const response = await apiClient.get<LogTransferCommandDto>(`/v1/tasks/commands/${commandId}/log`);
+      return response.data;
+    } catch {
+      return null;
+    }
   },
 
 
@@ -634,55 +633,118 @@ export interface StartServiceSequenceRequest {
 
 
 export interface ServiceSequenceResult {
-
   success: boolean;
-
   message: string;
-
   robotId?: string;
-
   robotName?: string;
-
   totalStops: number;
-
   createdTasks?: Array<{
-
     id: string;
-
+    orderId?: string;
     robotId?: string;
-
     cargoLevel: number;
-
     status: string;
-
     toStationId?: string;
-
     destinationTableNo?: string;
-
     orderReference?: string;
-
+    commandId?: string;
+    createdAt?: string;
   }>;
-
 }
 
-
-
 export interface ConfirmNextTableResponse {
-
   success: boolean;
-
   message: string;
-
   nextAction: 'next_table' | 'return_to_kitchen';
-
   nextStationId?: string | null;
-
   nextStationName?: string | null;
-
   completedCargoLevel: number;
-
   robotId?: string | null;
+  nextTaskId?: string | null;
+  nextCommandId?: string | null;
+}
 
+export interface TransferStatusDto {
+  id: string;
+  transferRequestId: string;
+  previousStatus?: string | null;
+  newStatus: string;
+  notes?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface TransferCommandDto {
+  id: string;
+  robotId: string;
+  commandType: string;
+  parametersJson?: string | null;
+  status: string;
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface TransferCommandStatusDto {
+  id: string;
+  commandId: string;
+  previousStatus?: string | null;
+  newStatus: string;
+  notes?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface LogTransferCommandDto {
+  id: string;
+  commandId: string;
+  executionResult: string;
+  responseDataJson?: string | null;
+  executionTimeMs?: number | null;
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface TransferResponseDto {
+  id: string;
+  transferRequestId: string;
+  robotId: string;
+  status: string;
+  currentX?: number | null;
+  currentY?: number | null;
+  batteryAtResponse?: number | null;
+  createdAt: string;
+}
+
+export interface LogTransferDto {
+  id: string;
+  transferRequestId: string;
+  robotId: string;
+  statusResult: string;
+  distanceTravelled?: number | null;
+  errorNotes?: string | null;
+  startedAt: string;
+  finishedAt?: string | null;
+  createdAt: string;
+}
+
+export interface TransferAuditDto {
+  transferRequestId: string;
+  request: {
+    id: string;
+    orderId?: string | null;
+    fromStationId: string;
+    toStationId: string;
+    priority: number;
+    cargoLevel?: number | null;
+    destinationTableNo?: string | null;
+    commandId?: string | null;
+    status: string;
+    createdAt: string;
+  };
+  statusHistory: TransferStatusDto[];
+  commands: TransferCommandDto[];
+  responses: TransferResponseDto[];
+  transferLog?: LogTransferDto | null;
 }
 
 
