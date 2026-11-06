@@ -323,19 +323,40 @@ export const fleetService = {
 
   getRobotsByTenant: async (tenantSlug?: string, tenantId?: string): Promise<FleetAMR[]> => {
     const cleanSlug = (tenantSlug || '').toLowerCase().trim();
+    let effectiveTenantId = tenantId;
+
+    if (!effectiveTenantId && typeof window !== 'undefined') {
+      try {
+        const u = JSON.parse(localStorage.getItem('user') || '{}');
+        if (u.tenantId) effectiveTenantId = u.tenantId;
+        const savedTenantId = localStorage.getItem('TENANT_ID');
+        if (savedTenantId) effectiveTenantId = savedTenantId;
+      } catch {}
+    }
+
+    if (!effectiveTenantId && cleanSlug) {
+      try {
+        const tenants = await tenantService.getTenantsList();
+        const matched = tenants.find((t) => (t.slug || '').toLowerCase() === cleanSlug);
+        if (matched?.id) effectiveTenantId = matched.id;
+      } catch {}
+    }
+
     try {
-      const url = tenantId ? `/robots?tenantId=${tenantId}` : '/robots';
+      const url = effectiveTenantId ? `/robots?tenantId=${effectiveTenantId}` : '/robots';
       const allRes = await portalClient.get(url);
       if (allRes.data && Array.isArray(allRes.data)) {
         const mapped = allRes.data.map((r: any) => mapRobotDtoToFleetAMR(r));
-        if (!cleanSlug && !tenantId) return mapped;
-        const filtered = mapped.filter(
-          (r) =>
-            (tenantId && r.ownerTenantId.toLowerCase() === tenantId.toLowerCase()) ||
-            (cleanSlug && ((r.ownerTenantSlug || '').toLowerCase() === cleanSlug || (r.ownerTenantId || '').toLowerCase() === cleanSlug))
-        );
-        // If filtered matched, return filtered. Otherwise fallback to mapped so single-tenant edge node or unassigned robot is not discarded!
-        return filtered.length > 0 ? filtered : mapped;
+        if (!cleanSlug && !effectiveTenantId) return mapped;
+
+        const filtered = mapped.filter((r) => {
+          const matchId = effectiveTenantId && r.ownerTenantId && r.ownerTenantId.toLowerCase() === effectiveTenantId.toLowerCase();
+          const matchSlug = cleanSlug && ((r.ownerTenantSlug && r.ownerTenantSlug.toLowerCase() === cleanSlug) || (r.ownerTenantId && r.ownerTenantId.toLowerCase() === cleanSlug));
+          return matchId || matchSlug;
+        });
+
+        // Strictly enforce tenant isolation: only return robots assigned to this store
+        return filtered;
       }
     } catch (err) {
       console.warn('Lỗi tải danh sách robot theo tenant:', err);

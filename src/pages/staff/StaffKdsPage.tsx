@@ -38,6 +38,7 @@ import {
 } from "@/services/portalApi";
 import { robotService, type CargoTrayAssignmentDto } from "@/services/robot";
 import { sqliteService } from "@/services/sqliteService";
+import apiClient from "@/services/api";
 import { useRobotStore } from "@/stores/robotStore";
 import { fixMojibake } from "@/utils/textUtils";
 import { usePagination } from "@/hooks/usePagination";
@@ -63,31 +64,50 @@ interface TableNode {
 }
 
 export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
-  return (backendTables || []).map((t) => ({
-    id: t.id ? t.id.toString() : t.tableNo || "Table",
-    tableNo: t.tableNo || t.id,
-    name: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : `Bàn ${t.id}`),
-    zone: t.zone || "Khu Trong Nhà",
-    status: (t.status === "serving"
-      ? "serving"
-      : t.status === "occupied"
-        ? "occupied"
-        : t.status === "waiting"
-          ? "waiting"
-          : "empty") as TableNode["status"],
-    guestsCount: t.capacity || 4,
-    currentOrders: t.currentOrders || [],
-    assignedRobot: t.assignedRobotCode || null,
-    stationId: t.stationId,
-    stationName: t.stationName,
-    qrCodeUrl: t.qrCodeUrl,
-    worldX: t.worldX,
-    worldY: t.worldY,
-  }));
+  return (backendTables || []).map((t) => {
+    let rawNo = t.tableNo || t.table_number || "";
+    if (!rawNo || (rawNo.length > 20 && rawNo.includes("-"))) {
+      const match = (t.tableName || "").match(/\d+/);
+      rawNo = match ? `T${match[0].padStart(2, "0")}` : "Bàn";
+    }
+    return {
+      id: t.id ? t.id.toString() : rawNo || "Table",
+      tableNo: rawNo,
+      name: t.tableName || (rawNo ? (rawNo.startsWith("Bàn") ? rawNo : `Bàn ${rawNo}`) : `Bàn ${t.id}`),
+      zone: t.zone || "Khu Trong Nhà",
+      status: (t.status === "serving"
+        ? "serving"
+        : t.status === "occupied"
+          ? "occupied"
+          : t.status === "waiting"
+            ? "waiting"
+            : "empty") as TableNode["status"],
+      guestsCount: t.capacity || 4,
+      currentOrders: t.currentOrders || [],
+      assignedRobot: t.assignedRobotCode || null,
+      stationId: t.stationId,
+      stationName: t.stationName,
+      qrCodeUrl: t.qrCodeUrl,
+      worldX: t.worldX,
+      worldY: t.worldY,
+    };
+  });
 };
 
 // Backward-compatible alias for any residual imports
 export const mergeWithDefaultTables = mapBackendTables;
+
+export const formatTableShortCode = (table?: TableNode | null): string => {
+  if (!table) return "Bàn";
+  const numMatch = (table.tableNo || table.name || "").match(/\d+/);
+  if (table.tableNo && table.tableNo.length <= 5 && !table.tableNo.includes("-")) {
+    return table.tableNo;
+  }
+  if (numMatch) {
+    return `T${numMatch[0].padStart(2, "0")}`;
+  }
+  return "Bàn";
+};
 export interface TrayItem {
   dishName: string;
   qty: number;
@@ -149,6 +169,15 @@ export const StaffKdsPage: React.FC = () => {
     status: "in_progress" | "completed";
     startTime: string;
   } | null>(null);
+
+  // Synchronize active sequence with localStorage so data is NEVER lost on page reload (F5)
+  useEffect(() => {
+    if (activeSequence) {
+      localStorage.setItem("vora_active_sequence", JSON.stringify(activeSequence));
+    } else {
+      localStorage.removeItem("vora_active_sequence");
+    }
+  }, [activeSequence]);
 
   // SignalR Live Robot Tracking Store
   const {
@@ -334,8 +363,16 @@ export const StaffKdsPage: React.FC = () => {
       robotCode: string;
       status: string;
       time: string;
+      rawTask?: any;
     }>
   >([]);
+
+  // Synchronize recent tasks with localStorage so data is NEVER lost on reload
+  useEffect(() => {
+    if (recentSqliteTasks.length > 0) {
+      localStorage.setItem("vora_recent_tasks", JSON.stringify(recentSqliteTasks));
+    }
+  }, [recentSqliteTasks]);
   // Pending Orders from Ordering Microservice
   const [pendingOrders, setPendingOrders] = useState<PendingOrderDto[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
@@ -452,26 +489,72 @@ export const StaffKdsPage: React.FC = () => {
           }
         }
 
-        // 4. Load recent SQLite dispatch tasks
+        // 4. Restore active sequence and recent tasks from localStorage & Backend Tasks API (Persist on Reload)
         try {
-          const recent = await sqliteService.getRecentDispatchTasks(5);
-          if (recent && recent.length > 0) {
-            setRecentSqliteTasks(
-              recent.map((r) => ({
-                taskId: r.taskId,
-                orderId: r.orderId,
-                destination: r.destination,
-                robotCode: r.robotCode,
-                status: r.status,
-                time: new Date(r.createdAt).toLocaleTimeString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              })),
-            );
+          const cachedSeqStr = localStorage.getItem("vora_active_sequence");
+          if (cachedSeqStr) {
+            const cachedSeq = JSON.parse(cachedSeqStr);
+            if (cachedSeq && cachedSeq.status !== "completed") {
+              setActiveSequence(cachedSeq);
+              if (cachedSeq.status === "in_progress") {
+                setMissionPhase(cachedSeq.currentLegIndex === 0 ? "moving" : "arrived");
+              }
+            }
           }
-        } catch {
-          // ignore
+        } catch {}
+
+        try {
+          const cachedTasksStr = localStorage.getItem("vora_recent_tasks");
+          if (cachedTasksStr) {
+            const cachedTasks = JSON.parse(cachedTasksStr);
+            if (Array.isArray(cachedTasks) && cachedTasks.length > 0) {
+              setRecentSqliteTasks(cachedTasks);
+            }
+          }
+        } catch {}
+
+        // Fetch real tasks from backend SQLite to guarantee 100% data persistence on reload
+        try {
+          const tasksRes = await apiClient.get<any[]>("/v1/tasks");
+          if (tasksRes.data && Array.isArray(tasksRes.data) && tasksRes.data.length > 0) {
+            const mappedTasks = tasksRes.data.map((t: any) => ({
+              taskId: t.id ? (t.id.length > 12 ? `TSK-${t.id.slice(0, 8)}` : t.id) : `TSK-${Date.now()}`,
+              orderId: t.orderId || t.orderNumber || "ORD-01",
+              robotCode: t.robotCode || t.robotName || (mappedRobots[0]?.code ?? "AMR-01"),
+              destination: t.destinationTableNo || (t.toStationId ? `Trạm ${t.toStationId.slice(0, 4)}` : "Bàn 01"),
+              status: t.status || "in_transit",
+              time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Vừa xong",
+              rawTask: t,
+            }));
+            setRecentSqliteTasks(mappedTasks);
+            localStorage.setItem("vora_recent_tasks", JSON.stringify(mappedTasks));
+
+            // If activeSequence is null but backend has active tasks, reconstruct active sequence
+            const activeTasks = tasksRes.data.filter((t: any) => t.status === "in_transit" || t.status === "assigned");
+            if (activeTasks.length > 0) {
+              const activeRobotItem = mappedRobots[0];
+              const reconstructed = {
+                sequenceId: `SEQ-${activeTasks[0].id.slice(0, 8)}`,
+                robotCode: activeRobotItem?.code || "AMR-01",
+                robotName: activeRobotItem?.name || "Robot AMR",
+                currentLegIndex: 0,
+                legs: activeTasks.map((t: any, idx: number) => ({
+                  cargoLevel: t.cargoLevel || (idx + 1),
+                  tableNo: t.destinationTableNo || `Bàn ${idx + 1}`,
+                  orderId: t.orderId || `ORD-0${idx + 1}`,
+                  status: (t.status === "in_transit" ? "delivering" : "pending") as "pending" | "delivering" | "completed",
+                  taskId: t.id,
+                })),
+                status: "in_progress" as const,
+                startTime: activeTasks[0].createdAt || new Date().toISOString(),
+              };
+              setActiveSequence(reconstructed);
+              setMissionPhase("moving");
+              localStorage.setItem("vora_active_sequence", JSON.stringify(reconstructed));
+            }
+          }
+        } catch (err) {
+          console.warn("[StaffKdsPage] Lỗi tải nhiệm vụ từ Backend SQLite:", err);
         }
       } catch (err) {
         console.warn("Lỗi khi nạp dữ liệu KDS:", err);
@@ -552,9 +635,6 @@ export const StaffKdsPage: React.FC = () => {
         `Đã gán ${tableName} vào Khay 2 (Tầng Trên).`,
         "info",
       );
-      if (isTray1Active && !tray1Table) {
-        setActiveTrayTarget("tray1");
-      }
     }
   };
 
@@ -1594,6 +1674,43 @@ export const StaffKdsPage: React.FC = () => {
                 <span className="truncate">Nhập Excel/CSV</span>
               </button>
             </div>
+
+            {/* Tray Target Selector: Cho phép nhân viên chọn rõ ràng đang gán bàn cho Khay 1 hay Khay 2 */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl mb-3 shadow-2xs">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-600 font-bold shrink-0">🎯 Gán bàn cho:</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTrayTarget("tray1")}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                    activeTrayTarget === "tray1"
+                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs ring-2 ring-blue-300"
+                      : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
+                  }`}
+                >
+                  <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">1</span>
+                  <span>Khay 1: <strong className="font-mono">{tray1Table || "Chưa chọn"}</strong></span>
+                </button>
+                {isTray2Active && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTrayTarget("tray2")}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                      activeTrayTarget === "tray2"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs ring-2 ring-indigo-300"
+                        : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                    }`}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">2</span>
+                    <span>Khay 2: <strong className="font-mono">{tray2Table || "Chưa chọn"}</strong></span>
+                  </button>
+                )}
+              </div>
+              <span className="text-[11px] text-slate-500 italic hidden sm:inline">
+                (Click bàn trên bản đồ/thẻ để gán vào khay đang chọn)
+              </span>
+            </div>
+
             {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
             {viewMode === "slam-map" ? (
               <SlamFloorMapViewer
@@ -1777,7 +1894,7 @@ export const StaffKdsPage: React.FC = () => {
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-slate-300">
             <div className="flex items-center gap-3.5 min-w-0">
               <div
-                className={`w-11 h-11 rounded-xl flex items-center justify-center font-mono font-black text-xs shadow-2xs shrink-0 border overflow-hidden ${
+                className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center font-mono font-black text-xs shadow-2xs shrink-0 border overflow-hidden ${
                   currentSelectedTable.id &&
                   currentSelectedTable.id !== "Chưa có"
                     ? "bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 border-blue-200"
@@ -1786,9 +1903,12 @@ export const StaffKdsPage: React.FC = () => {
               >
                 {currentSelectedTable.id &&
                 currentSelectedTable.id !== "Chưa có" ? (
-                  <span className="truncate max-w-[38px] text-center px-0.5">
-                    {currentSelectedTable.tableNo || "Bàn"}
-                  </span>
+                  <>
+                    <UtensilsCrossed className="w-3.5 h-3.5 text-blue-600 mb-0.5" />
+                    <span className="text-[10px] font-extrabold tracking-tighter leading-none">
+                      {formatTableShortCode(currentSelectedTable)}
+                    </span>
+                  </>
                 ) : (
                   <Target className="w-5 h-5 text-slate-400" />
                 )}
@@ -1801,10 +1921,10 @@ export const StaffKdsPage: React.FC = () => {
                   {currentSelectedTable.id &&
                     currentSelectedTable.id !== "Chưa có" && (
                       <span
-                        className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200"
+                        className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200 shadow-2xs"
                         title={`Mã ID CSDL: ${currentSelectedTable.id}`}
                       >
-                        Mã: {currentSelectedTable.tableNo || (currentSelectedTable.id.length > 8 ? currentSelectedTable.id.slice(0, 8) : currentSelectedTable.id)}
+                        #{formatTableShortCode(currentSelectedTable)}
                       </span>
                     )}
                   {currentSelectedTable.zone &&
