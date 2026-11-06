@@ -1,7 +1,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { authService, tenantService } from '@/services';
+import { authService, tenantService, robotService } from '@/services';
+import type { EdgeNodeInfo } from '@/services/robot';
 import { Icons } from '@/components/common/Icons';
 
 export function LoginPage() {
@@ -10,20 +11,35 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [emailNotVerified, setEmailNotVerified] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [edgeNode, setEdgeNode] = useState<EdgeNodeInfo | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Check for password reset success message from navigation state
+  // Check for password reset or edge access denied message from navigation state
   useEffect(() => {
-    const state = location.state as { passwordResetSuccess?: boolean } | null;
+    const state = location.state as { passwordResetSuccess?: boolean; accessDeniedReason?: string } | null;
     if (state?.passwordResetSuccess) {
       setError('');
       setEmailNotVerified(false);
       setError('Đổi mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.');
     }
+    if (state?.accessDeniedReason) {
+      setError(state.accessDeniedReason);
+    }
     if (state) {
       window.history.replaceState({}, document.title);
     }
+
+    let isMounted = true;
+    robotService.getEdgeNodeInfo().then((info) => {
+      if (isMounted && info && info.isEdgeNode) {
+        setEdgeNode(info);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [location]);
 
   const validateForm = (): boolean => {
@@ -87,6 +103,30 @@ export function LoginPage() {
         }
         if (!subdomain && tenantInfo.tenantSlug) {
           subdomain = tenantInfo.tenantSlug;
+        }
+      }
+
+      // 🛡️ STRICT MULTI-TENANT ISOLATION CHECK FOR EDGE NODES
+      const edgeInfo = edgeNode || (await robotService.getEdgeNodeInfo());
+      if (edgeInfo && edgeInfo.isEdgeNode && edgeInfo.subdomain) {
+        const isSuperAdmin =
+          (res.role || '').toLowerCase().includes('superadmin') ||
+          Boolean(tenantInfo?.isSuperAdmin);
+
+        const userSub = (subdomain || '').toLowerCase().trim();
+        const edgeSub = edgeInfo.subdomain.toLowerCase().trim();
+
+        if (!isSuperAdmin && userSub !== edgeSub) {
+          authService.logout();
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          localStorage.removeItem('TENANT_SUBDOMAIN');
+          setError(
+            `Truy cập bị từ chối: Thiết bị Edge Box này thuộc nhà hàng '${edgeInfo.restaurantName || edgeSub}'. Tài khoản của bạn thuộc quán '${userSub || 'khác'}'. Bạn không có quyền truy cập vào Edge Box của nhà hàng khác!`
+          );
+          setLoading(false);
+          return;
         }
       }
 
@@ -177,6 +217,24 @@ export function LoginPage() {
             </p>
           </div>
         </div>
+
+        {edgeNode?.isEdgeNode && (
+          <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/40 rounded-2xl text-amber-200 text-xs flex items-start gap-3 shadow-inner">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse mt-1 shrink-0" />
+            <div className="space-y-0.5">
+              <p className="font-semibold text-white tracking-wide flex items-center gap-1.5 flex-wrap">
+                <span>Trạm Edge Box Cục Bộ:</span>
+                <span className="text-amber-400 font-bold uppercase">{edgeNode.restaurantName || edgeNode.subdomain}</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-400/20 text-amber-300 rounded border border-amber-400/30">
+                  @{edgeNode.subdomain}
+                </span>
+              </p>
+              <p className="text-gray-300 text-[11px] leading-relaxed">
+                Thiết bị phần cứng đặt tại quán. Chỉ nhân viên thuộc nhà hàng này mới được phép đăng nhập.
+              </p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="p-4 bg-red-950/60 border border-red-500/40 rounded-xl text-red-200 text-xs font-semibold leading-relaxed flex flex-col gap-2">

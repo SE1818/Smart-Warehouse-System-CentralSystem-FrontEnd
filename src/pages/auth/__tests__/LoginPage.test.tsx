@@ -8,10 +8,14 @@ import { LoginPage } from '../LoginPage';
 vi.mock('@/services', () => ({
   authService: {
     login: vi.fn(),
+    logout: vi.fn(),
     resendVerification: vi.fn(),
   },
   tenantService: {
     resolveUserTenant: vi.fn().mockResolvedValue(null),
+  },
+  robotService: {
+    getEdgeNodeInfo: vi.fn().mockResolvedValue({ isEdgeNode: false }),
   },
 }));
 
@@ -24,7 +28,7 @@ vi.mock('@/components/common/Icons', () => ({
   },
 }));
 
-import { authService } from '@/services';
+import { authService, robotService } from '@/services';
 
 const renderLoginPage = () => {
   render(
@@ -184,5 +188,58 @@ describe('LoginPage', () => {
     expect(authService.resendVerification).toHaveBeenCalledWith({ email: 'test@example.com' });
     expect(alertSpy).toHaveBeenCalledWith('Email xác thực mới đã được gửi. Vui lòng kiểm tra hộp thư của bạn.');
     alertSpy.mockRestore();
+  });
+
+  it('should block login when user tenant does not match edge node tenant', async () => {
+    const user = userEvent.setup();
+    vi.mocked(robotService.getEdgeNodeInfo).mockResolvedValue({
+      isEdgeNode: true,
+      subdomain: 'goldenbbq',
+      restaurantName: 'Nhà Hàng Golden BBQ',
+    });
+
+    const payload = btoa(JSON.stringify({ sub: '123', role: 'staff', subdomain: 'dmitryslovaski' }));
+    vi.mocked(authService.login).mockResolvedValueOnce({
+      accessToken: `mock.${payload}.token`,
+      refreshToken: 'mock-refresh',
+      accessTokenExpiresIn: '3600',
+      role: 'staff',
+    });
+
+    renderLoginPage();
+
+    await user.type(getEmailInput(), 'dmitry@other.com');
+    await user.type(getPasswordInput(), 'Password123!');
+    await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
+
+    expect(await screen.findByText(/Truy cập bị từ chối: Thiết bị Edge Box này thuộc nhà hàng 'Nhà Hàng Golden BBQ'/i)).toBeInTheDocument();
+    expect(localStorage.getItem('authToken')).toBeNull();
+  });
+
+  it('should allow login when user tenant matches edge node tenant', async () => {
+    const user = userEvent.setup();
+    vi.mocked(robotService.getEdgeNodeInfo).mockResolvedValue({
+      isEdgeNode: true,
+      subdomain: 'goldenbbq',
+      restaurantName: 'Nhà Hàng Golden BBQ',
+    });
+
+    const payload = btoa(JSON.stringify({ sub: '123', role: 'staff', subdomain: 'goldenbbq' }));
+    vi.mocked(authService.login).mockResolvedValueOnce({
+      accessToken: `mock.${payload}.token`,
+      refreshToken: 'mock-refresh',
+      accessTokenExpiresIn: '3600',
+      role: 'staff',
+    });
+
+    renderLoginPage();
+
+    await user.type(getEmailInput(), 'staff@goldenbbq.com');
+    await user.type(getPasswordInput(), 'Password123!');
+    await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
+
+    await waitFor(() => {
+      expect(localStorage.getItem('authToken')).toBe(`mock.${payload}.token`);
+    });
   });
 });

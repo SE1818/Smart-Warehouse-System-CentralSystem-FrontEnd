@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-import { refreshAccessToken } from './api';
+import apiClient, { refreshAccessToken } from './api';
 
 export const resolvePortalBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
@@ -547,6 +547,37 @@ export const tableService = {
       }
     } catch {
       // Backend /tables chưa có hoặc offline
+    }
+
+    // 2. Thử truy vấn qua Edge Node RobotService (Local SQLite tables)
+    try {
+      const edgeRes = await apiClient.get<any[]>('/v1/tables');
+      if (edgeRes.data && Array.isArray(edgeRes.data) && edgeRes.data.length > 0) {
+        return edgeRes.data.map((t: any) => ({
+          id: t.id?.toString() || t.tableNo || 'Table',
+          tableNo: t.tableNo || t.name || 'Bàn',
+          tableName: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : 'Bàn'),
+          zone: t.zone || 'Khu Trong Nhà',
+          capacity: t.capacity || 4,
+          status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
+            : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
+            : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
+            : t.status === 'Served' || t.status === 'serving' ? 'serving'
+            : t.status === 'Merged' || t.status === 'merged' ? 'merged'
+            : 'empty') as DiningTableDto['status'],
+          assignedRobotCode: t.assignedRobotCode || null,
+          stationId: t.stationId || null,
+          stationName: t.stationName || null,
+          mergedIntoTableId: t.mergedIntoTableId || null,
+          qrCodeUrl: t.qrCodeUrl || null,
+          currentOrders: t.currentOrders || [],
+          orderTime: t.orderTime || null,
+          worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
+          worldY: typeof t.worldY === 'number' ? t.worldY : t.yCoord,
+        }));
+      }
+    } catch {
+      // Edge node offline
     }
 
     // 2. Fallback nếu không kết nối được BE

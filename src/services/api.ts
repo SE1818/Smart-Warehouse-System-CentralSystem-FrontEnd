@@ -53,7 +53,12 @@ export const resolveEdgeBaseUrl = (): string => {
     }
   }
 
-  // 2. When accessed via HTTPS (e.g. Ngrok tunnel https://...ngrok-free.app or remote HTTPS),
+  // 2. When served from Docker port 3200 (Edge Frontend), use Nginx reverse proxy /edge-api
+  if (typeof window !== 'undefined' && window.location.port === '3200') {
+    return '/edge-api';
+  }
+
+  // 3. When accessed via HTTPS (e.g. Ngrok tunnel https://...ngrok-free.app or remote HTTPS),
   // mobile browsers strictly block plain HTTP requests to localhost as Mixed Content.
   // Moreover, 'localhost' on a smartphone resolves to the phone itself, not the PC!
   // In Ngrok tunnel mode, proxy through relative '/api' which Vite forwards to http://localhost:5000.
@@ -65,26 +70,26 @@ export const resolveEdgeBaseUrl = (): string => {
     return resolveBaseUrl();
   }
 
-  // 3. Read environment variable
+  // 4. Read environment variable
   let edgeUrl = (import.meta.env.VITE_EDGE_API_URL || '').trim();
   if (edgeUrl) {
     const cleanUrl = edgeUrl.replace(/\/+$/, '');
     return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
   }
 
+  // 5. When accessed via LAN IP or hostname (e.g. 192.168.1.7)
   const hostname = typeof window !== 'undefined' ? window.location?.hostname : '';
-  if (hostname && typeof hostname === 'string' && hostname.endsWith('.local')) {
-    const parts = hostname.split('.');
-    edgeUrl = `http://${parts[0]}.local:5000/api`;
-  } else {
-    edgeUrl = 'http://localhost:5000/api';
+  if (hostname && typeof hostname === 'string') {
+    if (hostname.endsWith('.local')) {
+      const parts = hostname.split('.');
+      return `http://${parts[0]}.local:5000/api`;
+    }
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `${window.location.protocol}//${hostname}:5000/api`;
+    }
   }
 
-  const cleanUrl = edgeUrl.replace(/\/+$/, '');
-  if (!cleanUrl.endsWith('/api')) {
-    return `${cleanUrl}/api`;
-  }
-  return cleanUrl;
+  return 'http://localhost:5000/api';
 };
 
 export const EDGE_BASE_URL = resolveEdgeBaseUrl();

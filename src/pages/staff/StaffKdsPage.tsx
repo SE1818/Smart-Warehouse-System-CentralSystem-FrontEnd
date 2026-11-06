@@ -374,6 +374,20 @@ export const StaffKdsPage: React.FC = () => {
           if (u.restaurantName || u.storeName)
             currentStore = fixMojibake(u.restaurantName || u.storeName);
         }
+
+        // 🛡️ Edge Node Alignment: If running on a physical Edge Node, enforce Edge Node's tenant identity
+        try {
+          const edgeInfo = await robotService.getEdgeNodeInfo();
+          if (edgeInfo && edgeInfo.isEdgeNode && edgeInfo.subdomain) {
+            sub = edgeInfo.subdomain;
+            if (edgeInfo.restaurantName) {
+              currentStore = edgeInfo.restaurantName;
+            }
+          }
+        } catch (e) {
+          console.warn("[StaffKdsPage] Failed to load edge node info:", e);
+        }
+
         setSubdomain(sub);
         setStoreName(currentStore);
         // 1. Fetch real robots for this tenant

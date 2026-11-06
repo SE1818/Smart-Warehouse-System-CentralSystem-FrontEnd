@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
+import { robotService } from '@/services';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,6 +11,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const token = localStorage.getItem('authToken');
   const refreshToken = localStorage.getItem('refreshToken');
   const userStr = localStorage.getItem('user');
+  const [edgeAccessDenied, setEdgeAccessDenied] = useState<string | null>(null);
 
   if ((!token && !refreshToken) || !userStr) {
     return <Navigate to="/login" replace />;
@@ -18,6 +21,36 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   if (!user || typeof user !== 'object') {
     return <Navigate to="/login" replace />;
+  }
+
+  // 🛡️ Edge Node Tenant Verification
+  useEffect(() => {
+    let isMounted = true;
+    robotService.getEdgeNodeInfo().then((info) => {
+      if (!isMounted) return;
+      if (info && info.isEdgeNode && info.subdomain) {
+        const isSuperAdmin =
+          (user.role || '').toLowerCase().includes('superadmin') ||
+          Boolean(user.isSuperAdmin);
+        const userSub = (user.subdomain || '').toLowerCase().trim();
+        const edgeSub = info.subdomain.toLowerCase().trim();
+        if (!isSuperAdmin && userSub !== edgeSub) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          setEdgeAccessDenied(
+            `Truy cập bị từ chối: Thiết bị Edge Box này thuộc quán '${info.restaurantName || edgeSub}'. Tài khoản của bạn thuộc quán '${userSub || 'khác'}'.`
+          );
+        }
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  if (edgeAccessDenied) {
+    return <Navigate to="/login" replace state={{ accessDeniedReason: edgeAccessDenied }} />;
   }
 
   // Block access if restaurant/tenant is suspended

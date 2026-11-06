@@ -6,6 +6,16 @@ import { sqliteService } from './sqliteService';
 
 
 
+export interface EdgeNodeInfo {
+  isEdgeNode: boolean;
+  subdomain?: string | null;
+  restaurantName?: string | null;
+  edgeNodeCode?: string | null;
+  environment?: string;
+  database?: string;
+  status?: string;
+}
+
 interface RobotRaw {
 
   id: string;
@@ -211,13 +221,26 @@ export const robotService = {
 
 
   // Get stations
-
   async getStations(): Promise<Station[]> {
+    try {
+      const response = await apiClient.get<Station[]>('/v1/robots/stations');
+      return response.data || [];
+    } catch (err) {
+      console.warn('Failed to load stations from robot service:', err);
+      return [];
+    }
+  },
 
-    const response = await apiClient.get<Station[]>('/v1/robots/stations');
-
-    return response.data;
-
+  // Get local Edge Node hardware identity & tenant allocation
+  async getEdgeNodeInfo(): Promise<EdgeNodeInfo> {
+    try {
+      const response = await apiClient.get<EdgeNodeInfo>('/v1/robots/edge-info', {
+        timeout: 4000,
+      });
+      return response.data || { isEdgeNode: false };
+    } catch {
+      return { isEdgeNode: false };
+    }
   },
 
 
