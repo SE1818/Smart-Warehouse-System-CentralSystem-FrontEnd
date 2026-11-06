@@ -27,6 +27,7 @@ import {
   X,
   Target,
   Eye,
+  Bot,
 } from "lucide-react";
 import type { Station } from "@/types/robot";
 import {
@@ -612,6 +613,13 @@ export const StaffKdsPage: React.FC = () => {
         ? tableId
         : `Bàn ${tableId}`);
 
+    if (matched && !matched.stationId && !matched.stationName) {
+      showToast(
+        `Bàn "${tableName}" chưa được gán trạm robot trong SQLite. Vui lòng bấm [Gán/Đổi Trạm] để liên kết trước khi robot xuất phát!`,
+        "info",
+      );
+    }
+
     if (activeTrayTarget === "tray1" || (!isTray2Active && isTray1Active)) {
       setTray1Table(tableName);
       setIsTray1Active(true);
@@ -641,6 +649,38 @@ export const StaffKdsPage: React.FC = () => {
   // Task Queue Handlers: Change Table, Change Station & View Details
   const handleOpenTaskReroute = (legIndex: number, _tableNo?: string) => {
     handleOpenWorkflowRerouteModal(legIndex);
+  };
+
+  // Toggle Customer Seating / Table Occupancy
+  const handleToggleTableOccupied = async (
+    e: React.MouseEvent,
+    table: TableNode,
+  ) => {
+    e.stopPropagation();
+    const newStatus: TableNode["status"] =
+      table.status === "occupied" ? "empty" : "occupied";
+
+    // Optimistic UI update
+    setTables((prev) =>
+      prev.map((t) => (t.id === table.id ? { ...t, status: newStatus } : t)),
+    );
+
+    try {
+      await tableService.updateTableStatus(table.id, newStatus);
+      try {
+        await apiClient.post(`/v1/tables/${table.id}/status`, {
+          status: newStatus,
+        });
+      } catch {}
+      showToast(
+        newStatus === "occupied"
+          ? `Bàn ${table.name} đã nhận khách (Có khách ngồi dùng bữa)!`
+          : `Đã dọn dẹp và trả ${table.name} về Bàn Trống sẵn sàng!`,
+        "success",
+      );
+    } catch {
+      showToast(`Không thể cập nhật trạng thái bàn ${table.name}`, "info");
+    }
   };
 
   const handleOpenTaskAssignStation = (tableNoOrId?: string) => {
@@ -1718,6 +1758,7 @@ export const StaffKdsPage: React.FC = () => {
                 selectedTableId={selectedTableId}
                 onSelectTable={(id) => handleTableSelect(id)}
                 robots={robots}
+                stations={stations}
                 mode="simplified"
                 className="flex-1 min-h-[440px]"
               />
@@ -1761,97 +1802,156 @@ export const StaffKdsPage: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
                   {paginatedTables.map((table) => {
                     const isSelected = table.id === selectedTableId;
-                    const isWaiting = table.status === "waiting";
-                    const isServing = table.status === "serving";
-                    const isOccupied = table.status === "occupied";
+                    const isDeliveringToTable =
+                      robots.some(
+                        (r) =>
+                          r.status === "delivering" &&
+                          (r.currentZone?.toLowerCase().includes(table.name.toLowerCase()) ||
+                            (table.tableNo &&
+                              r.currentZone?.toLowerCase().includes(table.tableNo.toLowerCase()))),
+                      ) ||
+                      (activeSequence &&
+                        activeSequence.legs.some(
+                          (leg) => leg.tableNo === table.name || leg.tableNo === table.tableNo,
+                        ));
+
+                    const isServing = table.status === "serving" || Boolean(isDeliveringToTable);
+                    const isWaiting =
+                      !isServing &&
+                      (table.status === "waiting" ||
+                        (Boolean(table.currentOrders) && table.currentOrders!.length > 0));
+                    const isOccupied = !isServing && !isWaiting && table.status === "occupied";
+                    const isEmpty = !isServing && !isWaiting && !isOccupied;
+
+                    const hasStation = Boolean(table.stationId || table.stationName);
+
                     return (
-                      <button
+                      <div
                         key={table.id}
-                        type="button"
                         onClick={() => handleTableSelect(table.id)}
-                        className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group active:scale-[0.98] h-[145px] cursor-pointer ${
+                        className={`relative p-3.5 rounded-2xl text-left transition-all border-2 flex flex-col justify-between group h-[155px] cursor-pointer ${
                           isSelected
                             ? "border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-600/20"
-                            : isWaiting
-                              ? "border-amber-300 bg-amber-50/50 hover:border-amber-400"
-                              : isServing
-                                ? "border-blue-200 bg-blue-50/30 hover:border-blue-300"
+                            : isServing
+                              ? "border-blue-500 bg-blue-50/80 shadow-[0_0_12px_rgba(59,130,246,0.3)] ring-2 ring-blue-500/30"
+                              : isWaiting
+                                ? "border-amber-300 bg-amber-50/50 hover:border-amber-400"
                                 : isOccupied
-                                  ? "border-emerald-200 bg-emerald-50/20 hover:border-emerald-300"
+                                  ? "border-emerald-300 bg-emerald-50/30 hover:border-emerald-400"
                                   : "border-slate-200 bg-slate-50/50 hover:border-slate-300"
                         }`}
                       >
-                        {/* Top Row: Name & Tag */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
-                              {table.name}
-                            </span>
-                            {false && (
-                              <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.5 rounded">
-                                Đã Gộp
+                        {/* Top Row: Name, Station & Status Badge */}
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight truncate">
+                                {table.name}
                               </span>
-                            )}
-                            {table.isRestricted && (
-                              <span
-                                className="text-[10px] text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded flex items-center gap-0.5"
-                                title="Bàn trong hành lang hẹp < 0.8m / góc khuất (kịch bản ví dụ Position S) - Yêu cầu điều phối qua Trạm Đệm trung gian"
-                              >
-                                <span>⚠️ Hẹp &lt;0.8m</span>
-                              </span>
-                            )}
-                          </div>
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                              isWaiting
-                                ? "bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse"
-                                : isServing
-                                  ? "bg-blue-600 shadow-[0_0_6px_#2563eb]"
-                                  : isOccupied
-                                    ? "bg-emerald-500"
-                                    : "bg-slate-300"
-                            }`}
-                          />
-                        </div>
-                        {/* Middle Info */}
-                        <div className="my-2.5 space-y-1">
-                          {table.zone ? (
-                            <div className="text-[11px] text-slate-500 line-clamp-1">
-                              {table.zone}
+                              {table.isRestricted && (
+                                <span
+                                  className="text-[9px] text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1 py-0.5 rounded shrink-0"
+                                  title="Hành lang hẹp <0.8m"
+                                >
+                                  ⚠️ Hẹp
+                                </span>
+                              )}
                             </div>
-                          ) : null}
-                          <div className="text-[10px] font-mono">
+                            <div className="mt-0.5">
+                              {hasStation ? (
+                                <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 inline-flex items-center gap-0.5">
+                                  <MapPin className="w-2.5 h-2.5 text-purple-600 shrink-0" />
+                                  <span className="truncate max-w-[85px]">{table.stationName || table.stationId}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-mono font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">
+                                  ⚠️ Chưa gán trạm
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                isServing
+                                  ? "bg-blue-600 text-white animate-pulse shadow-xs"
+                                  : isWaiting
+                                    ? "bg-amber-500 text-white animate-pulse"
+                                    : isOccupied
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-slate-200 text-slate-600"
+                              }`}
+                            >
+                              {isServing
+                                ? "Đang giao"
+                                : isWaiting
+                                  ? "Chờ món"
+                                  : isOccupied
+                                    ? "Có khách"
+                                    : "Bàn trống"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Middle Info: Orders & Robot */}
+                        <div className="my-1.5 space-y-1">
+                          <div className="text-[10px] font-mono flex items-center justify-between">
                             {isServing ? (
-                              <span className="text-blue-700 font-bold bg-blue-100/70 px-1.5 py-0.5 rounded">
-                                {table.assignedRobot} Đang Đến
+                              <span className="text-blue-700 font-bold bg-blue-100/80 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <Bot className="w-3 h-3 text-blue-600" />
+                                {table.assignedRobot || "Robot"} Đang Giao
                               </span>
                             ) : isWaiting ? (
                               <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded">
-                                Cần Ra Món Ngay
+                                Bếp Cần Ra Món
                               </span>
                             ) : isOccupied ? (
                               <span className="text-emerald-700 font-medium">
-                                {table.guestsCount} Khách
+                                👤 {table.guestsCount || 4} Khách đang ngồi
                               </span>
                             ) : (
-                              <span className="text-slate-400">Bàn Trống</span>
+                              <span className="text-slate-400">Chưa có khách</span>
                             )}
                           </div>
                         </div>
-                        {/* Footer selection pill */}
+
+                        {/* Footer: Quick Occupancy Action Button & Selection Pill */}
                         <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500 text-[10px]">
-                            {table.currentOrders
-                              ? `${table.currentOrders.length} Món`
-                              : "Chưa gọi"}
-                          </span>
+                          {/* Quick Occupancy Toggle */}
+                          <div className="flex items-center gap-1">
+                            {isOccupied ? (
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleTableOccupied(e, table)}
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors shadow-2xs"
+                                title="Khách trả bàn / Dọn bàn thành trống"
+                              >
+                                ✓ Trả Bàn
+                              </button>
+                            ) : isEmpty ? (
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleTableOccupied(e, table)}
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 transition-colors shadow-2xs"
+                                title="Nhận khách ngồi vào bàn này"
+                              >
+                                👤 Nhận Khách
+                              </button>
+                            ) : null}
+                          </div>
+
                           <span
-                            className={`text-[10px] font-bold ${isSelected ? "text-blue-700" : "text-slate-400 group-hover:text-blue-600 transition-colors"}`}
+                            className={`text-[10px] font-bold ${
+                              isSelected
+                                ? "text-blue-700"
+                                : "text-slate-400 group-hover:text-blue-600 transition-colors"
+                            }`}
                           >
-                            {isSelected ? "Đang chọn" : "Click để chọn"}
+                            {isSelected ? "Đang chọn" : "Chọn bàn"}
                           </span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

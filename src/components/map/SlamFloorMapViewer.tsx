@@ -35,6 +35,8 @@ export interface MapTableNode {
   assignedRobot?: string | null;
   worldX?: number; // Tọa độ thực mét từ ROS / CSDL
   worldY?: number;
+  stationId?: string | null;
+  stationName?: string | null;
 }
 
 export interface MapRobotItem {
@@ -57,6 +59,7 @@ export interface SlamFloorMapViewerProps {
   robots: MapRobotItem[];
   selectedRobotId?: string;
   onSelectRobot?: (robotId: string) => void;
+  stations?: any[];
   waypoints?: SlamMapWaypointDto[];
   metadata?: SlamMapMetadata;
   mapImageUrl?: string;
@@ -72,6 +75,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   robots,
   selectedRobotId,
   onSelectRobot,
+  stations,
   waypoints,
   metadata = DEFAULT_SLAM_METADATA,
   mapImageUrl = '',
@@ -210,45 +214,91 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     };
   }, [effectiveMapUrl]);
 
-  // 3. REAL TABLES: lấy bàn có tọa độ thực từ API / CSDL; ở mode simplified tự động bố trí sơ đồ trực quan nếu chưa có tọa độ
-  const resolvedTables = useMemo(() => {
-    const validTables = tables.filter((t) => typeof t.worldX === 'number' && typeof t.worldY === 'number');
-    if (activeSlamMap?.tables && activeSlamMap.tables.length > 0) {
-      const existingIds = new Set(validTables.map((t) => t.id));
-      const backendTables: MapTableNode[] = activeSlamMap.tables
-        .filter((st) => !existingIds.has(st.id) && !existingIds.has(st.tableNo))
-        .map((st) => ({
-          id: st.id || st.tableNo,
-          name: st.name || `Bàn ${st.tableNo}`,
-          zone: st.zone || '',
-          status: 'empty',
-          worldX: st.worldX,
-          worldY: st.worldY,
-        }));
-      return [...validTables, ...backendTables];
+  // 3. REAL STATIONS (Lấy trực tiếp từ prop stations hoặc qua activeSlamMap.stations)
+  const resolvedStations: SlamMapStationDto[] = useMemo(() => {
+    if (stations && Array.isArray(stations) && stations.length > 0) {
+      return stations.map((s: any) => ({
+        id: s.id?.toString() || s.stationId || '',
+        name: s.name || s.stationName || `Trạm ${s.id}`,
+        stationType: s.stationType || s.type || 'dropoff',
+        status: s.status || 'active',
+        worldX:
+          typeof s.worldX === 'number'
+            ? s.worldX
+            : typeof s.metric_x === 'number'
+              ? s.metric_x
+              : typeof s.x_coord === 'number'
+                ? s.x_coord * 0.5
+                : 0,
+        worldY:
+          typeof s.worldY === 'number'
+            ? s.worldY
+            : typeof s.metric_y === 'number'
+              ? s.metric_y
+              : typeof s.y_coord === 'number'
+                ? s.y_coord * 0.5
+                : 0,
+        yaw: s.yaw ?? 0,
+        areaId: s.areaId || s.area_id,
+      }));
     }
-    // Ở chế độ simplified (Staff), nếu chưa có tọa độ ROS thì tự động bố trí bàn theo sơ đồ trực quan
-    if (mode === 'simplified' && validTables.length === 0 && tables.length > 0) {
-      const cols = Math.min(Math.ceil(Math.sqrt(tables.length * 1.5)), 4);
-      return tables.map((t, index) => {
-        const col = index % cols;
-        const row = Math.floor(index / cols);
-        const wx = (col - (cols - 1) / 2) * 2.5 + 2.0;
-        const wy = (row - 1.0) * 2.5 + 2.0;
-        return {
+    return activeSlamMap?.stations || [];
+  }, [stations, activeSlamMap]);
+
+  // 4. REAL TABLES: Ràng buộc bất biến - Chỉ load lên bản đồ khi bàn ĐÃ ĐƯỢC GÁN TRẠM VẬT LÝ trong SQLite
+  // Tuyệt đối không tự ý sinh tọa độ bàn giả lập khi chưa có trạm.
+  const resolvedTables: MapTableNode[] = useMemo(() => {
+    const mapped: MapTableNode[] = [];
+    for (const t of tables) {
+      let wx = t.worldX;
+      let wy = t.worldY;
+
+      // Nếu bàn đã được gán trạm nhưng chưa có tọa độ ROS riêng, đồng bộ tọa độ theo trạm vật lý
+      if ((wx === undefined || wy === undefined || (wx === 0 && wy === 0)) && (t.stationId || t.stationName)) {
+        const matchedStation = resolvedStations.find(
+          (s) =>
+            s.id === t.stationId ||
+            s.name === t.stationName ||
+            (t.stationId && s.name === t.stationId)
+        );
+        if (matchedStation) {
+          wx = matchedStation.worldX;
+          wy = matchedStation.worldY;
+        }
+      }
+
+      // Chỉ hiển thị bàn nếu đã gán trạm vật lý hợp lệ
+      if (typeof wx === 'number' && typeof wy === 'number' && (t.stationId || t.stationName)) {
+        mapped.push({
           ...t,
           worldX: wx,
           worldY: wy,
-        };
-      });
+        });
+      }
     }
-    return validTables;
-  }, [tables, activeSlamMap, mode]);
 
-  // 4. REAL STATIONS (Lấy trực tiếp từ PostgreSQL qua activeSlamMap.stations)
-  const resolvedStations: SlamMapStationDto[] = useMemo(() => {
-    return activeSlamMap?.stations || [];
-  }, [activeSlamMap]);
+    if (mapped.length > 0) {
+      return mapped;
+    }
+
+    // Nếu activeSlamMap có bảng bàn gắn trạm từ BE
+    if (activeSlamMap?.tables && activeSlamMap.tables.length > 0) {
+      return (activeSlamMap.tables as any[])
+        .filter((st: any) => st.stationId || st.stationName)
+        .map((st: any) => ({
+          id: (st.id || st.tableNo).toString(),
+          name: st.name || `Bàn ${st.tableNo}`,
+          zone: st.zone || '',
+          status: 'empty' as const,
+          stationId: st.stationId,
+          stationName: st.stationName,
+          worldX: st.worldX,
+          worldY: st.worldY,
+        }));
+    }
+
+    return [];
+  }, [tables, resolvedStations, activeSlamMap]);
 
   // 4b. REAL WAYPOINTS (Chỉ hiển thị khi nhận từ MQTT ROS 2 / SQLite, KHÔNG tự ý xếp waypoint giả)
   const resolvedWaypoints: SlamMapWaypointDto[] = useMemo(() => {
