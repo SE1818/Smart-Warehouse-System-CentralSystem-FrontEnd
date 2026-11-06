@@ -261,6 +261,35 @@ export const StaffKdsPage: React.FC = () => {
     newTableNo: string;
     newStationId: string;
   } | null>(null);
+
+  // TASK-24: Assisted Drop-off Last-Mile Handoff Alert Banner
+  interface AssistedDropoffAlert {
+    robotId?: string;
+    robotName?: string;
+    taskId: string;
+    orderId?: string;
+    stagingStationName: string;
+    destinationTableNo: string;
+    cargoLevel: number;
+  }
+  const [assistedDropoffAlert, setAssistedDropoffAlert] = useState<AssistedDropoffAlert | null>(null);
+
+  const handleConfirmAssistedHandover = async (alert: AssistedDropoffAlert) => {
+    try {
+      await robotService.confirmNextTable(
+        alert.taskId,
+        "Nhân viên KDS (Tiếp ứng chặng cuối)",
+        false,
+      );
+      showToast(
+        `Đã xác nhận hoàn tất giao món cho bàn ${alert.destinationTableNo}. AMR tự động hoàn tất/về bếp!`,
+        "success",
+      );
+      setAssistedDropoffAlert(null);
+    } catch (err: any) {
+      showToast(err?.message || "Lỗi xác nhận hoàn tất giao món", "info");
+    }
+  };
   const [isSubmittingSecondLeg, setIsSubmittingSecondLeg] =
     useState<boolean>(false);
   const [recentSqliteTasks, setRecentSqliteTasks] = useState<
@@ -1421,6 +1450,38 @@ export const StaffKdsPage: React.FC = () => {
       </header>
       {/* Main Staff Operational Canvas */}
       <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
+        {/* TASK-24: Assisted Drop-off Last-Mile Handoff Banner */}
+        {assistedDropoffAlert && (
+          <div className="lg:col-span-12 bg-amber-900/90 border-2 border-amber-400 text-amber-50 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl animate-bounce">🔔</span>
+              <div>
+                <h4 className="font-bold text-amber-200 text-base">
+                  AMR {assistedDropoffAlert.robotName || "Robot"} đã tới {assistedDropoffAlert.stagingStationName} (Trạm Đệm Tiếp Ứng)
+                </h4>
+                <p className="text-xs sm:text-sm text-amber-100">
+                  Nhân viên vui lòng lấy món tại <strong>Khay {assistedDropoffAlert.cargoLevel}</strong> và bưng bộ giao tận <strong>{assistedDropoffAlert.destinationTableNo}</strong> cho khách.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleConfirmAssistedHandover(assistedDropoffAlert)}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white text-xs font-bold rounded-xl shadow transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <span>✓</span> Đã Giao Tận Bàn (AMR Về Bếp)
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssistedDropoffAlert(null)}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        )}
         {/* LEFT / CENTER COLUMN: TABLE FLOOR MAP (7 COLS) */}
         <div className="lg:col-span-7 flex flex-col gap-4">
           {/* Interactive Table Section */}
@@ -3810,11 +3871,9 @@ export const StaffKdsPage: React.FC = () => {
                     <span>Quy Tắc Trạm Đệm Tiếp Ứng (Assisted Drop-off):</span>
                   </div>
                   <p className="text-[11px] text-indigo-700 leading-relaxed">
-                    • Áp dụng cho bàn ở hành lang hẹp &lt; 0.8m hoặc góc khuất
-                    AMR không tiếp cận trực tiếp.
-                    <br />• Robot AMR giao món tới{" "}
-                    <strong>Trạm Đệm trung gian (ví dụ Point A, ST01, ST02...)</strong>, nhân viên tiếp ứng bưng
-                    thủ công chặng cuối vào bàn cho khách.
+                    • Robot AMR tự nhận diện chướng ngại vật &amp; hành lang bằng cảm biến LiDAR/SLAM trên xe.
+                    <br />• Khi khách ngồi ở vị trí robot không thể tiếp cận trực tiếp (hoặc bàn chưa có trạm đỗ riêng), nhân viên chủ động chọn{" "}
+                    <strong>Trạm Đệm trung gian gần nhất</strong> để AMR giao đến, sau đó nhân viên lấy món và phục vụ tận bàn cho khách.
                   </p>
                 </div>
                 <div className="space-y-3">

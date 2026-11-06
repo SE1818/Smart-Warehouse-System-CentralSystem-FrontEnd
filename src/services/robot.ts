@@ -642,6 +642,10 @@ export interface CargoTrayAssignmentDto {
 
   priority?: number;
 
+  deliveryMode?: 'direct' | 'assisted_dropoff';
+
+  stagingStationName?: string;
+
 }
 
 
@@ -707,6 +711,8 @@ export interface ConfirmNextTableResponse {
   nextStationName?: string | null;
 
   completedCargoLevel: number;
+
+  robotId?: string | null;
 
 }
 
