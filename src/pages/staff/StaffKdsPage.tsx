@@ -16,7 +16,6 @@ import {
   MapPin,
   ArrowRight,
   ArrowRightLeft,
-  GitMerge,
   Layers,
   Cpu,
   Navigation,
@@ -38,6 +37,7 @@ import {
 } from "@/services/portalApi";
 import { robotService, type CargoTrayAssignmentDto } from "@/services/robot";
 import { sqliteService } from "@/services/sqliteService";
+import { useRobotStore } from "@/stores/robotStore";
 import { fixMojibake } from "@/utils/textUtils";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/common/Pagination";
@@ -48,7 +48,7 @@ interface TableNode {
   tableNo?: string;
   name: string;
   zone: string;
-  status: "occupied" | "serving" | "empty" | "waiting" | "merged";
+  status: "occupied" | "serving" | "empty" | "waiting";
   currentOrders?: string[];
   guestsCount?: number;
   assignedRobot?: string | null;
@@ -56,8 +56,7 @@ interface TableNode {
   worldY?: number;
   stationId?: string | null;
   stationName?: string | null;
-  mergedIntoTableId?: string | null;
-  qrCodeUrl?: string | null;
+    qrCodeUrl?: string | null;
   isRestricted?: boolean;
   aisleWidth?: number;
 }
@@ -68,21 +67,18 @@ export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
     tableNo: t.tableNo || t.id,
     name: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : `Bàn ${t.id}`),
     zone: t.zone || "Khu Trong Nhà",
-    status: (t.status === "merged"
-      ? "merged"
-      : t.status === "serving"
-        ? "serving"
-        : t.status === "occupied"
-          ? "occupied"
-          : t.status === "waiting"
-            ? "waiting"
-            : "empty") as TableNode["status"],
+    status: (t.status === "serving"
+      ? "serving"
+      : t.status === "occupied"
+        ? "occupied"
+        : t.status === "waiting"
+          ? "waiting"
+          : "empty") as TableNode["status"],
     guestsCount: t.capacity || 4,
     currentOrders: t.currentOrders || [],
     assignedRobot: t.assignedRobotCode || null,
     stationId: t.stationId,
     stationName: t.stationName,
-    mergedIntoTableId: t.mergedIntoTableId,
     qrCodeUrl: t.qrCodeUrl,
     worldX: t.worldX,
     worldY: t.worldY,
@@ -153,15 +149,69 @@ export const StaffKdsPage: React.FC = () => {
     startTime: string;
   } | null>(null);
 
+  // SignalR Live Robot Tracking Store
+  const {
+    robots: liveRobots,
+    status: signalRStatus,
+    connect: connectRobotHub,
+    disconnect: disconnectRobotHub,
+  } = useRobotStore();
+
+  useEffect(() => {
+    connectRobotHub();
+    return () => {
+      disconnectRobotHub();
+    };
+  }, [connectRobotHub, disconnectRobotHub]);
+
+  const isSignalRConnected = signalRStatus === "connected";
+
+  // Identify active robot executing the sequence from SignalR store
+  const activeRobot = useMemo(() => {
+    if (!activeSequence) return null;
+    return (
+      liveRobots.find(
+        (r) =>
+          r.id === activeSequence.robotCode ||
+          r.name === activeSequence.robotName ||
+          r.name.includes(activeSequence.robotCode),
+      ) || null
+    );
+  }, [activeSequence, liveRobots]);
+
+  // Normalized realtime robot status from SignalR
+  const liveRobotStatus = useMemo(() => {
+    if (!activeSequence) return "idle";
+    if (activeRobot?.status) {
+      return activeRobot.status.toLowerCase().replace(/[\s-]/g, "_");
+    }
+    if (missionPhase === "moving") return "in_transit";
+    if (missionPhase === "arrived") return "arrived";
+    if (missionPhase === "returning") return "returning";
+    return "idle";
+  }, [activeSequence, activeRobot, missionPhase]);
+
   // Active workflow step calculation (1 = Xuất Bếp, 2 = Đến Bàn, 3 = Trả Món, 4 = Về Bếp)
   const currentWorkflowStep = useMemo(() => {
     if (!activeSequence) return 1;
     if (activeSequence.status === "completed") return 4;
-    if (missionPhase === "moving") return 2;
-    if (missionPhase === "arrived") return 3;
-    if (missionPhase === "returning") return 4;
+    if (liveRobotStatus === "in_transit" || liveRobotStatus === "moving" || missionPhase === "moving") return 2;
+    if (liveRobotStatus === "arrived" || missionPhase === "arrived") return 3;
+    if (liveRobotStatus === "returning" || missionPhase === "returning") return 4;
     return 2;
-  }, [activeSequence, missionPhase]);
+  }, [activeSequence, liveRobotStatus, missionPhase]);
+
+  // Only allow table transfer when robot is actively in_transit via SignalR
+  const isRobotInTransit = useMemo(() => {
+    return (
+      isSignalRConnected &&
+      activeSequence !== null &&
+      activeSequence.status === "in_progress" &&
+      (liveRobotStatus === "in_transit" ||
+       liveRobotStatus === "moving" ||
+       currentWorkflowStep === 2)
+    );
+  }, [isSignalRConnected, activeSequence, liveRobotStatus, currentWorkflowStep]);
 
   // Target table currently being delivered to
   const activeTargetTable = useMemo(() => {
@@ -192,6 +242,7 @@ export const StaffKdsPage: React.FC = () => {
     useState<boolean>(false);
   // Physical Stations from ROS SLAM map
   const [stations, setStations] = useState<Station[]>([]);
+
   // Create Table Modal State
   const [isCreateTableModalOpen, setIsCreateTableModalOpen] =
     useState<boolean>(false);
@@ -199,8 +250,10 @@ export const StaffKdsPage: React.FC = () => {
   const [newTableName, setNewTableName] = useState<string>("");
   const [newTableCapacity, setNewTableCapacity] = useState<number>(4);
   const [newTableStationId, setNewTableStationId] = useState<string>("");
+  const [newTableZone, setNewTableZone] = useState<string>("Khu Bàn Ăn");
   const [isSubmittingCreateTable, setIsSubmittingCreateTable] =
     useState<boolean>(false);
+
   // Import CSV Modal State
   const [isImportCsvModalOpen, setIsImportCsvModalOpen] =
     useState<boolean>(false);
@@ -220,7 +273,7 @@ export const StaffKdsPage: React.FC = () => {
     totalSkipped: number;
     messages: string[];
   } | null>(null);
-  // Assign Station Modal State
+  // Assign Station Modal State (Hỗ trợ gán nhiều bàn -> một trạm)
   const [isAssignStationModalOpen, setIsAssignStationModalOpen] =
     useState<boolean>(false);
   const [assignStationTableId, setAssignStationTableId] = useState<string>("");
@@ -228,31 +281,7 @@ export const StaffKdsPage: React.FC = () => {
     useState<string>("");
   const [isSubmittingAssignStation, setIsSubmittingAssignStation] =
     useState<boolean>(false);
-  // Table Merge & Split State
-  // Flow 3: Table Grouping under Primary Anchor Station Modal State
-  const [isMergeModalOpen, setIsGroupingModalOpen] = useState<boolean>(false);
-  const [mergeStagingTab, setMergeStagingTab] = useState<"merge" | "staging">(
-    "merge",
-  );
-  const [stagingTableId, setStagingTableId] = useState<string>("");
-  const [stagingStationId, setStagingStationId] = useState<string>("");
-  const [isSubmittingStaging, setIsSubmittingStaging] =
-    useState<boolean>(false);
-  const [primaryAnchorTableId, setPrimaryAnchorTableId] = useState<string>("");
-  const [memberTableId, setMemberTableId] = useState<string>("");
-  const [memberTableIds, setMemberTableIds] = useState<string[]>([]);
-  const [mergeReason, setGroupReason] = useState<string>("Gộp nhóm bàn");
-  const [isSubmittingMerge, setIsSubmittingGroup] = useState<boolean>(false);
-  // Flow 3: HC-04 Pre-Dispatch Table Transfer Modal State
-  const [transferOrderModal, setTransferOrderModal] = useState<{
-    orderId: string;
-    orderNumber: string;
-    currentTableNo: string;
-  } | null>(null);
-  const [transferOrderTargetId, setTransferOrderTargetId] =
-    useState<string>("");
-  const [isSubmittingTransferOrder, setIsSubmittingTransferOrder] =
-    useState<boolean>(false);
+
   // Flow 3: HC-06 & UC-06 Arrival Race Condition & Second-Leg Dispatch State
   const [rerouteConflictModal, setRerouteConflictModal] = useState<{
     isOpen: boolean;
@@ -516,34 +545,6 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
-  // Open Pre-Dispatch Table Transfer (Dining Table Transfer - HC-04 & WF-02)
-  const handleOpenTableTransferForSelected = (specificTable?: any) => {
-    const activeFromTable = specificTable ||
-      (currentSelectedTable && currentSelectedTable.id !== "Chưa có"
-        ? currentSelectedTable
-        : tables[0]) || {
-        id: "01",
-        name: "Bàn 01",
-        zone: "Sảnh Chính",
-        status: "occupied",
-      };
-    const matchingOrder = pendingOrders.find(
-      (o) =>
-        o.tableNo.toLowerCase() === activeFromTable.name.toLowerCase() ||
-        o.tableNo === activeFromTable.id,
-    );
-    setTransferOrderModal({
-      orderId:
-        matchingOrder?.id || `ORD-${activeFromTable.name.replace(/\s+/g, "")}`,
-      orderNumber: matchingOrder?.orderNumber || `Đơn ${activeFromTable.name}`,
-      currentTableNo: activeFromTable.name,
-    });
-    const avail = tables.find(
-      (t) => t.name !== activeFromTable.name && t.status !== "merged",
-    );
-    setTransferOrderTargetId(avail?.id || tables[1]?.id || "");
-  };
-
   // Action: Select Pending Order -> Autofill Order ID & Destination Table in Active Tray
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
     setActiveOrderId(order.id);
@@ -588,28 +589,6 @@ export const StaffKdsPage: React.FC = () => {
     if (!effectiveRobot) {
       showToast("Không có robot nào sẵn sàng nhận lệnh điều phối!", "info");
       return;
-    }
-
-    // Auto-redirect merged table orders to Primary Anchor Table
-    if (table1) {
-      const t1 = tables.find((t) => t.name.toLowerCase() === table1.toLowerCase());
-      if (t1 && t1.status === "merged" && t1.mergedIntoTableId) {
-        const main1 = tables.find((t) => t.id === t1.mergedIntoTableId);
-        if (main1) {
-          table1 = main1.name;
-          showToast(`Khay 1: Bàn ${t1.name} đã gộp vào ${main1.name} -> Đích đến chuyển sang ${main1.name}!`, "info");
-        }
-      }
-    }
-    if (table2) {
-      const t2 = tables.find((t) => t.name.toLowerCase() === table2.toLowerCase());
-      if (t2 && t2.status === "merged" && t2.mergedIntoTableId) {
-        const main2 = tables.find((t) => t.id === t2.mergedIntoTableId);
-        if (main2) {
-          table2 = main2.name;
-          showToast(`Khay 2: Bàn ${t2.name} đã gộp vào ${main2.name} -> Đích đến chuyển sang ${main2.name}!`, "info");
-        }
-      }
     }
 
     setIsDispatching(true);
@@ -910,23 +889,56 @@ export const StaffKdsPage: React.FC = () => {
       setIsConfirmingTable(false);
     }
   };
-  // Open Mid-Transit Reroute Modal
-  const handleOpenRerouteModal = (legIndex: number) => {
-    if (!activeSequence) return;
-    setRerouteLegIndex(legIndex);
-    const currentTableNo = activeSequence.legs[legIndex]?.tableNo;
+  // Open Flexible Table Transfer Modal across All Workflow Stages
+  const handleOpenWorkflowRerouteModal = (preferredLegIndex?: number) => {
+    const targetIdx = preferredLegIndex ?? (activeSequence?.currentLegIndex || 0);
+    setRerouteLegIndex(targetIdx);
+    const curTable = activeSequence
+      ? activeSequence.legs[targetIdx]?.tableNo
+      : (targetIdx === 0 ? tray1Table : tray2Table);
+    const otherLegTable = activeSequence
+      ? activeSequence.legs.find((_, i) => i !== targetIdx)?.tableNo
+      : (targetIdx === 0 ? tray2Table : tray1Table);
     const defaultTarget = tables.find(
-      (t) => t.name !== currentTableNo && t.status !== "merged",
+      (t) =>
+        t.name !== curTable &&
+        t.name !== otherLegTable &&
+        t.status !== "occupied" &&
+        t.status !== "serving",
     );
-    setRerouteNewTable(defaultTarget?.name || "Bàn 08");
+    setRerouteNewTable(defaultTarget?.name || "");
     setIsRerouteModalOpen(true);
   };
 
-  // Confirm Mid-Transit Reroute
+  // Confirm Flexible Table Transfer according to current delivery stage
   const handleConfirmReroute = async () => {
-    if (!activeSequence) return;
+    if (!rerouteNewTable) {
+      showToast("Vui lòng chọn bàn đích mới.", "info");
+      return;
+    }
+
+    // Situation 1: Pre-dispatch at Central Kitchen (No active sequence running yet)
+    if (!activeSequence) {
+      if (rerouteLegIndex === 0) {
+        setTray1Table(rerouteNewTable);
+        setIsTray1Active(true);
+      } else {
+        setTray2Table(rerouteNewTable);
+        setIsTray2Active(true);
+      }
+      showToast(`Đã đổi bàn đích Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable}!`, "success");
+      setIsRerouteModalOpen(false);
+      return;
+    }
+
     const leg = activeSequence.legs[rerouteLegIndex];
-    if (!leg || !rerouteNewTable) return;
+    if (!leg) return;
+
+    if (!isSignalRConnected) {
+      showToast("Mất kết nối realtime với Robot Hub. Vui lòng kiểm tra mạng.", "info");
+      return;
+    }
+
     setIsSubmittingReroute(true);
     try {
       const targetNode = tables.find(
@@ -938,29 +950,35 @@ export const StaffKdsPage: React.FC = () => {
         targetNode?.stationId ||
         targetNode?.id ||
         "55555555-5555-5555-5555-555555555555";
-      const res = await robotService.rerouteTask(
-        leg.taskId,
-        targetStationId,
-        rerouteNewTable,
-        rerouteReason,
-      );
-      if (res && res.success === false) {
-        const msg = res.message || "";
-        if (
-          msg.toLowerCase().includes("arrived") ||
-          msg.toLowerCase().includes("trạm giao cũ")
-        ) {
-          setRerouteConflictModal({
-            isOpen: true,
-            taskId: leg.taskId,
-            oldTableNo: leg.tableNo,
-            newTableNo: rerouteNewTable,
-            newStationId: targetStationId,
-          });
-          setIsRerouteModalOpen(false);
-          return;
+
+      // If robot is in transit or arrived, call backend reroute
+      if (isRobotInTransit || currentWorkflowStep === 2 || currentWorkflowStep === 3 || liveRobotStatus === "moving" || liveRobotStatus === "arrived") {
+        const res = await robotService.rerouteTask(
+          leg.taskId,
+          targetStationId,
+          rerouteNewTable,
+          rerouteReason || "Khách đổi bàn ăn",
+        );
+        if (res && res.success === false) {
+          const msg = res.message || "";
+          if (
+            msg.toLowerCase().includes("arrived") ||
+            msg.toLowerCase().includes("trạm giao cũ")
+          ) {
+            setRerouteConflictModal({
+              isOpen: true,
+              taskId: leg.taskId,
+              oldTableNo: leg.tableNo,
+              newTableNo: rerouteNewTable,
+              newStationId: targetStationId,
+            });
+            setIsRerouteModalOpen(false);
+            return;
+          }
         }
       }
+
+      // Update sequence in state
       setActiveSequence((prev) => {
         if (!prev) return null;
         const updatedLegs = [...prev.legs];
@@ -968,9 +986,16 @@ export const StaffKdsPage: React.FC = () => {
           ...updatedLegs[rerouteLegIndex],
           tableNo: rerouteNewTable,
         };
-
         return { ...prev, legs: updatedLegs };
       });
+
+      // Synchronize Dispatch Console display route
+      if (rerouteLegIndex === 0) {
+        setTray1Table(rerouteNewTable);
+      } else if (rerouteLegIndex === 1) {
+        setTray2Table(rerouteNewTable);
+      }
+
       if (activeSequence.currentLegIndex === rerouteLegIndex) {
         setRobots((prev) =>
           prev.map((r) =>
@@ -980,8 +1005,9 @@ export const StaffKdsPage: React.FC = () => {
           ),
         );
       }
+
       showToast(
-        `Đã chuyển hướng Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`,
+        `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`,
         "success",
       );
       setIsRerouteModalOpen(false);
@@ -1026,20 +1052,24 @@ export const StaffKdsPage: React.FC = () => {
     }
     setIsSubmittingCreateTable(true);
     try {
+      const storeIdToUse = resolveEffectiveStoreId();
       const res = await tableService.createTable({
+        storeId: storeIdToUse,
         tableNo: newTableNo.trim(),
         tableName: newTableName.trim() || `Bàn ${newTableNo.trim()}`,
         capacity: newTableCapacity,
         stationId: newTableStationId || null,
+        zone: newTableZone.trim() || "Khu Bàn Ăn",
       });
       if (res.success) {
         showToast(`Tạo thành công bàn ${newTableNo}`, "success");
         setIsCreateTableModalOpen(false);
         // Refresh tables list
-        const updatedList = await tableService.getTables(_subdomain);
-        const fullList = mapBackendTables(updatedList);
-        setTables(fullList);
-        setSelectedTableId(newTableNo.trim());
+        const updatedList = await tableService.getTables(storeIdToUse);
+        if (updatedList.length > 0) {
+          setTables(mapBackendTables(updatedList));
+          setSelectedTableId(newTableNo.trim());
+        }
       } else {
         showToast(res.message || "Không thể tạo bàn ăn", "info");
       }
@@ -1092,7 +1122,7 @@ export const StaffKdsPage: React.FC = () => {
     showToast("Đã tải xuống file CSV mẫu", "info");
   };
 
-  // Assign Station to Table
+  // Assign Station to Table (SLAM Waypoint)
   const handleAssignStation = async () => {
     if (!assignStationTableId) {
       showToast("Vui lòng chọn bàn cần gán", "info");
@@ -1126,164 +1156,20 @@ export const StaffKdsPage: React.FC = () => {
               : t,
           ),
         );
-        showToast(res.message || "Gán trạm thành công", "success");
+        showToast(
+          assignStationTargetStationId
+            ? `Đã gán ${targetTable?.name || "bàn"} vào ${stationObj?.name} thành công!`
+            : `Đã hủy gán trạm cho ${targetTable?.name || "bàn"}!`,
+          "success",
+        );
         setIsAssignStationModalOpen(false);
       } else {
-        showToast(res.message || "Lỗi gán trạm", "info");
+        showToast(res.message || "Gán trạm thất bại", "info");
       }
     } catch (err: any) {
       showToast(err?.message || "Lỗi gán trạm", "info");
     } finally {
       setIsSubmittingAssignStation(false);
-    }
-  };
-
-  // Flow 3: Confirm Table Merge (Supports multi-table selection HC-02)
-  const handleConfirmBindStaging = async () => {
-    if (!stagingTableId || !stagingStationId) {
-      showToast("Vui lòng chọn bàn và trạm đệm", "info");
-      return;
-    }
-    setIsSubmittingStaging(true);
-    try {
-      const res = await tableService.bindAssistedStation(
-        stagingTableId,
-        stagingStationId,
-        "assisted_dropoff",
-      );
-      if (res.success) {
-        showToast(res.message || "Liên kết trạm đệm thành công!", "success");
-        const updatedList = await tableService.getTables(_subdomain);
-        setTables(mapBackendTables(updatedList));
-        setIsGroupingModalOpen(false);
-      } else {
-        showToast(res.message || "Lỗi liên kết trạm đệm", "info");
-      }
-    } catch (err: any) {
-      showToast(err?.message || "Lỗi liên kết trạm đệm", "info");
-    } finally {
-      setIsSubmittingStaging(false);
-    }
-  };
-
-  const handleConfirmMerge = async () => {
-    const targets =
-      memberTableIds.length > 0
-        ? memberTableIds
-        : memberTableId
-          ? [memberTableId]
-          : [];
-    if (!primaryAnchorTableId || targets.length === 0) {
-      showToast(
-        "Vui lòng chọn Bàn Chính và ít nhất 1 bàn thành viên để gộp!",
-        "info",
-      );
-      return;
-    }
-    if (targets.includes(primaryAnchorTableId)) {
-      showToast("Bàn thành viên không được trùng với Bàn Chính!", "info");
-      return;
-    }
-    setIsSubmittingGroup(true);
-    try {
-      await robotService.mergeTables(
-        primaryAnchorTableId,
-        targets,
-        resolveEffectiveStoreId(),
-        mergeReason,
-      );
-      setTables((prev) =>
-        prev.map((t) => {
-          if (targets.includes(t.id)) {
-            return {
-              ...t,
-              status: "merged" as const,
-              mergedIntoTableId: primaryAnchorTableId,
-            };
-          }
-
-          return t;
-        }),
-      );
-      const targetName =
-        tables.find((t) => t.id === primaryAnchorTableId)?.name ||
-        primaryAnchorTableId;
-      showToast(
-        `Đã gộp ${targets.length} bàn vào ${targetName} thành công (Robot AMR giao cố định tại Trạm ${targetName})!`,
-        "success",
-      );
-      setIsGroupingModalOpen(false);
-      setMemberTableIds([]);
-      setMemberTableId("");
-    } catch (err: any) {
-      showToast(
-        err?.response?.data?.message || err?.message || "Lỗi khi gộp bàn.",
-        "info",
-      );
-    } finally {
-      setIsSubmittingGroup(false);
-    }
-  };
-
-  // Flow 3: Split Table (HC-08 Full Split & HC-09 Partial Split)
-  const handleSplitTable = async (tableId: string) => {
-    try {
-      await robotService.splitTable(tableId, resolveEffectiveStoreId());
-      setTables((prev) =>
-        prev.map((t) => {
-          if (t.id === tableId || t.mergedIntoTableId === tableId) {
-            return { ...t, status: "empty" as const, mergedIntoTableId: null };
-          }
-
-          return t;
-        }),
-      );
-      const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
-      showToast(
-        `Đã tách nhóm bàn ${tableName}, hoàn nguyên trạng thái độc lập thành công!`,
-        "success",
-      );
-    } catch (err: any) {
-      showToast(
-        err?.response?.data?.message || err?.message || "Lỗi khi tách bàn.",
-        "info",
-      );
-    }
-  };
-
-  // Flow 3: HC-04 Confirm Pre-Dispatch Table Transfer for Pending Order
-  const handleConfirmTransferOrder = async () => {
-    if (!transferOrderModal || !transferOrderTargetId) return;
-    const targetTable = tables.find((t) => t.id === transferOrderTargetId);
-    if (!targetTable) return;
-    setIsSubmittingTransferOrder(true);
-    try {
-      await robotService.transferOrderTable(
-        targetTable.id,
-        transferOrderModal.orderId,
-        "Khách chuyển bàn khi món đang nấu",
-      );
-      setPendingOrders((prev) =>
-        prev.map((o) =>
-          o.id === transferOrderModal.orderId
-            ? { ...o, tableNo: targetTable.name }
-            : o,
-        ),
-      );
-      showToast(
-        `Đã chuyển đơn ${transferOrderModal.orderNumber} sang ${targetTable.name} thành công!`,
-        "success",
-      );
-      setTransferOrderModal(null);
-    } catch (err: any) {
-      showToast(
-        err?.response?.data?.message ||
-          err?.message ||
-          "Lỗi khi đổi bàn cho đơn món.",
-        "info",
-      );
-    } finally {
-      setIsSubmittingTransferOrder(false);
     }
   };
 
@@ -1486,124 +1372,92 @@ export const StaffKdsPage: React.FC = () => {
         <div className="lg:col-span-7 flex flex-col gap-4">
           {/* Interactive Table Section */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
-            {/* Table Area Header & Operation Toolbar */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
+            {/* Table Area Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
                 <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
                   <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
                   <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs">
                     {tables.length} Bàn
                   </span>
                 </h2>
-                {/* View Switcher Segmented Control */}
-                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("slam-map")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      viewMode === "slam-map"
-                        ? "bg-white text-blue-700 shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    <MapIcon className="w-3.5 h-3.5" />
-                    <span>Bản Đồ SLAM (ROS 2)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("grid")}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      viewMode === "grid"
-                        ? "bg-white text-blue-700 shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span>Dạng Thẻ Bàn</span>
-                  </button>
-                </div>
               </div>
-              {/* Action Buttons Toolbar */}
-              <div className="flex flex-wrap items-center gap-2">
+              {/* View Switcher Segmented Control */}
+              <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-2xs">
                 <button
                   type="button"
-                  onClick={() => {
-                    setAssignStationTableId(currentSelectedTable.id);
-                    setAssignStationTargetStationId(
-                      currentSelectedTable.stationId || "",
-                    );
-                    setIsAssignStationModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
-                  title="Gán trạm điều phối AMR cho bàn này"
+                  onClick={() => setViewMode("slam-map")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === "slam-map"
+                      ? "bg-white text-blue-700 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
                 >
-                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Gán Trạm Robot</span>
+                  <MapIcon className="w-3.5 h-3.5" />
+                  <span>Bản Đồ SLAM (ROS 2)</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setPrimaryAnchorTableId(tables[0]?.id || "");
-                    setMemberTableId(tables[1]?.id || "");
-                    setIsGroupingModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
-                  title="Gộp các bàn ăn thành một nhóm tiệc (Logical Table Grouping)"
+                  onClick={() => setViewMode("grid")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-white text-blue-700 shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
                 >
-                  <GitMerge className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Gộp Bàn & Trạm Đệm</span>
-                </button>
-                {/* Main Flow 1: Dining Table Transfer (WF-02 & HC-04) */}
-                <button
-                  type="button"
-                  onClick={() => handleOpenTableTransferForSelected()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
-                  title="Đổi bàn cho khách khi món đang nấu hoặc đổi vị trí"
-                >
-                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Đổi Bàn (Table Transfer)</span>
-                </button>
-                {currentSelectedTable.status === "merged" && (
-                  <button
-                    type="button"
-                    onClick={() => handleSplitTable(currentSelectedTable.id)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100 transition-all cursor-pointer shadow-2xs"
-                  >
-                    Tách Bàn (Split)
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportResult(null);
-                    setImportCsvFile(null);
-                    setIsImportCsvModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer shadow-2xs"
-                  title="Nhập danh sách bàn từ Excel / CSV"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Nhập Excel/CSV</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewTableNo(
-                      `T${(tables.length + 1).toString().padStart(2, "0")}`,
-                    );
-                    setNewTableName(
-                      `Bàn ${(tables.length + 1).toString().padStart(2, "0")}`,
-                    );
-                    setNewTableCapacity(4);
-                    setNewTableStationId("");
-                    setIsCreateTableModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-xs transition-all cursor-pointer active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Thêm Bàn</span>
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Dạng Thẻ Bàn</span>
                 </button>
               </div>
+            </div>
+
+            {/* Action Buttons Toolbar: Dạng Grid chuẩn 3 cột đều nhau, bố cục ngăn nắp */}
+            <div className="grid grid-cols-3 gap-2.5 mb-3.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextNum = (tables.length + 1).toString().padStart(2, "0");
+                  setNewTableNo(`T${nextNum}`);
+                  setNewTableName(`Bàn ${nextNum}`);
+                  setNewTableCapacity(4);
+                  setNewTableStationId("");
+                  setNewTableZone("Khu Bàn Ăn");
+                  setIsCreateTableModalOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 active:scale-95 text-white shadow-xs transition-all cursor-pointer"
+                title="Thêm bàn ăn mới vào hệ thống"
+              >
+                <Plus className="w-3.5 h-3.5 text-white shrink-0" />
+                <span className="truncate">Thêm Bàn</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignStationTableId(currentSelectedTable.id);
+                  setAssignStationTargetStationId(
+                    currentSelectedTable.stationId || "",
+                  );
+                  setIsAssignStationModalOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/90 hover:border-purple-300 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                title="Gán trạm điều phối AMR cho bàn này"
+              >
+                <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span className="truncate">Gán Trạm Robot</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportResult(null);
+                  setImportCsvFile(null);
+                  setIsImportCsvModalOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/90 hover:border-emerald-300 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                title="Nhập danh sách bàn từ Excel / CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">Nhập Excel/CSV</span>
+              </button>
             </div>
             {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
             {viewMode === "slam-map" ? (
@@ -1681,7 +1535,7 @@ export const StaffKdsPage: React.FC = () => {
                             <span className="font-extrabold text-slate-900 text-sm font-mono tracking-tight">
                               {table.name}
                             </span>
-                            {table.status === "merged" && (
+                            {false && (
                               <span className="text-[10px] text-purple-700 font-bold bg-purple-100 px-1.5 py-0.5 rounded">
                                 Đã Gộp
                               </span>
@@ -1703,9 +1557,7 @@ export const StaffKdsPage: React.FC = () => {
                                   ? "bg-blue-600 shadow-[0_0_6px_#2563eb]"
                                   : isOccupied
                                     ? "bg-emerald-500"
-                                    : table.status === "merged"
-                                      ? "bg-purple-500"
-                                      : "bg-slate-300"
+                                    : "bg-slate-300"
                             }`}
                           />
                         </div>
@@ -1824,9 +1676,7 @@ export const StaffKdsPage: React.FC = () => {
                         ? "bg-amber-100 text-amber-800 border border-amber-200"
                         : currentSelectedTable.status === "serving"
                           ? "bg-blue-100 text-blue-800 border border-blue-200 animate-pulse"
-                          : currentSelectedTable.status === "merged"
-                            ? "bg-purple-100 text-purple-800 border border-purple-200"
-                            : currentSelectedTable.status === "occupied"
+                          : currentSelectedTable.status === "occupied"
                               ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                               : "bg-slate-100 text-slate-700 border border-slate-200"
                     }`}
@@ -1835,9 +1685,7 @@ export const StaffKdsPage: React.FC = () => {
                       ? "Đang chờ món ăn"
                       : currentSelectedTable.status === "serving"
                         ? "Đang giao"
-                        : currentSelectedTable.status === "merged"
-                          ? "Đã gộp bàn (Giao bàn chính)"
-                          : currentSelectedTable.status === "occupied"
+                        : currentSelectedTable.status === "occupied"
                             ? "Khách đang dùng bữa"
                             : "Đang đón khách"}
                   </span>
@@ -1936,16 +1784,9 @@ export const StaffKdsPage: React.FC = () => {
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
                   <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span>ĐƠN MÓN CHỜ RA BẾP ({pendingOrders.length})</span>
-                  <span className="text-[10px] font-mono font-bold bg-amber-200/70 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
-                    Dining Table Transfer
-                  </span>
                 </span>
                 <span className="text-[10px] font-medium text-amber-800">
-                  Click đơn để nạp khay • Nhấn{" "}
-                  <strong className="text-amber-900 font-bold font-mono">
-                    ⇄ Đổi Bàn
-                  </strong>{" "}
-                  khi khách chuyển chỗ
+                  Click đơn để tự động nạp khay giao món
                 </span>
               </div>
               <div className="flex gap-2.5 overflow-x-auto pb-1 pt-0.5">
@@ -1982,27 +1823,7 @@ export const StaffKdsPage: React.FC = () => {
                         ({ord.items.length} món)
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      title="Đổi bàn cho đơn đang nấu"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTransferOrderModal({
-                          orderId: ord.id,
-                          orderNumber: ord.orderNumber,
-                          currentTableNo: ord.tableNo,
-                        });
-                        const avail = tables.find(
-                          (t) =>
-                            t.name !== ord.tableNo && t.status !== "merged",
-                        );
-                        setTransferOrderTargetId(avail?.id || "");
-                      }}
-                      className="px-2.5 py-2 bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 text-[11px] font-bold border-l border-amber-300 flex items-center gap-1 transition-all cursor-pointer"
-                    >
-                      <ArrowRightLeft className="w-3 h-3 text-amber-700" />
-                      <span>Đổi Bàn</span>
-                    </button>
+
                   </div>
                 ))}
               </div>
@@ -2133,20 +1954,7 @@ export const StaffKdsPage: React.FC = () => {
                                 ? "Đang tới bàn..."
                                 : `Chờ chặng ${idx}`}
                           </div>
-                          {!isCompleted && activeSequence.status === "in_progress" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenRerouteModal(idx);
-                              }}
-                              className="mt-1.5 w-full py-1 px-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/40 cursor-pointer transition-all flex items-center justify-center gap-1 active:scale-95"
-                              title={`Đổi bàn cho Khay ${leg.cargoLevel}`}
-                            >
-                              <ArrowRightLeft className="w-3 h-3 text-amber-300" />
-                              <span>Đổi Bàn</span>
-                            </button>
-                          )}
+
                         </div>
                       </div>
                     );
@@ -2320,20 +2128,7 @@ export const StaffKdsPage: React.FC = () => {
                     </div>
                   </div>
                   {/* Operational Override & Obstacle Control */}
-                  <div className="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleOpenRerouteModal(activeSequence.currentLegIndex)
-                      }
-                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400" />
-                      <span>
-                        Đổi Bàn Giữa Chặng (Khay{" "}
-                        {activeSequence.currentLegIndex + 1})
-                      </span>
-                    </button>
+                  <div className="pt-2 border-t border-white/10 flex justify-end">
                     <button
                       type="button"
                       onClick={handleTogglePauseTask}
@@ -2377,17 +2172,32 @@ export const StaffKdsPage: React.FC = () => {
           )}
           {/* STAFF MOVE REQUEST FORM - UNIFIED 2-TRAY CONSOLE */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-blue-600" />
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight font-heading">
                   ĐIỀU PHỐI GIAO MÓN (DISPATCH CONSOLE)
                 </h3>
               </div>
-              <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                <span>Hệ Thống Sẵn Sàng</span>
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenWorkflowRerouteModal()}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer shadow-xs ${
+                    isRobotInTransit
+                      ? "bg-amber-500 hover:bg-amber-600 active:scale-95 text-white border-amber-600 animate-pulse"
+                      : "bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 border-amber-200/90 shadow-2xs"
+                  }`}
+                  title="Đổi Bàn: Xem tiến trình giao hàng và đổi bàn linh hoạt theo tình huống"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Đổi Bàn</span>
+                </button>
+                <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Hệ Thống Sẵn Sàng</span>
+                </span>
+              </div>
             </div>
 
             {/* UNIFIED 2-TRAY FORM WITH EXPLICIT CONFIRMATION TOGGLE PER TRAY */}
@@ -2461,7 +2271,7 @@ export const StaffKdsPage: React.FC = () => {
                         )}
                         {tables.map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""} {t.status === "merged" ? "(Đã gộp)" : ""}
+                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""}
                           </option>
                         ))}
                       </select>
@@ -2579,7 +2389,7 @@ export const StaffKdsPage: React.FC = () => {
                         )}
                         {tables.map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""} {t.status === "merged" ? "(Đã gộp)" : ""}
+                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""}
                           </option>
                         ))}
                       </select>
@@ -2648,36 +2458,36 @@ export const StaffKdsPage: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs overflow-x-auto">
                     <span className="text-emerald-700">Bếp</span>
-                    {isTray1Active && (
-                      <>
-                        <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="text-blue-700 font-extrabold whitespace-nowrap">
-                          {tray1Table || "Chưa chọn"} (Khay 1)
-                        </span>
-                      </>
-                    )}
-                    {isTray2Active && (
-                      <>
-                        <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="text-indigo-700 font-extrabold whitespace-nowrap">
-                          {tray2Table || "Chưa chọn"} (Khay 2)
-                        </span>
-                      </>
-                    )}
+                    {isTray1Active && (() => {
+                      const matched = tables.find((t) => t.name.toLowerCase() === tray1Table.toLowerCase());
+                      const stLabel = matched?.stationName ? ` [Trạm: ${matched.stationName}]` : "";
+                      return (
+                        <>
+                          <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="text-blue-700 font-extrabold whitespace-nowrap">
+                            {tray1Table || "Chưa chọn"}{stLabel} (Khay 1)
+                          </span>
+                        </>
+                      );
+                    })()}
+                    {isTray2Active && (() => {
+                      const matched = tables.find((t) => t.name.toLowerCase() === tray2Table.toLowerCase());
+                      const stLabel = matched?.stationName ? ` [Trạm: ${matched.stationName}]` : "";
+                      return (
+                        <>
+                          <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="text-indigo-700 font-extrabold whitespace-nowrap">
+                            {tray2Table || "Chưa chọn"}{stLabel} (Khay 2)
+                          </span>
+                        </>
+                      );
+                    })()}
                     <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
                     <span className="text-slate-500">Về Bếp</span>
                   </div>
                 </div>
                 {/* Merged table warning if active trays have merged tables */}
-                {((isTray1Active && tables.find((t) => t.name.toLowerCase() === tray1Table.toLowerCase())?.status === "merged") ||
-                  (isTray2Active && tables.find((t) => t.name.toLowerCase() === tray2Table.toLowerCase())?.status === "merged")) && (
-                  <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] flex items-center gap-1.5 font-medium">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>
-                      Lưu ý: Có bàn đã gộp. Robot sẽ tự động điều phối trả món tại Trạm Bàn Chính tương ứng.
-                    </span>
-                  </div>
-                )}
+                
               </div>
 
               {/* DYNAMIC REALTIME 4-STEP WORKFLOW PIPELINE WITH LIVE PULSING INDICATOR */}
@@ -2697,7 +2507,7 @@ export const StaffKdsPage: React.FC = () => {
                       {currentWorkflowStep === 1
                         ? "Bước 1/4 • Nạp Món Tại Bếp"
                         : currentWorkflowStep === 2
-                          ? `Bước 2/4 • Đang Đến ${activeTargetTable || "Bàn"}`
+                          ? `Bước 2/4 • Đang Đến ${activeTargetTable || "Bàn"}${tables.find((t) => t.name.toLowerCase() === (activeTargetTable || "").toLowerCase())?.stationName ? ` (Trạm: ${tables.find((t) => t.name.toLowerCase() === (activeTargetTable || "").toLowerCase())?.stationName})` : ""}`
                           : currentWorkflowStep === 3
                             ? `Bước 3/4 • Trả Món Tại ${activeTargetTable || "Bàn"}`
                             : "Bước 4/4 • Tự Động Về Bếp"}
@@ -3359,24 +3169,27 @@ export const StaffKdsPage: React.FC = () => {
           )}
         </button>
       </div>
-      {/* MID-TRANSIT TABLE REROUTE MODAL (MAIN FLOW: TABLE TRANSFER) */}
-      {isRerouteModalOpen && activeSequence && (
+      {/* MODAL ĐỔI BÀN & CHUYỂN HƯỚNG GIAO MÓN (HIỂN THỊ TIẾN TRÌNH QUY TRÌNH REALTIME & XỬ LÝ THEO TÌNH HUỐNG) */}
+      {isRerouteModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 space-y-4 text-slate-800 max-h-[92vh] overflow-y-auto">
+            {/* Modal Header */}
             <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
               <div>
                 <h3 className="text-sm font-black text-slate-900 font-heading flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
                     <ArrowRightLeft className="w-4 h-4 text-amber-600" />
                   </div>
-                  <span>Đổi Bàn Giữa Chặng (Mid-Transit Table Transfer)</span>
+                  <span>Đổi Bàn &amp; Chuyển Hướng Giao Món</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Chuyển hướng di chuyển thời gian thực của Robot{" "}
-                  <strong className="text-slate-800 font-mono">
-                    {activeSequence.robotCode}
-                  </strong>{" "}
-                  sang bàn mới.
+                  {activeSequence ? (
+                    <>
+                      Lượt giao <strong className="font-mono text-slate-800">{activeSequence.sequenceId}</strong> • Robot <strong className="font-mono text-slate-800">{activeSequence.robotCode}</strong> ({activeSequence.robotName})
+                    </>
+                  ) : (
+                    "Điều phối giao món tại Quầy Bếp (Chưa xuất lệnh robot)"
+                  )}
                 </p>
               </div>
               <button
@@ -3387,7 +3200,322 @@ export const StaffKdsPage: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* SignalR & Robot Live Status Indicator Bar */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">
+                  {activeSequence ? `Robot ${activeSequence.robotCode}:` : "Bộ điều phối:"}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    !activeSequence
+                      ? "bg-slate-100 text-slate-700 border-slate-300"
+                      : isRobotInTransit
+                        ? "bg-blue-100 text-blue-800 border-blue-300 animate-pulse"
+                        : liveRobotStatus === "arrived"
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                  }`}
+                >
+                  {!activeSequence
+                    ? "● Sẵn Sàng (Tại Bếp)"
+                    : isRobotInTransit
+                      ? "● in_transit (Đang Di Chuyển)"
+                      : liveRobotStatus === "arrived"
+                        ? "● arrived (Đã Đến Bàn)"
+                        : `● ${liveRobotStatus}`}
+                </span>
+              </div>
+              <div>
+                {isSignalRConnected ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    SignalR Realtime
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    Mất kết nối
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* THÔNG TIN TIẾN TRÌNH: QUY TRÌNH GIAO ĐANG TỚI ĐÂU */}
+            <div className="p-3 rounded-xl bg-slate-50/90 border border-slate-200 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-extrabold text-slate-900 flex items-center gap-1.5 font-heading">
+                  <Navigation className="w-4 h-4 text-blue-600" />
+                  <span>Quy Trình Giao Đang Tới Đâu:</span>
+                </span>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    !activeSequence
+                      ? "bg-slate-100 text-slate-700 border-slate-300"
+                      : currentWorkflowStep === 1
+                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                        : currentWorkflowStep === 2
+                          ? "bg-blue-100 text-blue-800 border-blue-300 animate-pulse"
+                          : currentWorkflowStep === 3
+                            ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                            : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                  }`}
+                >
+                  {!activeSequence
+                    ? "Tại Bếp (Soạn Khay)"
+                    : currentWorkflowStep === 1
+                      ? "Bước 1/4: Xuất Bếp"
+                      : currentWorkflowStep === 2
+                        ? "Bước 2/4: Đến Bàn (Đang Di Chuyển)"
+                        : currentWorkflowStep === 3
+                          ? "Bước 3/4: Trả Món (Tại Bàn)"
+                          : "Bước 4/4: Về Bếp"}
+                </span>
+              </div>
+
+              {/* 4-Step Mini Pipeline Stepper */}
+              <div className="grid grid-cols-4 gap-1.5 text-center">
+                {/* Step 1: Xuất Bếp */}
+                <div
+                  className={`p-2 rounded-xl border text-center transition-all ${
+                    !activeSequence || currentWorkflowStep === 1
+                      ? "bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-400/40 font-bold shadow-xs"
+                      : currentWorkflowStep > 1
+                        ? "bg-emerald-50/70 border-emerald-200 text-emerald-800"
+                        : "bg-white border-slate-200 text-slate-400 opacity-60"
+                  }`}
+                >
+                  <div className="text-[9px] uppercase font-mono font-bold">1. Xuất Bếp</div>
+                  <div className="text-[10px] font-extrabold mt-0.5 truncate">Quầy Bếp</div>
+                  <div className="text-[8.5px] font-mono mt-0.5 font-bold">
+                    {!activeSequence
+                      ? "Soạn khay"
+                      : currentWorkflowStep === 1
+                        ? "Đang nạp món"
+                        : "Đã xong ✓"}
+                  </div>
+                </div>
+
+                {/* Step 2: Đến Bàn */}
+                <div
+                  className={`p-2 rounded-xl border text-center transition-all ${
+                    activeSequence && currentWorkflowStep === 2
+                      ? "bg-blue-50 border-blue-500 text-blue-950 ring-2 ring-blue-500/40 font-bold shadow-md shadow-blue-500/10 animate-pulse"
+                      : activeSequence && currentWorkflowStep > 2
+                        ? "bg-emerald-50/70 border-emerald-200 text-emerald-800"
+                        : "bg-white border-slate-200 text-slate-400 opacity-60"
+                  }`}
+                >
+                  <div className="text-[9px] uppercase font-mono font-bold">2. Đến Bàn</div>
+                  <div className="text-[10px] font-extrabold mt-0.5 truncate">In-Transit</div>
+                  <div className="text-[8.5px] font-mono mt-0.5 font-bold">
+                    {activeSequence && currentWorkflowStep === 2
+                      ? "Đang chạy tới bàn"
+                      : activeSequence && currentWorkflowStep > 2
+                        ? "Đã tới bàn ✓"
+                        : "Chưa tới"}
+                  </div>
+                </div>
+
+                {/* Step 3: Trả Món */}
+                <div
+                  className={`p-2 rounded-xl border text-center transition-all ${
+                    activeSequence && currentWorkflowStep === 3
+                      ? "bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/40 font-bold shadow-md shadow-amber-500/10 animate-pulse"
+                      : activeSequence && currentWorkflowStep > 3
+                        ? "bg-emerald-50/70 border-emerald-200 text-emerald-800"
+                        : "bg-white border-slate-200 text-slate-400 opacity-60"
+                  }`}
+                >
+                  <div className="text-[9px] uppercase font-mono font-bold">3. Trả Món</div>
+                  <div className="text-[10px] font-extrabold mt-0.5 truncate">Tại Bàn</div>
+                  <div className="text-[8.5px] font-mono mt-0.5 font-bold">
+                    {activeSequence && currentWorkflowStep === 3
+                      ? "Khách nhận món"
+                      : activeSequence && currentWorkflowStep > 3
+                        ? "Đã trả xong ✓"
+                        : "Chờ đến"}
+                  </div>
+                </div>
+
+                {/* Step 4: Về Bếp */}
+                <div
+                  className={`p-2 rounded-xl border text-center transition-all ${
+                    activeSequence && currentWorkflowStep === 4
+                      ? "bg-indigo-50 border-indigo-500 text-indigo-950 ring-2 ring-indigo-500/40 font-bold shadow-xs"
+                      : "bg-white border-slate-200 text-slate-400 opacity-60"
+                  }`}
+                >
+                  <div className="text-[9px] uppercase font-mono font-bold">4. Về Bếp</div>
+                  <div className="text-[10px] font-extrabold mt-0.5 truncate">Quay Về</div>
+                  <div className="text-[8.5px] font-mono mt-0.5 font-bold">
+                    {activeSequence && currentWorkflowStep === 4 ? "Đang quay về" : "Tự động"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tình Huống Cụ Thể (Situational Context & Action Guidance) */}
+              <div
+                className={`p-2.5 rounded-xl border text-xs leading-relaxed transition-all shadow-2xs ${
+                  !activeSequence || currentWorkflowStep === 1
+                    ? "bg-emerald-50/90 border-emerald-200/90 text-emerald-950"
+                    : currentWorkflowStep === 2
+                      ? "bg-blue-50/90 border-blue-200/90 text-blue-950"
+                      : currentWorkflowStep === 3
+                        ? "bg-amber-50/90 border-amber-200/90 text-amber-950"
+                        : "bg-indigo-50/90 border-indigo-200/90 text-indigo-950"
+                }`}
+              >
+                <div className="font-extrabold flex items-center gap-1.5 mb-1 text-[11.5px]">
+                  {!activeSequence || currentWorkflowStep === 1 ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Tình huống: Đổi bàn khi món còn ở Bếp (Xuất Bếp)</span>
+                    </>
+                  ) : currentWorkflowStep === 2 ? (
+                    <>
+                      <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0 animate-pulse" />
+                      <span>Tình huống: Khách đổi chỗ khi Robot đang trên đường đi (In-Transit)</span>
+                    </>
+                  ) : currentWorkflowStep === 3 ? (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Tình huống: Robot đã tới bàn cũ nhưng khách đã sang bàn mới (Trả Món)</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span>Tình huống: Robot đang trên đường quay về Bếp</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-700 leading-snug">
+                  {!activeSequence
+                    ? "Robot chưa phát lệnh xuất bến. Thao tác đổi bàn sẽ cập nhật ngay bàn đích mới trên khay soạn của bộ điều phối."
+                    : currentWorkflowStep === 1
+                      ? `Món ăn đang ở quầy bếp. Đổi bàn lúc này sẽ cập nhật ngay bàn đích xuất phát cho Khay ${rerouteLegIndex + 1}, robot sẽ xuất bến đi thẳng tới bàn mới.`
+                      : currentWorkflowStep === 2
+                        ? `Robot đang chạy tới ${activeSequence.legs[rerouteLegIndex]?.tableNo || "Bàn cũ"}. Hệ thống sẽ gửi lệnh Reroute lập tức để AMR bẻ lái chuyển hướng trong thời gian thực sang bàn mới mà không cần quay về bếp.`
+                        : currentWorkflowStep === 3
+                          ? `Robot đã dừng tại ${activeSequence.legs[rerouteLegIndex]?.tableNo || "Bàn cũ"}. Bạn có thể chọn bàn mới để robot di chuyển tiếp, hoặc nhân viên tại sảnh hỗ trợ chuyển món từ khay tới bàn của khách.`
+                          : "Robot đã hoàn tất trả món và đang trở về trạm sạc bếp. Chọn bàn mới nếu cần điều hướng robot phục vụ tiếp."}
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-3.5">
+              {/* Tray Selector */}
+              {activeSequence && activeSequence.legs.length > 1 ? (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Chọn Khay Cần Đổi Bàn:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeSequence.legs.map((leg, idx) => {
+                      const isLegDone = leg.status === "completed";
+                      const isSelected = rerouteLegIndex === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          disabled={isLegDone}
+                          onClick={() => {
+                            setRerouteLegIndex(idx);
+                            const other = activeSequence.legs.find((_, i) => i !== idx)?.tableNo;
+                            const avail = tables.find(
+                              (t) =>
+                                t.name !== leg.tableNo &&
+                                t.name !== other &&
+                                t.status !== "occupied" &&
+                                t.status !== "serving",
+                            );
+                            setRerouteNewTable(avail?.name || "");
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? "border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20 shadow-xs"
+                              : isLegDone
+                                ? "border-slate-200 bg-slate-100 opacity-60 cursor-not-allowed"
+                                : "border-slate-200 bg-white hover:border-slate-300 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-mono font-bold">
+                            <span className={isSelected ? "text-blue-700" : "text-slate-500"}>
+                              Khay {leg.cargoLevel} (Tầng {leg.cargoLevel})
+                            </span>
+                            {isLegDone && <span className="text-emerald-600">Đã xong ✓</span>}
+                          </div>
+                          <div className="text-xs font-black text-slate-900 mt-0.5">
+                            Bàn: {leg.tableNo}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : !activeSequence ? (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Chọn Khay Cần Đổi Bàn (Dispatch Console):
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRerouteLegIndex(0);
+                        const avail = tables.find(
+                          (t) =>
+                            t.name !== tray1Table &&
+                            t.name !== tray2Table &&
+                            t.status !== "occupied" &&
+                            t.status !== "serving",
+                        );
+                        setRerouteNewTable(avail?.name || "");
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        rerouteLegIndex === 0
+                          ? "border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20 shadow-xs"
+                          : "border-slate-200 bg-white hover:border-slate-300 cursor-pointer"
+                      }`}
+                    >
+                      <div className="text-[10px] font-mono font-bold text-blue-700">
+                        Khay 1 (Tầng Dưới)
+                      </div>
+                      <div className="text-xs font-black text-slate-900 mt-0.5">
+                        {tray1Table || "Chưa chọn bàn"}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRerouteLegIndex(1);
+                        const avail = tables.find(
+                          (t) =>
+                            t.name !== tray2Table &&
+                            t.name !== tray1Table &&
+                            t.status !== "occupied" &&
+                            t.status !== "serving",
+                        );
+                        setRerouteNewTable(avail?.name || "");
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        rerouteLegIndex === 1
+                          ? "border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/20 shadow-xs"
+                          : "border-slate-200 bg-white hover:border-slate-300 cursor-pointer"
+                      }`}
+                    >
+                      <div className="text-[10px] font-mono font-bold text-blue-700">
+                        Khay 2 (Tầng Trên)
+                      </div>
+                      <div className="text-xs font-black text-slate-900 mt-0.5">
+                        {tray2Table || "Chưa chọn bàn"}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {/* From-To Visual Indicator */}
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs shadow-2xs">
                 <div>
@@ -3395,12 +3523,16 @@ export const StaffKdsPage: React.FC = () => {
                     Khay {rerouteLegIndex + 1} Hiện Tại
                   </div>
                   <div className="font-extrabold text-slate-900 text-sm mt-0.5">
-                    {activeSequence.legs[rerouteLegIndex]?.tableNo}
+                    {activeSequence
+                      ? activeSequence.legs[rerouteLegIndex]?.tableNo
+                      : rerouteLegIndex === 0
+                        ? tray1Table || "Chưa chọn"
+                        : tray2Table || "Chưa chọn"}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-amber-100/80 border border-amber-200 text-amber-900 font-mono text-[10px] font-bold">
-                  <span>Đổi Hướng</span>
-                  <ArrowRight className="w-3 h-3 text-amber-700" />
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100/90 border border-amber-200 text-amber-900 font-mono text-[10px] font-bold">
+                  <span>Đổi Sang</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-amber-700" />
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] font-mono text-blue-600 font-semibold uppercase">
@@ -3411,42 +3543,64 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Target Table Dropdown - Filtered Valid Tables */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Chọn Bàn Đích Mới (Khả Dụng)
+                  Chọn Bàn Đích Mới (Khả Dụng):
                 </label>
                 <select
                   value={rerouteNewTable}
                   onChange={(e) => setRerouteNewTable(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs cursor-pointer"
                 >
+                  <option value="">-- Chọn bàn đích chuyển hướng --</option>
                   {tables
-                    .filter(
-                      (t) =>
-                        t.name !==
-                          activeSequence.legs[rerouteLegIndex]?.tableNo &&
-                        t.status !== "merged",
-                    )
+                    .filter((t) => {
+                      const curTable = activeSequence
+                        ? activeSequence.legs[rerouteLegIndex]?.tableNo
+                        : rerouteLegIndex === 0
+                          ? tray1Table
+                          : tray2Table;
+                      const otherLegTable = activeSequence
+                        ? activeSequence.legs.find((_, i) => i !== rerouteLegIndex)?.tableNo
+                        : rerouteLegIndex === 0
+                          ? tray2Table
+                          : tray1Table;
+                      return (
+                        t.name !== curTable &&
+                        t.name !== otherLegTable &&
+                        t.status !== "occupied" &&
+                        t.status !== "serving"
+                      );
+                    })
                     .map((t) => (
                       <option key={t.id} value={t.name}>
-                        {t.name} ({t.zone || "Khu Bàn Ăn"})
+                        {t.name} ({t.zone || "Khu Bàn Ăn"}) {t.stationName ? `• Trạm: ${t.stationName}` : ""}
                       </option>
                     ))}
                 </select>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  * Hệ thống chỉ hiển thị bàn trống/sẵn sàng, loại trừ bàn hiện tại và bàn đang có khách dùng bữa.
+                </span>
               </div>
+
+              {/* Reason Input */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Lý do chuyển bàn (Tùy chọn)
+                  Lý do chuyển bàn (Tùy chọn):
                 </label>
                 <input
                   type="text"
                   value={rerouteReason}
                   onChange={(e) => setRerouteReason(e.target.value)}
-                  placeholder="Ví dụ: Khách đổi sang bàn phòng lạnh, gộp tiệc..."
+                  placeholder="Ví dụ: Khách đổi sang bàn phòng lạnh, chuyển chỗ..."
                   className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-2xs"
                 />
               </div>
             </div>
+
+            {/* Modal Actions */}
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
@@ -3460,20 +3614,28 @@ export const StaffKdsPage: React.FC = () => {
                 type="button"
                 disabled={isSubmittingReroute || !rerouteNewTable}
                 onClick={handleConfirmReroute}
-                className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-md shadow-blue-500/15 transition-all cursor-pointer flex items-center gap-1.5"
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold text-white shadow-md transition-all flex items-center gap-1.5 ${
+                  !isSubmittingReroute && rerouteNewTable
+                    ? "bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-blue-500/15 cursor-pointer"
+                    : "bg-slate-400 cursor-not-allowed opacity-60"
+                }`}
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
                 <span>
                   {isSubmittingReroute
-                    ? "Đang Xử Lý Reroute..."
-                    : "Xác Nhận Đổi Bàn"}
+                    ? "Đang Xử Lý Đổi Bàn..."
+                    : !activeSequence
+                      ? "Xác Nhận Đổi Bàn (Khay Bếp)"
+                      : currentWorkflowStep === 2
+                        ? "Xác Nhận Reroute Robot AMR"
+                        : "Xác Nhận Đổi Bàn"}
                 </span>
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* MODAL 1: CREATE TABLE MANUALLY */}
+      {/* MODAL 1: TẠO BÀN ĂN MỚI */}
       {isCreateTableModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
@@ -3490,11 +3652,12 @@ export const StaffKdsPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsCreateTableModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+
             <form onSubmit={handleCreateTable} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -3509,6 +3672,7 @@ export const StaffKdsPage: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Tên Hiển Thị (TableName)
@@ -3521,52 +3685,70 @@ export const StaffKdsPage: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Sức Chứa (Ghế)
+                    Số Chỗ Ngồi (Sức Chứa)
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="50"
+                    min={1}
+                    max={30}
                     value={newTableCapacity}
                     onChange={(e) =>
-                      setNewTableCapacity(parseInt(e.target.value) || 4)
+                      setNewTableCapacity(parseInt(e.target.value, 10) || 4)
                     }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Trạm Robot (SLAM)
+                    Khu Vực (Zone)
                   </label>
-                  <select
-                    value={newTableStationId}
-                    onChange={(e) => setNewTableStationId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    <option value="">-- Chưa gán trạm --</option>
-                    {stations.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.xCoord}, {s.yCoord})
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    value={newTableZone}
+                    onChange={(e) => setNewTableZone(e.target.value)}
+                    placeholder="Ví dụ: Khu Trong Nhà"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Gán Trạm Robot SLAM (Tùy chọn)
+                </label>
+                <select
+                  value={newTableStationId}
+                  onChange={(e) => setNewTableStationId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="">-- Chưa gán trạm --</option>
+                  {stations.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      📍 {s.name} ({s.stationType || "Bàn"})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  * Nếu bàn nằm ở vị trí robot không tới được, có thể gán trạm gần nhất tại đây hoặc dùng tính năng &quot;Gán Trạm Robot&quot;.
+                </span>
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsCreateTableModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-colors"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingCreateTable || !newTableNo.trim()}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/10 cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/10 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                 >
                   {isSubmittingCreateTable ? "Đang Tạo..." : "Tạo Bàn Ăn"}
                 </button>
@@ -3575,6 +3757,7 @@ export const StaffKdsPage: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* MODAL 2: IMPORT TABLES CSV / EXCEL */}
       {isImportCsvModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
@@ -3726,7 +3909,7 @@ export const StaffKdsPage: React.FC = () => {
           </div>
         </div>
       )}
-      {/* MODAL 3: ASSIGN STATION (WAYPOINT) TO TABLE */}
+      {/* MODAL: GÁN TRẠM ROBOT (WAYPOINT) */}
       {isAssignStationModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
@@ -3737,14 +3920,13 @@ export const StaffKdsPage: React.FC = () => {
                   <span>Gán Trạm Robot (SLAM Waypoint)</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ
-                  SLAM.
+                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ SLAM.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAssignStationModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -3761,7 +3943,7 @@ export const StaffKdsPage: React.FC = () => {
                     const matched = tables.find((t) => t.id === e.target.value);
                     setAssignStationTargetStationId(matched?.stationId || "");
                   }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                 >
                   {tables.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -3782,7 +3964,7 @@ export const StaffKdsPage: React.FC = () => {
                   onChange={(e) =>
                     setAssignStationTargetStationId(e.target.value)
                   }
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                 >
                   <option value="">-- Hủy gán trạm (Không gán xe) --</option>
                   {stations.map((s) => (
@@ -3799,8 +3981,7 @@ export const StaffKdsPage: React.FC = () => {
                   <span>Cơ chế điều phối tự động:</span>
                 </span>
                 <p className="text-purple-700 leading-relaxed">
-                  Khi bếp phát lệnh giao món tới bàn này, Robot AMR sẽ tự động
-                  di chuyển đến tọa độ của trạm được chọn để phục vụ.
+                  Khi bếp phát lệnh giao món tới bàn này, Robot AMR sẽ tự động di chuyển đến tọa độ của trạm được chọn để phục vụ.
                 </p>
               </div>
             </div>
@@ -3819,464 +4000,6 @@ export const StaffKdsPage: React.FC = () => {
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 shadow-md shadow-purple-500/10 cursor-pointer"
               >
                 {isSubmittingAssignStation ? "Đang Lưu..." : "Lưu Gán Trạm"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* TABLE MERGE MODAL (FLOW 3) */}
-      {isMergeModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="border-b border-slate-100 pb-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 font-heading">
-                  Quản Lý Bàn & Trạm Đệm (Merge & Staging Console)
-                </h3>
-              </div>
-              <div className="flex items-center gap-2 mt-3 p-1 bg-slate-100 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setMergeStagingTab("merge")}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${mergeStagingTab === "merge" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
-                >
-                  Tab 1: Gộp Bàn Khách Đoàn
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMergeStagingTab("staging");
-                    const narrowTable = tables.find(
-                      (t) =>
-                        t.name.includes("S") ||
-                        t.name.includes("Hành lang") ||
-                        t.name.includes("Hẹp"),
-                    );
-                    if (narrowTable && !stagingTableId)
-                      setStagingTableId(narrowTable.id);
-                    if (stations.length > 0 && !stagingStationId)
-                      setStagingStationId(stations[0].id);
-                  }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${mergeStagingTab === "staging" ? "bg-white text-indigo-600 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
-                >
-                  Tab 2: Trạm Đệm Tiếp Ứng (Lối Hẹp)
-                </button>
-              </div>
-            </div>
-            {mergeStagingTab === "staging" ? (
-              <div className="space-y-4">
-                <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-indigo-900">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Quy Tắc Trạm Đệm Tiếp Ứng (Assisted Drop-off):</span>
-                  </div>
-                  <p className="text-[11px] text-indigo-700 leading-relaxed">
-                    • Robot AMR tự nhận diện chướng ngại vật &amp; hành lang bằng cảm biến LiDAR/SLAM trên xe.
-                    <br />• Khi khách ngồi ở vị trí robot không thể tiếp cận trực tiếp (hoặc bàn chưa có trạm đỗ riêng), nhân viên chủ động chọn{" "}
-                    <strong>Trạm Đệm trung gian gần nhất</strong> để AMR giao đến, sau đó nhân viên lấy món và phục vụ tận bàn cho khách.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Bàn Thuộc Vùng Hạn Chế / Lối Hẹp (&lt; 0.8m)
-                    </label>
-                    <select
-                      value={stagingTableId}
-                      onChange={(e) => setStagingTableId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    >
-                      <option value="">-- Chọn bàn lối hẹp --</option>
-                      {tables.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.zone || "Khu Bàn"}){" "}
-                          {t.name.includes("S") ||
-                          t.name.includes("Hành lang") ||
-                          t.name.includes("Hẹp")
-                            ? "⚠️ [Lối Hẹp < 0.8m]"
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Trạm Đệm Trung Gian Khả Dụng (ví dụ Point A, ST01, ST02...)
-                    </label>
-                    <select
-                      value={stagingStationId}
-                      onChange={(e) => setStagingStationId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    >
-                      <option value="">-- Chọn Trạm Đệm phù hợp --</option>
-                      {stations
-                        .filter(
-                          (s) =>
-                            !s.name?.toLowerCase().includes("bếp") &&
-                            s.status === "available",
-                        )
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name} (Waypoint {s.xCoord}, {s.yCoord})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsGroupingModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      isSubmittingStaging ||
-                      !stagingTableId ||
-                      !stagingStationId
-                    }
-                    onClick={handleConfirmBindStaging}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:scale-95 shadow-md shadow-indigo-500/10 transition-all cursor-pointer"
-                  >
-                    {isSubmittingStaging
-                      ? "Đang Liên Kết..."
-                      : "Xác Nhận Liên Kết Trạm Đệm (Mode A->S)"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Architectural Clarification Banner */}
-                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-blue-900">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Nguyên tắc Robot khi Gộp Bàn:</span>
-                  </div>
-                  <p className="text-[11px] text-blue-700 leading-relaxed">
-                    • Toàn bộ đơn hàng sẽ được Robot chuyển hướng giao tới{" "}
-                    <strong>Trạm vật lý của Bàn Chính</strong>.<br />•{" "}
-                    <strong>
-                      Bản đồ SLAM và các Waypoint của Robot được giữ nguyên 100%
-                    </strong>
-                    , không bị xáo trộn hay gộp sai lệch tọa độ.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-slate-700">
-                        Bàn Chính (Trạm giao cố định của Robot AMR)
-                      </label>
-                      {primaryAnchorTableId &&
-                        (() => {
-                          const sel = tables.find(
-                            (t) => t.id === primaryAnchorTableId,
-                          );
-                          const isOcc =
-                            sel &&
-                            (sel.status === "occupied" ||
-                              sel.status === "serving" ||
-                              sel.status === "waiting");
-                          return isOcc ? (
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                              ⚠️ Bàn đang có khách
-                            </span>
-                          ) : null;
-                        })()}
-                    </div>
-                    <select
-                      value={primaryAnchorTableId}
-                      onChange={(e) => setPrimaryAnchorTableId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      {tables
-                        .filter((t) => t.status !== "merged")
-                        .map((t) => {
-                          const hasStation = !!(t.stationId || t.stationName);
-                          return (
-                            <option key={t.id} value={t.id}>
-                              {t.name}{" "}
-                              {hasStation
-                                ? `(Trạm: ${t.stationName || t.stationId})`
-                                : "(⚠️ Chưa gán trạm)"}{" "}
-                              ({t.zone || "Khu Bàn Ăn"})
-                            </option>
-                          );
-                        })}
-                    </select>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-slate-700">
-                        Chọn Các Bàn Thành Viên (Gộp nhiều bàn)
-                      </label>
-                      <span className="text-[10px] font-mono text-blue-700 font-bold">
-                        Đã chọn: {memberTableIds.length} bàn
-                      </span>
-                    </div>
-                    <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                      {tables
-                        .filter(
-                          (t) =>
-                            t.id !== primaryAnchorTableId &&
-                            t.status !== "merged",
-                        )
-                        .map((t) => {
-                          const isChecked = memberTableIds.includes(t.id);
-                          const isOcc =
-                            t.status === "occupied" ||
-                            t.status === "serving" ||
-                            t.status === "waiting";
-                          return (
-                            <label
-                              key={t.id}
-                              className={`flex items-center justify-between p-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-                                isChecked
-                                  ? "bg-blue-50 border-blue-300 text-blue-900 font-semibold"
-                                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setMemberTableIds((prev) => [
-                                        ...prev,
-                                        t.id,
-                                      ]);
-                                    } else {
-                                      setMemberTableIds((prev) =>
-                                        prev.filter((id) => id !== t.id),
-                                      );
-                                    }
-                                  }}
-                                  className="w-3.5 h-3.5 rounded text-blue-600 border-slate-300 focus:ring-blue-500"
-                                />
-                                <span>
-                                  {t.name} ({t.zone || "Khu Bàn Ăn"})
-                                </span>
-                              </div>
-                              {isOcc && (
-                                <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                                  Đang có khách
-                                </span>
-                              )}
-                            </label>
-                          );
-                        })}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Lý do gộp bàn
-                    </label>
-                    <input
-                      type="text"
-                      value={mergeReason}
-                      onChange={(e) => setGroupReason(e.target.value)}
-                      placeholder="Ghép bàn nhóm đông, tiệc gia đình..."
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    disabled={isSubmittingMerge}
-                    onClick={() => setIsGroupingModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="button"
-                    disabled={
-                      isSubmittingMerge ||
-                      !primaryAnchorTableId ||
-                      (memberTableIds.length === 0 && !memberTableId)
-                    }
-                    onClick={handleConfirmMerge}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 shadow-md shadow-blue-500/10 transition-all cursor-pointer"
-                  >
-                    {isSubmittingMerge
-                      ? "Đang Gộp Bàn..."
-                      : "Xác Nhận Gộp Bàn (Table Merge)"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {/* FLOW 3: PRE-DISPATCH TABLE TRANSFER MODAL (HC-04 & UC-05) */}
-      {transferOrderModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
-            <div className="border-b border-slate-100 pb-3 flex items-start justify-between">
-              <div>
-                <h3 className="text-sm font-black text-slate-900 font-heading flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
-                    <ArrowRightLeft className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <span>Đổi Bàn</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Chuyển đơn{" "}
-                  <strong className="text-slate-800 font-mono">
-                    {transferOrderModal.orderNumber}
-                  </strong>{" "}
-                  sang vị trí bàn mới trước khi xuất lệnh điều phối AMR.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setTransferOrderModal(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="space-y-3.5">
-              {/* Visual From-To Step Card */}
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs shadow-2xs">
-                <div>
-                  <div className="text-[10px] font-mono text-slate-500 font-semibold uppercase">
-                    Bàn Gốc
-                  </div>
-                  <div className="font-extrabold text-slate-900 text-sm mt-0.5">
-                    {transferOrderModal.currentTableNo}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100/90 border border-amber-300 text-amber-900 font-mono text-[10px] font-bold">
-                  <span>Chuyển Bàn</span>
-                  <ArrowRight className="w-3 h-3 text-amber-700" />
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] font-mono text-blue-600 font-semibold uppercase">
-                    Bàn Nhận Đơn
-                  </div>
-                  <div className="font-extrabold text-blue-700 text-sm mt-0.5">
-                    {tables.find((t) => t.id === transferOrderTargetId)?.name ||
-                      "Chưa chọn"}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Bàn Gốc Cần Chuyển Đi (From Table)
-                </label>
-                <select
-                  value={
-                    tables.find(
-                      (t) =>
-                        t.name.toLowerCase() ===
-                        transferOrderModal.currentTableNo.toLowerCase(),
-                    )?.id ||
-                    tables[0]?.id ||
-                    ""
-                  }
-                  onChange={(e) => {
-                    const sel = tables.find((t) => t.id === e.target.value);
-                    if (sel) {
-                      const match = pendingOrders.find(
-                        (o) =>
-                          o.tableNo.toLowerCase() === sel.name.toLowerCase() ||
-                          o.tableNo === sel.id,
-                      );
-                      setTransferOrderModal((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              currentTableNo: sel.name,
-                              orderId:
-                                match?.id ||
-                                `ORD-${sel.name.replace(/\s+/g, "")}`,
-                              orderNumber:
-                                match?.orderNumber || `Đơn ${sel.name}`,
-                            }
-                          : null,
-                      );
-                    }
-                  }}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs cursor-pointer"
-                >
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}{" "}
-                      {t.status === "occupied"
-                        ? "(Đang dùng món)"
-                        : t.status === "waiting"
-                          ? "(Chờ phục vụ)"
-                          : "(Khả dụng)"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Chọn Bàn Đích Mới (Trống &amp; Chưa Gộp)
-                </label>
-                <select
-                  value={transferOrderTargetId}
-                  onChange={(e) => setTransferOrderTargetId(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 shadow-2xs cursor-pointer"
-                >
-                  <option value="">-- Chọn Bàn Nhận Đơn --</option>
-                  {tables
-                    .filter(
-                      (t) =>
-                        t.name !== transferOrderModal.currentTableNo &&
-                        t.status !== "merged",
-                    )
-                    .map((t) => {
-                      const isOccupied =
-                        t.status === "occupied" ||
-                        t.status === "serving" ||
-                        t.status === "waiting";
-                      return (
-                        <option key={t.id} value={t.id} disabled={isOccupied}>
-                          {t.name}{" "}
-                          {isOccupied
-                            ? "(Đang bận - Không khả dụng)"
-                            : "(Trống)"}{" "}
-                          {t.stationName ? `[Trạm: ${t.stationName}]` : ""}
-                        </option>
-                      );
-                    })}
-                </select>
-              </div>
-              <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl text-[11px] text-amber-900 leading-relaxed shadow-2xs">
-                <strong>Lưu ý nghiệp vụ:</strong> Hệ thống tự động cập nhật lại
-                trạm đích cho KDS và Robot AMR. Nếu bàn đích đã gộp vào bàn
-                chính, đơn sẽ được tự động hướng tới trạm của bàn chính.
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                disabled={isSubmittingTransferOrder}
-                onClick={() => setTransferOrderModal(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingTransferOrder || !transferOrderTargetId}
-                onClick={handleConfirmTransferOrder}
-                className="px-4 py-2 rounded-xl text-xs font-black text-white bg-amber-600 hover:bg-amber-500 active:scale-95 shadow-md shadow-amber-500/20 transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5 text-white" />
-                <span>
-                  {isSubmittingTransferOrder
-                    ? "Đang Chuyển Bàn..."
-                    : "Xác Nhận Đổi Bàn"}
-                </span>
               </button>
             </div>
           </div>

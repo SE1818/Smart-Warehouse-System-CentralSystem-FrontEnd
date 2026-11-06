@@ -161,11 +161,10 @@ export interface DiningTableDto {
   tableName?: string;
   zone: string;
   capacity: number;
-  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
+  status: 'occupied' | 'serving' | 'empty' | 'waiting';
   assignedRobotCode: string | null;
   stationId?: string | null;
   stationName?: string | null;
-  mergedIntoTableId?: string | null;
   qrCodeUrl?: string | null;
   currentOrders: string[];
   orderTime: string | null;
@@ -535,12 +534,10 @@ export const tableService = {
             : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
             : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
             : t.status === 'Served' || t.status === 'serving' ? 'serving'
-            : t.status === 'Merged' || t.status === 'merged' ? 'merged'
             : 'empty') as DiningTableDto['status'],
           assignedRobotCode: t.assignedRobotCode || null,
           stationId: t.stationId || null,
           stationName: t.stationName || null,
-          mergedIntoTableId: t.mergedIntoTableId || null,
           qrCodeUrl: t.qrCodeUrl || null,
           currentOrders: t.currentOrders || [],
           orderTime: t.orderTime || null,
@@ -642,14 +639,7 @@ export const tableService = {
     }
   },
 
-  bindAssistedStation: async (tableId: string, stationId: string, mode: string = 'assisted_dropoff'): Promise<{ success: boolean; message: string }> => {
-    try {
-      const res = await portalClient.post(`/tables/${tableId}/bind-assisted-station`, { stationId, mode });
-      return { success: true, message: res.data?.message || 'Liên kết trạm đệm thành công' };
-    } catch (err: any) {
-      return { success: false, message: extractErrorMessage(err, 'Lỗi liên kết trạm đệm') };
-    }
-  },
+
 
   assignStation: async (tableId: string, stationId: string | null): Promise<{ success: boolean; message: string }> => {
     try {

@@ -532,47 +532,6 @@ export const robotService = {
 
 
 
-  // Flow 3: Table Merge (Fixed Delivery Waypoint at Target Station)
-  async mergeTables(targetTableId: string, sourceTableIds: string[], storeId?: string, reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
-    const effectiveStoreId = (storeId && storeId.trim() !== '' && storeId !== '00000000-0000-0000-0000-000000000000') ? storeId : '11111111-1111-1111-1111-111111111111';
-    try {
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${targetTableId}/merge`, {
-        storeId: effectiveStoreId,
-        sourceTableIds,
-        reason
-      });
-      return response.data;
-    } catch (err) {
-      console.warn('[robotService] Lỗi gọi API merge tables, fallback mô phỏng:', err);
-      return { success: true, message: 'Đã gộp bàn thành công (chế độ dự phòng).' };
-    }
-  },
-
-  // Compatibility alias for groupTables
-  async groupTables(primaryAnchorTableId: string, memberTableIds: string[], storeId?: string, reason: string = 'Gộp bàn'): Promise<{ success: boolean; message: string }> {
-    return this.mergeTables(primaryAnchorTableId, memberTableIds, storeId, reason);
-  },
-
-  // Flow 3: Table Split (Restore table back to standalone available state)
-  async splitTable(tableId: string, storeId?: string, reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
-    const effectiveStoreId = (storeId && storeId.trim() !== '' && storeId !== '00000000-0000-0000-0000-000000000000') ? storeId : '11111111-1111-1111-1111-111111111111';
-    try {
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${tableId}/split`, {
-        storeId: effectiveStoreId,
-        reason
-      });
-      return response.data;
-    } catch (err) {
-      console.warn('[robotService] Lỗi gọi API split table, fallback mô phỏng:', err);
-      return { success: true, message: 'Đã tách bàn hoàn nguyên thành công (chế độ dự phòng).' };
-    }
-  },
-
-  // Compatibility alias for ungroupTable
-  async ungroupTable(tableId: string, storeId?: string, reason: string = 'Tách bàn'): Promise<{ success: boolean; message: string }> {
-    return this.splitTable(tableId, storeId, reason);
-  },
-
   // Flow 3: Transfer order from current table to another table while cooking (Pre-dispatch)
   async transferOrderTable(newTableId: string, orderId: string, reason: string = 'Đổi bàn khi đang nấu'): Promise<{ success: boolean; message: string }> {
     try {
