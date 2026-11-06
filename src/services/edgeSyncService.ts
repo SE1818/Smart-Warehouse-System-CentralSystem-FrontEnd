@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr';
-import { resolveBaseUrl, getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from './api';
+import { resolveBaseUrl } from './api';
 import { sqliteService } from './sqliteService';
 
 export interface EdgeSyncRequest {
@@ -143,45 +143,36 @@ class EdgeSyncService {
     return this.totalSyncs;
   }
 
+  public isStarted(): boolean {
+    return this.isAutoSyncStarted;
+  }
+
   /**
-   * Initializes background connection from local frontend to VPS server
+   * Attaches background synchronization and listeners to a single shared HubConnection
+   * to guarantee zero connection duplication and prevent hopping.
    */
-  public async startEdgeSync(): Promise<void> {
-    if (this.isAutoSyncStarted && this.connection) return;
-    this.isAutoSyncStarted = true;
+  public attachToHubConnection(connection: signalR.HubConnection): void {
+    if (!connection) return;
     this.readTenantConfig();
+    this.connection = connection;
+    this.isAutoSyncStarted = true;
 
-    const cleanBase = resolveBaseUrl().replace(/\/+$/, '');
-    const connectionUrl = cleanBase.endsWith('/v1')
-      ? `${cleanBase}/robots/tracking-hub`
-      : `${cleanBase}/v1/robots/tracking-hub`;
-
-    this.connection = new signalR.HubConnectionBuilder()
-      .withUrl(connectionUrl, {
-        accessTokenFactory: async () => (await getValidAuthTokenOrRefresh()) || '',
-        headers: { 'ngrok-skip-browser-warning': 'true' },
-      })
-      .configureLogging(signalR.LogLevel.Information)
-      .withAutomaticReconnect({
-        nextRetryDelayInMilliseconds: (retryContext) => {
-          if (retryContext.retryReason && isUnauthorizedError(retryContext.retryReason)) {
-            void handleSignalR401();
-            return null;
-          }
-          const delays = [0, 2000, 5000, 10000, 30000];
-          return delays[retryContext.previousRetryCount] ?? null;
-        },
-      })
-      .build();
+    // Remove any previous handlers to prevent duplicates
+    try {
+      connection.off('SuperAdminRequestDataSync');
+      connection.off('EdgeDataSyncConfirmed');
+    } catch {
+      // safe ignore
+    }
 
     // 1. Listen for background sync request initiated by SuperAdmin on VPS
-    this.connection.on('SuperAdminRequestDataSync', async (request: EdgeSyncRequest) => {
+    connection.on('SuperAdminRequestDataSync', async (request: EdgeSyncRequest) => {
       console.log('[EdgeSync Background] SuperAdmin trên VPS đã gửi yêu cầu đồng bộ data:', request);
       await this.handleSuperAdminSyncRequest(request);
     });
 
     // 2. Listen for sync acknowledgment
-    this.connection.on('EdgeDataSyncConfirmed', (ack: any) => {
+    connection.on('EdgeDataSyncConfirmed', (ack: any) => {
       console.log('[EdgeSync Background] Server VPS đã xác nhận nhận data đồng bộ:', ack);
       this.lastSyncedAt = new Date().toLocaleTimeString('vi-VN');
       this.totalSyncs++;
@@ -192,49 +183,39 @@ class EdgeSyncService {
       );
     });
 
-    this.connection.onreconnecting(() => {
-      this.connectionState = 'connecting';
-      this.notifyStateChanged();
-    });
-
-    this.connection.onreconnected(async () => {
+    if (connection.state === signalR.HubConnectionState.Connected) {
       this.connectionState = 'connected';
       this.notifyStateChanged();
-      await this.announceEdgeNode();
-    });
-
-    this.connection.onclose(() => {
-      this.connectionState = 'disconnected';
-      this.notifyStateChanged();
-    });
-
-    try {
+      void this.announceEdgeNode();
+    } else {
       this.connectionState = 'connecting';
       this.notifyStateChanged();
-      await this.connection.start();
-      this.connectionState = 'connected';
-      this.notifyStateChanged();
-      console.log('[EdgeSync Background] Đã kết nối ngầm tới VPS Tracking Hub thành công. Sẵn sàng nhận lệnh đồng bộ từ SuperAdmin.');
-      await this.announceEdgeNode();
-
-      // Launch automatic background connectivity & sync keeper (30s heartbeat loop)
-      if (!this.backgroundIntervalId && typeof window !== 'undefined') {
-        this.backgroundIntervalId = setInterval(async () => {
-          if (this.connectionState === 'connected') {
-            await this.announceEdgeNode();
-          } else if (this.connectionState === 'disconnected') {
-            void this.startEdgeSync();
-          }
-        }, 30000);
-      }
-    } catch (err) {
-      console.warn('[EdgeSync Background] Chưa thể kết nối tới VPS Hub:', err);
-      this.connectionState = 'disconnected';
-      this.notifyStateChanged();
-      if (isUnauthorizedError(err)) {
-        void handleSignalR401();
-      }
     }
+
+    // Launch periodic announce loop (30s heartbeat) without creating extra connections
+    if (!this.backgroundIntervalId && typeof window !== 'undefined') {
+      this.backgroundIntervalId = setInterval(async () => {
+        if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
+          await this.announceEdgeNode();
+        }
+      }, 30000);
+    }
+  }
+
+  /**
+   * Initializes background connection from local frontend to VPS server.
+   * Leverages the shared Robot Hub connection to prevent duplicate WebSockets.
+   */
+  public async startEdgeSync(existingConnection?: signalR.HubConnection): Promise<void> {
+    if (existingConnection) {
+      this.attachToHubConnection(existingConnection);
+      return;
+    }
+    if (this.connection && (this.connection.state === signalR.HubConnectionState.Connected || this.connection.state === signalR.HubConnectionState.Connecting)) {
+      return;
+    }
+    this.readTenantConfig();
+    this.isAutoSyncStarted = true;
   }
 
   /**

@@ -83,8 +83,13 @@ export const useRobotStore = create<RobotState>((set, get) => {
 
     connect: () => {
       activeConnectionsCount++;
-      if (get().connection) {
-        // Connection already exists, skip creation
+      const existingConn = get().connection;
+      if (
+        existingConn &&
+        (existingConn.state === signalR.HubConnectionState.Connected ||
+         existingConn.state === signalR.HubConnectionState.Connecting)
+      ) {
+        // Connection already in progress or connected, skip creation to avoid duplicate websockets
         return;
       }
 
@@ -101,7 +106,7 @@ export const useRobotStore = create<RobotState>((set, get) => {
           accessTokenFactory: async () => (await getValidAuthTokenOrRefresh()) || '',
           headers: { 'ngrok-skip-browser-warning': 'true' },
         })
-        .configureLogging(signalR.LogLevel.Information)
+        .configureLogging(signalR.LogLevel.Warning)
         .withAutomaticReconnect({
           nextRetryDelayInMilliseconds: (retryContext) => {
             if (retryContext.retryReason && isUnauthorizedError(retryContext.retryReason)) {
@@ -254,11 +259,14 @@ export const useRobotStore = create<RobotState>((set, get) => {
 
       const startConnection = () => {
         if (!get().connection) return;
+        if (connection.state === signalR.HubConnectionState.Connected) return;
+
         connection.start()
           .then(() => {
             set({ status: 'connected', connection });
             get().addLog('Kết nối SignalR Hub thành công.', 'success');
-            void edgeSyncService.startEdgeSync();
+            // Attach edge sync to the SAME single hub connection! Zero duplicate WebSockets!
+            edgeSyncService.attachToHubConnection(connection);
           })
           .catch(async (err) => {
             set({ status: 'disconnected' });
@@ -272,30 +280,36 @@ export const useRobotStore = create<RobotState>((set, get) => {
               }
               return;
             }
-            setTimeout(() => {
-              if (get().connection && get().status === 'disconnected') {
-                get().addLog('Thử kết nối lại Robot Hub...', 'info');
-                set({ status: 'connecting' });
-                startConnection();
-              }
-            }, 5000);
+            if (activeConnectionsCount > 0) {
+              setTimeout(() => {
+                if (get().connection && get().status === 'disconnected' && activeConnectionsCount > 0) {
+                  get().addLog('Thử kết nối lại Robot Hub...', 'info');
+                  set({ status: 'connecting' });
+                  startConnection();
+                }
+              }, 5000);
+            }
           });
       };
 
       connection.onclose((error) => {
         set({ status: 'disconnected' });
-        get().addLog(`Kết nối Robot Hub bị đóng: ${error?.message}`, 'error');
-        if (isUnauthorizedError(error)) {
-          void handleSignalR401();
-          return;
-        }
-        setTimeout(() => {
-          if (get().connection && get().status === 'disconnected') {
-            get().addLog('Thử khởi động lại kết nối Robot Hub...', 'info');
-            set({ status: 'connecting' });
-            startConnection();
+        if (error) {
+          get().addLog(`Kết nối Robot Hub bị đóng: ${error?.message}`, 'error');
+          if (isUnauthorizedError(error)) {
+            void handleSignalR401();
+            return;
           }
-        }, 10000);
+          if (activeConnectionsCount > 0) {
+            setTimeout(() => {
+              if (get().connection && get().status === 'disconnected' && activeConnectionsCount > 0) {
+                get().addLog('Thử khởi động lại kết nối Robot Hub...', 'info');
+                set({ status: 'connecting' });
+                startConnection();
+              }
+            }, 10000);
+          }
+        }
       });
 
       set({ connection });
@@ -304,10 +318,15 @@ export const useRobotStore = create<RobotState>((set, get) => {
 
     disconnect: () => {
       activeConnectionsCount = Math.max(0, activeConnectionsCount - 1);
-      if (activeConnectionsCount === 0 && get().connection) {
-        const conn = get().connection;
-        set({ connection: null, status: 'disconnected' });
-        conn?.stop().catch((e) => console.error('Error stopping Robot Hub connection:', e));
+      // Grace period (15s) to avoid closing and renegotiating connection during rapid page transitions
+      if (activeConnectionsCount === 0) {
+        setTimeout(() => {
+          if (activeConnectionsCount === 0 && get().connection) {
+            const conn = get().connection;
+            set({ connection: null, status: 'disconnected' });
+            conn?.stop().catch((e) => console.error('Error stopping Robot Hub connection:', e));
+          }
+        }, 15000);
       }
     },
   };
