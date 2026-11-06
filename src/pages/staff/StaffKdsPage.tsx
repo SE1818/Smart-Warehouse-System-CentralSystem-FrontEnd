@@ -26,6 +26,8 @@ import {
   Upload,
   X,
   Target,
+  Eye,
+  Utensils,
 } from "lucide-react";
 import type { Station } from "@/types/robot";
 import {
@@ -213,18 +215,6 @@ export const StaffKdsPage: React.FC = () => {
     );
   }, [isSignalRConnected, activeSequence, liveRobotStatus, currentWorkflowStep]);
 
-  // Target table currently being delivered to
-  const activeTargetTable = useMemo(() => {
-    if (activeSequence) {
-      return (
-        activeSequence.legs[activeSequence.currentLegIndex]?.tableNo ||
-        activeSequence.legs[0]?.tableNo ||
-        ""
-      );
-    }
-    return isTray1Active ? tray1Table : isTray2Active ? tray2Table : "";
-  }, [activeSequence, isTray1Active, isTray2Active, tray1Table, tray2Table]);
-
   // Cleanup transit timer on unmount
   useEffect(() => {
     return () => {
@@ -242,6 +232,22 @@ export const StaffKdsPage: React.FC = () => {
     useState<boolean>(false);
   // Physical Stations from ROS SLAM map
   const [stations, setStations] = useState<Station[]>([]);
+
+  // Task Progress Detail Modal State
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<{
+    taskId: string;
+    missionId: string;
+    legIndex: number;
+    trayLevel: 1 | 2;
+    tableNo: string;
+    stationName?: string;
+    robotCode: string;
+    orderId?: string;
+    status: string;
+    workflowStep: number;
+    time?: string;
+    isLive: boolean;
+  } | null>(null);
 
   // Create Table Modal State
   const [isCreateTableModalOpen, setIsCreateTableModalOpen] =
@@ -476,18 +482,7 @@ export const StaffKdsPage: React.FC = () => {
     };
     initKds();
   }, []);
-  // Sync active tray table whenever selectedTableId or tables change
-  useEffect(() => {
-    if (selectedTableId && tables.length > 0) {
-      const matched = tables.find((t) => t.id === selectedTableId);
-      const tableName = matched ? matched.name : `Bàn ${selectedTableId}`;
-      if (activeTrayTarget === "tray1" || (!isTray2Active && isTray1Active)) {
-        setTray1Table(tableName);
-      } else {
-        setTray2Table(tableName);
-      }
-    }
-  }, [selectedTableId, tables, activeTrayTarget, isTray1Active, isTray2Active]);
+
   // Selected Table Object
   const currentSelectedTable: TableNode = tables.find(
     (t) => t.id === selectedTableId,
@@ -525,7 +520,8 @@ export const StaffKdsPage: React.FC = () => {
     setPage: setTablePage,
     setPageSize: setTablePageSize,
   } = usePagination(tables, 12);
-  // Unified Table Selection Handler: Interlinks Map/Grid Selection with Dispatch Trays & Table Focus
+
+  // Unified Table Selection Handler: Assigns table exclusively to active focused tray target
   const handleTableSelect = (tableId: string) => {
     setSelectedTableId(tableId);
     const matched = tables.find((t) => t.id === tableId);
@@ -541,9 +537,6 @@ export const StaffKdsPage: React.FC = () => {
       if (!tray1OrderId && matched?.currentOrders?.[0]) {
         setTray1OrderId(matched.currentOrders[0]);
       }
-      if (isTray2Active) {
-        setActiveTrayTarget("tray2");
-      }
       showToast(
         `Đã gán ${tableName} vào Khay 1 (Tầng Dưới).`,
         "info",
@@ -554,10 +547,126 @@ export const StaffKdsPage: React.FC = () => {
       if (!tray2OrderId && matched?.currentOrders?.[0]) {
         setTray2OrderId(matched.currentOrders[0]);
       }
-      setActiveTrayTarget("tray1");
-      showToast(`Đã gán ${tableName} vào Khay 2 (Tầng Trên).`, "info");
+      showToast(
+        `Đã gán ${tableName} vào Khay 2 (Tầng Trên).`,
+        "info",
+      );
     }
   };
+
+  // Task Queue Handlers: Change Table, Change Station & View Details
+  const handleOpenTaskReroute = (legIndex: number, _tableNo?: string) => {
+    handleOpenWorkflowRerouteModal(legIndex);
+  };
+
+  const handleOpenTaskAssignStation = (tableNoOrId?: string) => {
+    if (!tableNoOrId) {
+      setIsAssignStationModalOpen(true);
+      return;
+    }
+    const matched = tables.find(
+      (t) =>
+        t.name.toLowerCase() === tableNoOrId.toLowerCase() ||
+        t.id === tableNoOrId ||
+        t.tableNo === tableNoOrId,
+    );
+    const effectiveId = matched?.id || tableNoOrId;
+    setAssignStationTableId(effectiveId);
+    setAssignStationTargetStationId(matched?.stationId || "");
+    setIsAssignStationModalOpen(true);
+  };
+
+  // Robot Mission Queue: Active sequence legs + recent/queued missions
+  const missionQueueTasks = useMemo(() => {
+    const list: Array<{
+      taskId: string;
+      missionId: string;
+      legIndex: number;
+      trayLevel: 1 | 2;
+      tableNo: string;
+      stationName?: string;
+      robotCode: string;
+      orderId?: string;
+      status: string;
+      workflowStep: number;
+      time: string;
+      isLive: boolean;
+    }> = [];
+
+    // 1. If activeSequence is running:
+    if (activeSequence) {
+      activeSequence.legs.forEach((leg, idx) => {
+        const isCurrentLeg = activeSequence.currentLegIndex === idx;
+        const isPassedLeg = activeSequence.currentLegIndex > idx;
+        let legStep = 1;
+        let legStatus = "Chờ giao";
+        if (isPassedLeg) {
+          legStep = 4;
+          legStatus = "Hoàn tất";
+        } else if (isCurrentLeg) {
+          legStep = currentWorkflowStep;
+          legStatus =
+            currentWorkflowStep === 1
+              ? "Nạp tại bếp"
+              : currentWorkflowStep === 2
+                ? "Đang di chuyển"
+                : currentWorkflowStep === 3
+                  ? "Đang trả món"
+                  : "Về bếp";
+        }
+
+        const matchedTable = tables.find(
+          (t) =>
+            t.name.toLowerCase() === leg.tableNo.toLowerCase() ||
+            t.tableNo === leg.tableNo,
+        );
+
+        list.push({
+          taskId: leg.taskId || `${activeSequence.sequenceId}-${idx + 1}`,
+          missionId: activeSequence.sequenceId,
+          legIndex: idx,
+          trayLevel: (leg.cargoLevel || idx + 1) as 1 | 2,
+          tableNo: leg.tableNo,
+          stationName:
+            matchedTable?.stationName || matchedTable?.stationId || undefined,
+          robotCode: activeSequence.robotCode,
+          orderId: leg.orderId,
+          status: legStatus,
+          workflowStep: legStep,
+          time: activeSequence.startTime || "Vừa xong",
+          isLive: isCurrentLeg,
+        });
+      });
+    }
+
+    // 2. Add recent tasks that are not already in activeSequence:
+    recentSqliteTasks.forEach((rt) => {
+      if (!list.some((l) => l.taskId === rt.taskId)) {
+        const matchedTable = tables.find(
+          (t) =>
+            t.name.toLowerCase() === rt.destination.toLowerCase() ||
+            t.tableNo === rt.destination,
+        );
+        list.push({
+          taskId: rt.taskId,
+          missionId: rt.taskId.split("-")[0] || "SEQ",
+          legIndex: 0,
+          trayLevel: rt.taskId.endsWith("-2") ? 2 : 1,
+          tableNo: rt.destination,
+          stationName:
+            matchedTable?.stationName || matchedTable?.stationId || undefined,
+          robotCode: rt.robotCode,
+          orderId: rt.orderId,
+          status: rt.status === "Delivering" ? "Đang giao" : "Hoàn tất",
+          workflowStep: rt.status === "Delivering" ? 2 : 4,
+          time: rt.time || "Gần đây",
+          isLive: false,
+        });
+      }
+    });
+
+    return list;
+  }, [activeSequence, currentWorkflowStep, recentSqliteTasks, tables]);
 
   // Action: Select Pending Order -> Autofill Order ID & Destination Table in Active Tray
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
@@ -1665,16 +1774,28 @@ export const StaffKdsPage: React.FC = () => {
               >
                 {currentSelectedTable.id &&
                 currentSelectedTable.id !== "Chưa có" ? (
-                  currentSelectedTable.id
+                  <Utensils className="w-5 h-5 text-blue-600" />
                 ) : (
                   <Target className="w-5 h-5 text-slate-400" />
                 )}
               </div>
               <div>
-                <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                <div className="text-xs font-bold text-slate-900 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-black tracking-tight">
                     {currentSelectedTable.name}
                   </span>
+                  {currentSelectedTable.id &&
+                    currentSelectedTable.id !== "Chưa có" && (
+                      <span
+                        className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200"
+                        title={`Mã ID CSDL: ${currentSelectedTable.id}`}
+                      >
+                        ID:{" "}
+                        {currentSelectedTable.id.length > 8
+                          ? `...${currentSelectedTable.id.slice(-6).toUpperCase()}`
+                          : currentSelectedTable.id}
+                      </span>
+                    )}
                   {currentSelectedTable.zone &&
                     currentSelectedTable.zone !== "Toàn quán" && (
                       <span className="text-[10px] font-mono font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
@@ -1747,14 +1868,14 @@ export const StaffKdsPage: React.FC = () => {
                       onClick={() => {
                         setTray1Table(currentSelectedTable.name);
                         setIsTray1Active(true);
-                        setActiveTrayTarget("tray2");
+                        setActiveTrayTarget("tray1");
                         showToast(
-                          `Đã nạp ${currentSelectedTable.name} vào Khay 1 (Tầng 1)`,
+                          `Đã nạp ${currentSelectedTable.name} vào Khay 1 (Tầng Dưới)`,
                           "info",
                         );
                       }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        isTray1Active && activeTrayTarget === "tray1"
+                        isTray1Active && tray1Table === currentSelectedTable.name
                           ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
                           : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
                       }`}
@@ -1767,14 +1888,14 @@ export const StaffKdsPage: React.FC = () => {
                       onClick={() => {
                         setTray2Table(currentSelectedTable.name);
                         setIsTray2Active(true);
-                        setActiveTrayTarget("tray1");
+                        setActiveTrayTarget("tray2");
                         showToast(
-                          `Đã nạp ${currentSelectedTable.name} vào Khay 2 (Tầng 2)`,
+                          `Đã nạp ${currentSelectedTable.name} vào Khay 2 (Tầng Trên)`,
                           "info",
                         );
                       }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        isTray2Active && activeTrayTarget === "tray2"
+                        isTray2Active && tray2Table === currentSelectedTable.name
                           ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
                           : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
                       }`}
@@ -2238,32 +2359,47 @@ export const StaffKdsPage: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  {/* Confirmation toggle button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !isTray1Active;
-                      setIsTray1Active(next);
-                      if (next) setActiveTrayTarget("tray1");
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      isTray1Active
-                        ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-2xs"
-                        : "bg-white hover:bg-slate-100 text-slate-600 border-slate-300"
-                    }`}
-                  >
-                    {isTray1Active ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                        <span>✓ Đang Dùng Khay 1</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Bật Khay 1</span>
-                      </>
+                  <div className="flex items-center gap-1.5">
+                    {isTray1Active && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTrayTarget("tray1")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                          activeTrayTarget === "tray1"
+                            ? "bg-blue-600 text-white border-blue-600 ring-2 ring-blue-300 shadow-2xs"
+                            : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
+                        }`}
+                      >
+                        {activeTrayTarget === "tray1" ? "🎯 Đang nhận bàn" : "Gán từ bản đồ"}
+                      </button>
                     )}
-                  </button>
+                    {/* Confirmation toggle button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isTray1Active;
+                        setIsTray1Active(next);
+                        if (next) setActiveTrayTarget("tray1");
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                        isTray1Active
+                          ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-2xs"
+                          : "bg-white hover:bg-slate-100 text-slate-600 border-slate-300"
+                      }`}
+                    >
+                      {isTray1Active ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                          <span>✓ Đang Dùng Khay 1</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Bật Khay 1</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 {isTray1Active ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-blue-100">
@@ -2275,7 +2411,6 @@ export const StaffKdsPage: React.FC = () => {
                         value={tray1Table}
                         onChange={(e) => {
                           setTray1Table(e.target.value);
-                          if (isTray2Active) setActiveTrayTarget("tray2");
                         }}
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
                       >
@@ -2359,14 +2494,28 @@ export const StaffKdsPage: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  {/* Confirmation toggle button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !isTray2Active;
-                      setIsTray2Active(next);
-                      if (next) setActiveTrayTarget("tray2");
-                    }}
+                  <div className="flex items-center gap-1.5">
+                    {isTray2Active && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTrayTarget("tray2")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                          activeTrayTarget === "tray2"
+                            ? "bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-300 shadow-2xs"
+                            : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                        }`}
+                      >
+                        {activeTrayTarget === "tray2" ? "🎯 Đang nhận bàn" : "Gán từ bản đồ"}
+                      </button>
+                    )}
+                    {/* Confirmation toggle button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isTray2Active;
+                        setIsTray2Active(next);
+                        if (next) setActiveTrayTarget("tray2");
+                      }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
                       isTray2Active
                         ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600 shadow-2xs"
@@ -2386,7 +2535,8 @@ export const StaffKdsPage: React.FC = () => {
                     )}
                   </button>
                 </div>
-                {isTray2Active ? (
+              </div>
+              {isTray2Active ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-indigo-100">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700 block mb-1">
@@ -2502,347 +2652,6 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
                 {/* Merged table warning if active trays have merged tables */}
                 
-              </div>
-
-              {/* DYNAMIC REALTIME 4-STEP WORKFLOW PIPELINE WITH LIVE PULSING INDICATOR */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-b from-blue-50/80 to-slate-50 border border-blue-200/90 text-xs space-y-2.5 shadow-2xs">
-                <div className="flex items-center justify-between pb-1.5 border-b border-blue-100">
-                  <span className="font-bold text-blue-950 flex items-center gap-1.5 font-heading">
-                    <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>QUY TRÌNH PHỤC VỤ TỰ ĐỘNG</span>
-                  </span>
-                  {/* Live Status Pill with Radar Wave Pulse */}
-                  <span className="text-[10px] font-mono font-bold bg-white text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200 flex items-center gap-1.5 shadow-2xs">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                    </span>
-                    <span>
-                      {currentWorkflowStep === 1
-                        ? "Bước 1/4 • Nạp Món Tại Bếp"
-                        : currentWorkflowStep === 2
-                          ? `Bước 2/4 • Đang Đến ${activeTargetTable || "Bàn"}${tables.find((t) => t.name.toLowerCase() === (activeTargetTable || "").toLowerCase())?.stationName ? ` (Trạm: ${tables.find((t) => t.name.toLowerCase() === (activeTargetTable || "").toLowerCase())?.stationName})` : ""}`
-                          : currentWorkflowStep === 3
-                            ? `Bước 3/4 • Trả Món Tại ${activeTargetTable || "Bàn"}`
-                            : "Bước 4/4 • Tự Động Về Bếp"}
-                    </span>
-                  </span>
-                </div>
-
-                {/* 4 Steps Grid with Active Dợn Sóng / Pulsing Radar Wave on Current Step */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] font-mono pt-0.5">
-                  {/* STEP 1: XUẤT BẾP */}
-                  {(() => {
-                    const isActive = currentWorkflowStep === 1;
-                    const isDone = currentWorkflowStep > 1;
-                    return (
-                      <div
-                        className={`relative p-2.5 rounded-xl border transition-all duration-300 flex flex-col justify-between overflow-hidden ${
-                          isActive
-                            ? "bg-gradient-to-b from-blue-500/10 to-blue-50 border-blue-500 text-blue-950 shadow-md shadow-blue-500/20 ring-2 ring-blue-400/50"
-                            : isDone
-                              ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
-                              : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
-                        }`}
-                      >
-                        {isActive && (
-                          <>
-                            {/* Dợn sóng viền radar pulse */}
-                            <div className="absolute inset-0 bg-blue-500/5 animate-pulse pointer-events-none" />
-                            <div className="absolute -top-4 -right-4 w-10 h-10 bg-blue-400/20 rounded-full blur-xs animate-ping pointer-events-none" />
-                          </>
-                        )}
-                        <div>
-                          <div className="flex items-center justify-center gap-1 mb-1">
-                            {isActive ? (
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                              </span>
-                            ) : isDone ? (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            ) : (
-                              <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            )}
-                            <span
-                              className={`text-[9px] font-black uppercase tracking-wider ${
-                                isActive
-                                  ? "text-blue-700 bg-blue-100/90 px-1.5 py-0.2 rounded-full border border-blue-200"
-                                  : isDone
-                                    ? "text-emerald-700 font-bold"
-                                    : "text-slate-400"
-                              }`}
-                            >
-                              {isActive ? "Đang Ở Bếp" : isDone ? "Đã Xong" : "Chờ"}
-                            </span>
-                          </div>
-                          <div
-                            className={`font-black text-xs ${
-                              isActive
-                                ? "text-blue-900 font-extrabold"
-                                : isDone
-                                  ? "text-emerald-800"
-                                  : "text-slate-700"
-                            }`}
-                          >
-                            1. Xuất Bếp
-                          </div>
-                        </div>
-                        <div className="mt-1.5 pt-1 border-t border-slate-200/50">
-                          <div
-                            className={`text-[9.5px] font-sans truncate ${
-                              isActive
-                                ? "text-blue-700 font-bold animate-pulse"
-                                : isDone
-                                  ? "text-emerald-600 font-semibold"
-                                  : "text-slate-400"
-                            }`}
-                          >
-                            {isActive
-                              ? "Nạp món tại quầy"
-                              : isDone
-                                ? "Đã xuất phát ✓"
-                                : "Nạp khay món"}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* STEP 2: ĐẾN BÀN */}
-                  {(() => {
-                    const isActive = currentWorkflowStep === 2;
-                    const isDone = currentWorkflowStep > 2;
-                    return (
-                      <div
-                        className={`relative p-2.5 rounded-xl border transition-all duration-300 flex flex-col justify-between overflow-hidden ${
-                          isActive
-                            ? "bg-gradient-to-b from-blue-500/10 to-indigo-50 border-blue-600 text-blue-950 shadow-md shadow-blue-500/25 ring-2 ring-blue-500/60"
-                            : isDone
-                              ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
-                              : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
-                        }`}
-                      >
-                        {isActive && (
-                          <>
-                            {/* Dợn sóng viền radar pulse */}
-                            <div className="absolute inset-0 bg-blue-500/10 animate-pulse pointer-events-none" />
-                            <div className="absolute -top-4 -right-4 w-10 h-10 bg-indigo-400/25 rounded-full blur-xs animate-ping pointer-events-none" />
-                          </>
-                        )}
-                        <div>
-                          <div className="flex items-center justify-center gap-1 mb-1">
-                            {isActive ? (
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                              </span>
-                            ) : isDone ? (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            ) : (
-                              <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            )}
-                            <span
-                              className={`text-[9px] font-black uppercase tracking-wider ${
-                                isActive
-                                  ? "text-blue-700 bg-blue-100/90 px-1.5 py-0.2 rounded-full border border-blue-200"
-                                  : isDone
-                                    ? "text-emerald-700 font-bold"
-                                    : "text-slate-400"
-                              }`}
-                            >
-                              {isActive ? "Đang Di Chuyển" : isDone ? "Đã Xong" : "Chờ"}
-                            </span>
-                          </div>
-                          <div
-                            className={`font-black text-xs ${
-                              isActive
-                                ? "text-blue-900 font-extrabold"
-                                : isDone
-                                  ? "text-emerald-800"
-                                  : "text-slate-700"
-                            }`}
-                          >
-                            2. Đến Bàn
-                          </div>
-                        </div>
-                        <div className="mt-1.5 pt-1 border-t border-slate-200/50">
-                          <div
-                            className={`text-[9.5px] font-sans truncate ${
-                              isActive
-                                ? "text-blue-700 font-bold animate-pulse"
-                                : isDone
-                                  ? "text-emerald-600 font-semibold"
-                                  : "text-slate-400"
-                            }`}
-                          >
-                            {isActive
-                              ? `Đang tới ${activeTargetTable || "Bàn"}...`
-                              : isDone
-                                ? `Đã đến ${activeTargetTable || "bàn"} ✓`
-                                : "Nút trên xe / Đổi bàn"}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* STEP 3: TRẢ MÓN */}
-                  {(() => {
-                    const isActive = currentWorkflowStep === 3;
-                    const isDone = currentWorkflowStep > 3;
-                    return (
-                      <div
-                        className={`relative p-2.5 rounded-xl border transition-all duration-300 flex flex-col justify-between overflow-hidden ${
-                          isActive
-                            ? "bg-gradient-to-b from-amber-500/10 to-amber-50 border-amber-500 text-amber-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400/60"
-                            : isDone
-                              ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
-                              : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
-                        }`}
-                      >
-                        {isActive && (
-                          <>
-                            {/* Dợn sóng viền radar pulse */}
-                            <div className="absolute inset-0 bg-amber-500/10 animate-pulse pointer-events-none" />
-                            <div className="absolute -top-4 -right-4 w-10 h-10 bg-amber-400/30 rounded-full blur-xs animate-ping pointer-events-none" />
-                          </>
-                        )}
-                        <div>
-                          <div className="flex items-center justify-center gap-1 mb-1">
-                            {isActive ? (
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
-                              </span>
-                            ) : isDone ? (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            ) : (
-                              <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            )}
-                            <span
-                              className={`text-[9px] font-black uppercase tracking-wider ${
-                                isActive
-                                  ? "text-amber-800 bg-amber-100/90 px-1.5 py-0.2 rounded-full border border-amber-300"
-                                  : isDone
-                                    ? "text-emerald-700 font-bold"
-                                    : "text-slate-400"
-                              }`}
-                            >
-                              {isActive ? "Đang Trả Món" : isDone ? "Đã Xong" : "Chờ"}
-                            </span>
-                          </div>
-                          <div
-                            className={`font-black text-xs ${
-                              isActive
-                                ? "text-amber-950 font-extrabold"
-                                : isDone
-                                  ? "text-emerald-800"
-                                  : "text-slate-700"
-                            }`}
-                          >
-                            3. Trả Món
-                          </div>
-                        </div>
-                        <div className="mt-1.5 pt-1 border-t border-slate-200/50">
-                          <div
-                            className={`text-[9.5px] font-sans truncate ${
-                              isActive
-                                ? "text-amber-800 font-bold animate-pulse"
-                                : isDone
-                                  ? "text-emerald-600 font-semibold"
-                                  : "text-slate-400"
-                            }`}
-                          >
-                            {isActive
-                              ? `Tại ${activeTargetTable || "bàn"} • Chờ lấy`
-                              : isDone
-                                ? "Đã nhận món ✓"
-                                : "Khách nhận món"}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* STEP 4: VỀ BẾP */}
-                  {(() => {
-                    const isActive = currentWorkflowStep === 4 && activeSequence?.status !== "completed";
-                    const isDone = currentWorkflowStep === 4 && activeSequence?.status === "completed";
-                    return (
-                      <div
-                        className={`relative p-2.5 rounded-xl border transition-all duration-300 flex flex-col justify-between overflow-hidden ${
-                          isActive
-                            ? "bg-gradient-to-b from-emerald-500/10 to-teal-50 border-emerald-500 text-emerald-950 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/60"
-                            : isDone
-                              ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
-                              : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
-                        }`}
-                      >
-                        {isActive && (
-                          <>
-                            {/* Dợn sóng viền radar pulse */}
-                            <div className="absolute inset-0 bg-emerald-500/10 animate-pulse pointer-events-none" />
-                            <div className="absolute -top-4 -right-4 w-10 h-10 bg-emerald-400/30 rounded-full blur-xs animate-ping pointer-events-none" />
-                          </>
-                        )}
-                        <div>
-                          <div className="flex items-center justify-center gap-1 mb-1">
-                            {isActive ? (
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-                              </span>
-                            ) : isDone ? (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            ) : (
-                              <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            )}
-                            <span
-                              className={`text-[9px] font-black uppercase tracking-wider ${
-                                isActive
-                                  ? "text-emerald-800 bg-emerald-100/90 px-1.5 py-0.2 rounded-full border border-emerald-300"
-                                  : isDone
-                                    ? "text-emerald-700 font-bold"
-                                    : "text-slate-400"
-                              }`}
-                            >
-                              {isActive ? "Đang Về Bếp" : isDone ? "Đã Xong" : "Chờ"}
-                            </span>
-                          </div>
-                          <div
-                            className={`font-black text-xs ${
-                              isActive
-                                ? "text-emerald-950 font-extrabold"
-                                : isDone
-                                  ? "text-emerald-800"
-                                  : "text-slate-700"
-                            }`}
-                          >
-                            4. Về Bếp
-                          </div>
-                        </div>
-                        <div className="mt-1.5 pt-1 border-t border-slate-200/50">
-                          <div
-                            className={`text-[9.5px] font-sans truncate ${
-                              isActive
-                                ? "text-emerald-700 font-bold animate-pulse"
-                                : isDone
-                                  ? "text-emerald-600 font-semibold"
-                                  : "text-slate-400"
-                            }`}
-                          >
-                            {isActive
-                              ? "Đang tự động về bếp..."
-                              : isDone
-                                ? "Đã về bến an toàn ✓"
-                                : "Tự động quay về"}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
               </div>
             </div>
           </div>
@@ -3050,59 +2859,169 @@ export const StaffKdsPage: React.FC = () => {
               <span>Robot: {effectiveRobot?.code || "AMR"}</span>
             </div>
           </div>
-          {/* RECENT DISPATCH MISSIONS LOG */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-heading">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                <span>LỆNH ĐIỀU PHỐI GẦN ĐÂY</span>
-              </span>
-              <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                Lưu trữ cục bộ
-              </span>
+          {/* HÀNG ĐỢI NHIỆM VỤ TIẾP THEO CỦA ROBOT (ROBOT MISSION QUEUE) */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3.5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <Navigation className="w-4 h-4 text-blue-600" />
+                </span>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 font-heading">
+                    HÀNG ĐỢI NHIỆM VỤ ROBOT
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-sans">
+                    Nhiệm vụ tiếp theo và chuyển hướng điều phối trực tiếp
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                  {missionQueueTasks.length} nhiệm vụ
+                </span>
+              </div>
             </div>
-            <div className="space-y-2">
-              {recentSqliteTasks.length === 0 ? (
-                <div className="py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                  Chưa có lệnh điều phối nào trong ca làm việc.
+
+            {/* List of Queue Tasks */}
+            <div className="space-y-3">
+              {missionQueueTasks.length === 0 ? (
+                <div className="py-8 px-4 text-center text-xs text-slate-400 italic bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-2">
+                  <Clock className="w-6 h-6 text-slate-300" />
+                  <span className="font-semibold text-slate-600">Hàng đợi nhiệm vụ đang trống</span>
+                  <span className="text-[11px] text-slate-400 max-w-xs leading-relaxed font-sans">
+                    Nạp món vào Khay 1 / Khay 2 và nhấn [Phát Lệnh Giao Món] để tạo nhiệm vụ tiếp theo cho Robot AMR.
+                  </span>
                 </div>
               ) : (
-                recentSqliteTasks.map((task) => (
-                  <div
-                    key={task.taskId}
-                    className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[10px]">
-                        {task.taskId}
-                      </span>
-                      <span className="font-semibold text-slate-800">
-                        {task.orderId} → {task.destination}
-                      </span>
+                missionQueueTasks.map((task, idx) => {
+                  const isCurrent = task.isLive;
+                  const isCompleted = task.workflowStep === 4 && task.status.includes("Hoàn tất");
+                  return (
+                    <div
+                      key={`${task.taskId}-${idx}`}
+                      className={`p-3.5 rounded-2xl border transition-all duration-200 space-y-2.5 ${
+                        isCurrent
+                          ? "bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white border-blue-400 shadow-sm ring-1 ring-blue-300/60"
+                          : isCompleted
+                            ? "bg-slate-50/50 border-slate-200 opacity-80"
+                            : "bg-white border-slate-200 hover:border-slate-300 shadow-2xs"
+                      }`}
+                    >
+                      {/* Top Row: Mission ID, Tray Badge, Robot, Status */}
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                              task.trayLevel === 1
+                                ? "bg-blue-600 text-white"
+                                : "bg-indigo-600 text-white"
+                            }`}
+                          >
+                            Khay {task.trayLevel}
+                          </span>
+                          <span className="font-mono font-extrabold text-xs text-slate-900">
+                            #{task.taskId}
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            🤖 {task.robotCode}
+                          </span>
+                        </div>
+                        {/* Status Badge with Live Pulse */}
+                        <div className="flex items-center gap-1.5">
+                          {isCurrent && (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                            </span>
+                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
+                              isCompleted
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : isCurrent
+                                  ? task.workflowStep === 2
+                                    ? "bg-blue-100 text-blue-800 border-blue-300 animate-pulse"
+                                    : task.workflowStep === 3
+                                      ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                                      : "bg-indigo-100 text-indigo-800 border-indigo-300"
+                                  : "bg-slate-100 text-slate-600 border-slate-200"
+                            }`}
+                          >
+                            {task.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Middle: Details (Destination, Station, Order, Time) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 text-slate-700">
+                          <span className="text-slate-400 font-semibold text-[11px]">Đích đến:</span>
+                          <span className="font-black text-slate-900 text-sm">
+                            {task.tableNo}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-slate-700">
+                          <span className="text-slate-400 font-semibold text-[11px]">Trạm robot:</span>
+                          {task.stationName ? (
+                            <span className="font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-purple-600" />
+                              <span>{task.stationName}</span>
+                            </span>
+                          ) : (
+                            <span className="font-mono text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[10px]">
+                              Chưa gán trạm
+                            </span>
+                          )}
+                        </div>
+                        {task.orderId && (
+                          <div className="flex items-center gap-1.5 text-slate-600">
+                            <span className="text-slate-400 font-semibold text-[11px]">Đơn món:</span>
+                            <span className="font-mono font-semibold text-slate-800 text-[11px]">
+                              {task.orderId}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>{task.time}</span>
+                        </div>
+                      </div>
+
+                      {/* Bottom Action Bar: Đổi Bàn, Đổi Trạm, Xem Chi Tiết */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTaskReroute(task.legIndex, task.tableNo)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 border border-amber-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          title="Đổi bàn đích đến cho nhiệm vụ này"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Đổi Bàn</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTaskAssignStation(task.tableNo)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-800 border border-purple-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          title="Gán hoặc đổi trạm dừng SLAM cho bàn này"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Đổi Trạm Giao</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTaskDetail(task)}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 border border-blue-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ml-auto"
+                          title="Xem tiến trình chi tiết 4 bước phục vụ của nhiệm vụ này"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Xem Chi Tiết</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[10px] text-slate-500">
-                        {task.robotCode}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          task.status === "Completed" ||
-                          task.status === "Delivered"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-blue-50 text-blue-700 border border-blue-200"
-                        }`}
-                      >
-                        {task.status === "Completed" ||
-                        task.status === "Delivered"
-                          ? "Hoàn Tất"
-                          : "Đang Giao"}
-                      </span>
-                      <span className="font-mono text-[10px] text-slate-400">
-                        {task.time}
-                      </span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -4082,6 +4001,340 @@ export const StaffKdsPage: React.FC = () => {
                     : "2. Robot Tự Động Đến Bàn Mới"}
                 </span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CHI TIẾT TIẾN TRÌNH NHIỆM VỤ ROBOT (4 BƯỚC PHỤC VỤ TỰ ĐỘNG) */}
+      {selectedTaskDetail && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-5 space-y-4 text-slate-800 max-h-[92vh] overflow-y-auto animate-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600">
+                  <Navigation className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 font-heading flex items-center gap-2">
+                    <span>Tiến Trình Nhiệm Vụ #{selectedTaskDetail.taskId}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                        selectedTaskDetail.trayLevel === 1
+                          ? "bg-blue-600 text-white"
+                          : "bg-indigo-600 text-white"
+                      }`}
+                    >
+                      Khay {selectedTaskDetail.trayLevel}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 font-sans mt-0.5">
+                    Theo dõi quy trình phục vụ tự động và chuyển hướng điều phối trực tiếp
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTaskDetail(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Information Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-[10px] text-slate-400 block font-semibold">Robot AMR:</span>
+                <span className="font-extrabold text-slate-900 text-sm">🤖 {selectedTaskDetail.robotCode}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-[10px] text-slate-400 block font-semibold">Bàn Đích Đến:</span>
+                <span className="font-extrabold text-blue-700 text-sm">{selectedTaskDetail.tableNo}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-[10px] text-slate-400 block font-semibold">Trạm Robot:</span>
+                <span className="font-mono font-bold text-purple-700 text-xs">
+                  {selectedTaskDetail.stationName || "Chưa gán trạm"}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span className="text-[10px] text-slate-400 block font-semibold">Thời Gian Xuất:</span>
+                <span className="font-mono text-slate-700 text-xs">{selectedTaskDetail.time || "Vừa xong"}</span>
+              </div>
+            </div>
+
+            {/* 4-Step Interactive Pipeline */}
+            <div className="p-4 rounded-2xl bg-gradient-to-b from-blue-50/70 via-slate-50/60 to-white border border-blue-200 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                <span className="font-bold text-blue-950 text-xs flex items-center gap-1.5 font-heading">
+                  <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>QUY TRÌNH PHỤC VỤ TỰ ĐỘNG</span>
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-white text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200 flex items-center gap-1.5 shadow-2xs">
+                  {selectedTaskDetail.isLive && (
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                    </span>
+                  )}
+                  <span>
+                    {selectedTaskDetail.workflowStep === 1
+                      ? "Bước 1/4 • Nạp Món Tại Bếp"
+                      : selectedTaskDetail.workflowStep === 2
+                        ? `Bước 2/4 • Đang Đến ${selectedTaskDetail.tableNo}`
+                        : selectedTaskDetail.workflowStep === 3
+                          ? `Bước 3/4 • Trả Món Tại ${selectedTaskDetail.tableNo}`
+                          : "Bước 4/4 • Tự Động Về Bếp"}
+                  </span>
+                </span>
+              </div>
+
+              {/* 4 Steps Visual Cards Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[10px] font-mono">
+                {/* STEP 1: XUẤT BẾP */}
+                {(() => {
+                  const isActive = selectedTaskDetail.workflowStep === 1;
+                  const isDone = selectedTaskDetail.workflowStep > 1;
+                  return (
+                    <div
+                      className={`relative p-2.5 rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
+                        isActive
+                          ? "bg-blue-50/90 border-blue-500 text-blue-950 shadow-md ring-2 ring-blue-400/50"
+                          : isDone
+                            ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
+                            : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
+                      }`}
+                    >
+                      {isActive && (
+                        <div className="absolute inset-0 bg-blue-500/5 animate-pulse pointer-events-none" />
+                      )}
+                      <div>
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          {isActive ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                            </span>
+                          ) : isDone ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                          )}
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wider ${
+                              isActive ? "text-blue-700" : isDone ? "text-emerald-700 font-bold" : "text-slate-400"
+                            }`}
+                          >
+                            {isActive ? "Đang Ở Bếp" : isDone ? "Đã Xong" : "Chờ"}
+                          </span>
+                        </div>
+                        <div className="font-black text-xs text-slate-900">1. Xuất Bếp</div>
+                      </div>
+                      <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500">
+                        {isDone ? "Đã nạp món ✓" : "Nạp khay tại quầy"}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* STEP 2: ĐẾN BÀN */}
+                {(() => {
+                  const isActive = selectedTaskDetail.workflowStep === 2;
+                  const isDone = selectedTaskDetail.workflowStep > 2;
+                  return (
+                    <div
+                      className={`relative p-2.5 rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
+                        isActive
+                          ? "bg-blue-50/90 border-blue-600 text-blue-950 shadow-md ring-2 ring-blue-500/60"
+                          : isDone
+                            ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
+                            : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
+                      }`}
+                    >
+                      {isActive && (
+                        <div className="absolute inset-0 bg-blue-500/10 animate-pulse pointer-events-none" />
+                      )}
+                      <div>
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          {isActive ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                            </span>
+                          ) : isDone ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                          )}
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wider ${
+                              isActive ? "text-blue-700" : isDone ? "text-emerald-700 font-bold" : "text-slate-400"
+                            }`}
+                          >
+                            {isActive ? "Đang Chạy" : isDone ? "Đã Xong" : "Chờ"}
+                          </span>
+                        </div>
+                        <div className="font-black text-xs text-slate-900">2. Đến Bàn</div>
+                      </div>
+                      <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500 truncate">
+                        {isActive
+                          ? `Đang tới ${selectedTaskDetail.tableNo}...`
+                          : isDone
+                            ? `Đã đến ${selectedTaskDetail.tableNo} ✓`
+                            : "Di chuyển theo SLAM"}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* STEP 3: TRẢ MÓN */}
+                {(() => {
+                  const isActive = selectedTaskDetail.workflowStep === 3;
+                  const isDone = selectedTaskDetail.workflowStep > 3;
+                  return (
+                    <div
+                      className={`relative p-2.5 rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
+                        isActive
+                          ? "bg-amber-50/90 border-amber-500 text-amber-950 shadow-md ring-2 ring-amber-400/60"
+                          : isDone
+                            ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
+                            : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
+                      }`}
+                    >
+                      {isActive && (
+                        <div className="absolute inset-0 bg-amber-500/10 animate-pulse pointer-events-none" />
+                      )}
+                      <div>
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          {isActive ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
+                            </span>
+                          ) : isDone ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                          )}
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wider ${
+                              isActive ? "text-amber-800" : isDone ? "text-emerald-700 font-bold" : "text-slate-400"
+                            }`}
+                          >
+                            {isActive ? "Đang Trả Món" : isDone ? "Đã Xong" : "Chờ"}
+                          </span>
+                        </div>
+                        <div className="font-black text-xs text-slate-900">3. Trả Món</div>
+                      </div>
+                      <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500 truncate">
+                        {isActive ? "Chờ khách nhận món" : isDone ? "Khách đã lấy món ✓" : "Nhận món tại bàn"}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* STEP 4: VỀ BẾP */}
+                {(() => {
+                  const isActive = selectedTaskDetail.workflowStep === 4 && !selectedTaskDetail.status.includes("Hoàn tất");
+                  const isDone = selectedTaskDetail.workflowStep === 4 && selectedTaskDetail.status.includes("Hoàn tất");
+                  return (
+                    <div
+                      className={`relative p-2.5 rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
+                        isActive
+                          ? "bg-teal-50/90 border-teal-500 text-teal-950 shadow-md ring-2 ring-teal-400/60"
+                          : isDone
+                            ? "bg-emerald-50/80 border-emerald-300 text-emerald-950 shadow-2xs"
+                            : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
+                      }`}
+                    >
+                      {isActive && (
+                        <div className="absolute inset-0 bg-teal-500/10 animate-pulse pointer-events-none" />
+                      )}
+                      <div>
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          {isActive ? (
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
+                            </span>
+                          ) : isDone ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                          ) : (
+                            <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                          )}
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wider ${
+                              isActive ? "text-teal-800" : isDone ? "text-emerald-700 font-bold" : "text-slate-400"
+                            }`}
+                          >
+                            {isActive ? "Đang Về" : isDone ? "Hoàn Tất" : "Chờ"}
+                          </span>
+                        </div>
+                        <div className="font-black text-xs text-slate-900">4. Về Bếp</div>
+                      </div>
+                      <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500 truncate">
+                        {isDone ? "Đã về bến an toàn ✓" : "Quay về quầy bếp"}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Quick Actions Footer inside Detail Modal */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const task = selectedTaskDetail;
+                    setSelectedTaskDetail(null);
+                    handleOpenTaskReroute(task.legIndex, task.tableNo);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Đổi Bàn Nhiệm Vụ Này</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const task = selectedTaskDetail;
+                    setSelectedTaskDetail(null);
+                    handleOpenTaskAssignStation(task.tableNo);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Đổi Trạm Giao</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedTaskDetail.workflowStep === 3 && activeSequence && (
+                  <button
+                    type="button"
+                    disabled={isConfirmingTable}
+                    onClick={() => {
+                      setSelectedTaskDetail(null);
+                      handleConfirmNextTable(false);
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                    <span>Xác Nhận Đã Nhận Món</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedTaskDetail(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>

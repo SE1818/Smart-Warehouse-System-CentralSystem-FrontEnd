@@ -520,6 +520,39 @@ const extractErrorMessage = (err: any, defaultMsg: string): string => {
 export const tableService = {
   // Danh sách bàn tải từ BE (API / Active SLAM Map), có SQLite cache cho chế độ offline
   getTables: async (storeIdOrSlug?: string): Promise<DiningTableDto[]> => {
+    // 0. Nếu chạy trên Edge node (port 3200 hoặc edge hostname), ưu tiên tải trực tiếp từ SQLite Edge
+    const isEdgeHost = typeof window !== 'undefined' && (window.location.port === '3200' || window.location.hostname?.endsWith('.local'));
+    if (isEdgeHost) {
+      try {
+        const edgeRes = await apiClient.get<any[]>('/v1/tables');
+        if (edgeRes.data && Array.isArray(edgeRes.data) && edgeRes.data.length > 0) {
+          return edgeRes.data.map((t: any) => ({
+            id: t.id?.toString() || t.tableNo || 'Table',
+            tableNo: t.tableNo || t.name || 'Bàn',
+            tableName: t.tableName || (t.tableNo ? `Bàn ${t.tableNo}` : 'Bàn'),
+            zone: t.zone || 'Khu Trong Nhà',
+            capacity: t.capacity || 4,
+            status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
+              : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
+              : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
+              : t.status === 'Served' || t.status === 'serving' ? 'serving'
+              : t.status === 'Merged' || t.status === 'merged' ? 'merged'
+              : 'empty') as DiningTableDto['status'],
+            assignedRobotCode: t.assignedRobotCode || null,
+            stationId: t.stationId || null,
+            stationName: t.stationName || null,
+            qrCodeUrl: t.qrCodeUrl || null,
+            currentOrders: t.currentOrders || [],
+            orderTime: t.orderTime || null,
+            worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
+            worldY: typeof t.worldY === 'number' ? t.worldY : t.yCoord,
+          }));
+        }
+      } catch {
+        // Fallback to central API
+      }
+    }
+
     // 1. Thử truy vấn API backend cấu hình bàn ăn
     try {
       const res = await portalClient.get(`/tables${storeIdOrSlug ? `?storeId=${storeIdOrSlug}` : ''}`);

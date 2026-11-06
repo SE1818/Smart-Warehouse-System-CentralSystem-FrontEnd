@@ -106,7 +106,9 @@ export const isEdgeEndpoint = (url?: string): boolean => {
     clean.startsWith('/v1/robot') ||
     clean.startsWith('/robot/') ||
     clean.startsWith('/v1/commands/robot') ||
-    clean.startsWith('/v1/tasks')
+    clean.startsWith('/v1/tasks') ||
+    clean.startsWith('/v1/tables') ||
+    clean.startsWith('/tables')
   );
 };
 
