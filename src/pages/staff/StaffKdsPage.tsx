@@ -27,7 +27,6 @@ import {
   X,
   Target,
   Eye,
-  Utensils,
 } from "lucide-react";
 import type { Station } from "@/types/robot";
 import {
@@ -400,16 +399,16 @@ export const StaffKdsPage: React.FC = () => {
         const robotList = await fleetService.getRobotsByTenant(sub);
         const mappedRobots: RobotFleetItem[] = robotList.map((r) => ({
           id: r.id,
-          code: r.code,
-          name: r.name,
+          code: r.code || r.name || `AMR-${r.id.slice(0, 4)}`,
+          name: r.name || r.code || "Robot AMR",
           status:
             r.status === "delivering" || r.status === "returning"
               ? "delivering"
               : r.status === "charging"
                 ? "charging"
                 : "idle",
-          battery: r.battery,
-          currentZone: r.currentLocation,
+          battery: typeof r.battery === "number" ? r.battery : 100,
+          currentZone: r.currentLocation || "Quầy Bếp",
         }));
         setRobots(mappedRobots);
         if (mappedRobots.length > 0) {
@@ -499,18 +498,17 @@ export const StaffKdsPage: React.FC = () => {
   // 2. Prioritize robot with highest battery
   const autoSelectedRobot = useMemo(() => {
     const idleRobots = robots.filter(
-      (r) => r.status === "idle" && r.battery >= 30,
+      (r) => (r.status === "idle" || !r.status) && (r.battery >= 30 || r.battery === undefined),
     );
-    if (idleRobots.length === 0) {
-      return null;
+    if (idleRobots.length > 0) {
+      return [...idleRobots].sort((a, b) => b.battery - a.battery)[0];
     }
-
-    return [...idleRobots].sort((a, b) => b.battery - a.battery)[0];
+    return robots[0] || null;
   }, [robots]);
   // Active chosen robot (Auto or Manual)
   const effectiveRobot = isAutoSelectMode
     ? autoSelectedRobot
-    : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot;
+    : robots.find((r) => r.code === manualSelectedRobot) || autoSelectedRobot || robots[0] || null;
   const {
     currentPage: tablePage,
     pageSize: tablePageSize,
@@ -541,6 +539,9 @@ export const StaffKdsPage: React.FC = () => {
         `Đã gán ${tableName} vào Khay 1 (Tầng Dưới).`,
         "info",
       );
+      if (isTray2Active && !tray2Table) {
+        setActiveTrayTarget("tray2");
+      }
     } else {
       setTray2Table(tableName);
       setIsTray2Active(true);
@@ -551,6 +552,9 @@ export const StaffKdsPage: React.FC = () => {
         `Đã gán ${tableName} vào Khay 2 (Tầng Trên).`,
         "info",
       );
+      if (isTray1Active && !tray1Table) {
+        setActiveTrayTarget("tray1");
+      }
     }
   };
 
@@ -1763,9 +1767,9 @@ export const StaffKdsPage: React.FC = () => {
         <div className="lg:col-span-5 flex flex-col gap-4">
           {/* Target Table Header Banner */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:border-slate-300">
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0">
               <div
-                className={`w-11 h-11 rounded-xl flex items-center justify-center font-mono font-black text-sm shadow-2xs shrink-0 border ${
+                className={`w-11 h-11 rounded-xl flex items-center justify-center font-mono font-black text-xs shadow-2xs shrink-0 border overflow-hidden ${
                   currentSelectedTable.id &&
                   currentSelectedTable.id !== "Chưa có"
                     ? "bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 border-blue-200"
@@ -1774,14 +1778,16 @@ export const StaffKdsPage: React.FC = () => {
               >
                 {currentSelectedTable.id &&
                 currentSelectedTable.id !== "Chưa có" ? (
-                  <Utensils className="w-5 h-5 text-blue-600" />
+                  <span className="truncate max-w-[38px] text-center px-0.5">
+                    {currentSelectedTable.tableNo || "Bàn"}
+                  </span>
                 ) : (
                   <Target className="w-5 h-5 text-slate-400" />
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs font-bold text-slate-900 flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-black tracking-tight">
+                  <span className="text-sm font-black tracking-tight truncate">
                     {currentSelectedTable.name}
                   </span>
                   {currentSelectedTable.id &&
@@ -1790,10 +1796,7 @@ export const StaffKdsPage: React.FC = () => {
                         className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200"
                         title={`Mã ID CSDL: ${currentSelectedTable.id}`}
                       >
-                        ID:{" "}
-                        {currentSelectedTable.id.length > 8
-                          ? `...${currentSelectedTable.id.slice(-6).toUpperCase()}`
-                          : currentSelectedTable.id}
+                        Mã: {currentSelectedTable.tableNo || (currentSelectedTable.id.length > 8 ? currentSelectedTable.id.slice(0, 8) : currentSelectedTable.id)}
                       </span>
                     )}
                   {currentSelectedTable.zone &&
@@ -2315,19 +2318,6 @@ export const StaffKdsPage: React.FC = () => {
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleOpenWorkflowRerouteModal()}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer shadow-xs ${
-                    isRobotInTransit
-                      ? "bg-amber-500 hover:bg-amber-600 active:scale-95 text-white border-amber-600 animate-pulse"
-                      : "bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 border-amber-200/90 shadow-2xs"
-                  }`}
-                  title="Đổi Bàn: Xem tiến trình giao hàng và đổi bàn linh hoạt theo tình huống"
-                >
-                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Đổi Bàn</span>
-                </button>
                 <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                   <span>Hệ Thống Sẵn Sàng</span>

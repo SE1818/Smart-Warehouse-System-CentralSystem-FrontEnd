@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as signalR from '@microsoft/signalr';
 import { robotService } from '@/services/robot';
-import { resolveBaseUrl, getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from '@/services/api';
+import { resolveBaseUrl, resolveEdgeBaseUrl, getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from '@/services/api';
 import { sqliteService } from '@/services/sqliteService';
 import { edgeSyncService } from '@/services/edgeSyncService';
 import type { Robot } from '@/types/robot';
@@ -33,6 +33,8 @@ interface RobotState {
 }
 
 let activeConnectionsCount = 0;
+let disconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let isInitiatingConnection = false;
 
 export const useRobotStore = create<RobotState>((set, get) => {
   return {
@@ -83,23 +85,40 @@ export const useRobotStore = create<RobotState>((set, get) => {
 
     connect: () => {
       activeConnectionsCount++;
+      if (disconnectTimeoutId) {
+        clearTimeout(disconnectTimeoutId);
+        disconnectTimeoutId = null;
+      }
+
       const existingConn = get().connection;
       if (
-        existingConn &&
-        (existingConn.state === signalR.HubConnectionState.Connected ||
-         existingConn.state === signalR.HubConnectionState.Connecting)
+        isInitiatingConnection ||
+        (existingConn &&
+          (existingConn.state === signalR.HubConnectionState.Connected ||
+           existingConn.state === signalR.HubConnectionState.Connecting))
       ) {
         // Connection already in progress or connected, skip creation to avoid duplicate websockets
         return;
       }
 
+      isInitiatingConnection = true;
       set({ status: 'connecting' });
       get().addLog('Đang kết nối đến Robot Hub...', 'info');
 
-      const cleanBase = resolveBaseUrl().replace(/\/+$/, '');
-      const connectionUrl = cleanBase.endsWith('/v1')
-        ? `${cleanBase}/robots/tracking-hub`
-        : `${cleanBase}/v1/robots/tracking-hub`;
+      // If running on Local Edge (port 3200 or LAN hostname), connect to Local Edge Robot Hub directly
+      const isEdge = typeof window !== 'undefined' && (window.location.port === '3200' || window.location.hostname?.endsWith('.local'));
+      let connectionUrl = '';
+      if (isEdge) {
+        const edgeBase = resolveEdgeBaseUrl().replace(/\/+$/, '');
+        connectionUrl = edgeBase.endsWith('/v1')
+          ? `${edgeBase}/robots/tracking-hub`
+          : `${edgeBase}/v1/robots/tracking-hub`;
+      } else {
+        const cleanBase = resolveBaseUrl().replace(/\/+$/, '');
+        connectionUrl = cleanBase.endsWith('/v1')
+          ? `${cleanBase}/robots/tracking-hub`
+          : `${cleanBase}/v1/robots/tracking-hub`;
+      }
 
       const connection = new signalR.HubConnectionBuilder()
         .withUrl(connectionUrl, {
@@ -289,6 +308,9 @@ export const useRobotStore = create<RobotState>((set, get) => {
                 }
               }, 5000);
             }
+          })
+          .finally(() => {
+            isInitiatingConnection = false;
           });
       };
 
@@ -318,15 +340,19 @@ export const useRobotStore = create<RobotState>((set, get) => {
 
     disconnect: () => {
       activeConnectionsCount = Math.max(0, activeConnectionsCount - 1);
-      // Grace period (15s) to avoid closing and renegotiating connection during rapid page transitions
+      // Grace period (30s) to avoid closing and renegotiating connection during rapid page transitions or StrictMode
       if (activeConnectionsCount === 0) {
-        setTimeout(() => {
+        if (disconnectTimeoutId) {
+          clearTimeout(disconnectTimeoutId);
+        }
+        disconnectTimeoutId = setTimeout(() => {
           if (activeConnectionsCount === 0 && get().connection) {
             const conn = get().connection;
             set({ connection: null, status: 'disconnected' });
             conn?.stop().catch((e) => console.error('Error stopping Robot Hub connection:', e));
           }
-        }, 15000);
+          disconnectTimeoutId = null;
+        }, 30000);
       }
     },
   };

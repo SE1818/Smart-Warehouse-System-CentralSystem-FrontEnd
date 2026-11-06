@@ -329,11 +329,13 @@ export const fleetService = {
       if (allRes.data && Array.isArray(allRes.data)) {
         const mapped = allRes.data.map((r: any) => mapRobotDtoToFleetAMR(r));
         if (!cleanSlug && !tenantId) return mapped;
-        return mapped.filter(
+        const filtered = mapped.filter(
           (r) =>
             (tenantId && r.ownerTenantId.toLowerCase() === tenantId.toLowerCase()) ||
             (cleanSlug && ((r.ownerTenantSlug || '').toLowerCase() === cleanSlug || (r.ownerTenantId || '').toLowerCase() === cleanSlug))
         );
+        // If filtered matched, return filtered. Otherwise fallback to mapped so single-tenant edge node or unassigned robot is not discarded!
+        return filtered.length > 0 ? filtered : mapped;
       }
     } catch (err) {
       console.warn('Lỗi tải danh sách robot theo tenant:', err);
