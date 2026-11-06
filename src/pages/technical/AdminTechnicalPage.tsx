@@ -18,6 +18,7 @@ import {
   Power,
   Upload,
   LogOut,
+  Store,
 } from 'lucide-react';
 import { RobotMonitorPage } from './RobotMonitorPage';
 import { StoreEdgeSetupPage } from './StoreEdgeSetupPage';
@@ -278,6 +279,10 @@ export const AdminTechnicalPage: React.FC = () => {
           const rId = (r.ownerTenantId || '').toLowerCase();
           return rSlug === tSlug || rId === tSlug || (r.tenantName && r.tenantName.toLowerCase().includes(tSlug));
         });
+      }
+
+      if (scopedRobots.length === 0 && robotsData.length > 0) {
+        scopedRobots = robotsData;
       }
 
       setRawRobots(scopedRobots);
@@ -589,6 +594,14 @@ export const AdminTechnicalPage: React.FC = () => {
 
           {/* User Actions */}
           <div className="flex items-center gap-1.5">
+            <Link
+              to="/staff"
+              className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-emerald-600/50 bg-emerald-950/40 hover:bg-emerald-900/60 text-xs font-bold text-emerald-300 hover:text-emerald-100 transition-all shadow-xs flex items-center gap-1.5"
+              title="Chuyển sang Giao diện Phục Vụ / KDS Bếp (Staff Console)"
+            >
+              <Store className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden md:inline">KDS Bếp</span>
+            </Link>
             <Link
               to="/login"
               onClick={() => {

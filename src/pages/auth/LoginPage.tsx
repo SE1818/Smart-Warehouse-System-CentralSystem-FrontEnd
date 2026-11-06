@@ -108,11 +108,13 @@ export function LoginPage() {
 
       // 🛡️ STRICT MULTI-TENANT ISOLATION CHECK FOR EDGE NODES
       const edgeInfo = edgeNode || (await robotService.getEdgeNodeInfo());
-      if (edgeInfo && edgeInfo.isEdgeNode && edgeInfo.subdomain) {
-        const isSuperAdmin =
-          (res.role || '').toLowerCase().includes('superadmin') ||
-          Boolean(tenantInfo?.isSuperAdmin);
+      const roleNormalized = (res.role || '').toLowerCase().replace(/[-_\s]/g, '');
+      const isSuperAdmin =
+        roleNormalized === 'superadmin' ||
+        roleNormalized === 'admin' ||
+        Boolean(tenantInfo?.isSuperAdmin);
 
+      if (edgeInfo && edgeInfo.isEdgeNode && edgeInfo.subdomain) {
         const userSub = (subdomain || '').toLowerCase().trim();
         const edgeSub = edgeInfo.subdomain.toLowerCase().trim();
 
@@ -130,8 +132,10 @@ export function LoginPage() {
         }
       }
 
-      if (subdomain) {
-        localStorage.setItem('TENANT_SUBDOMAIN', subdomain);
+      // If SuperAdmin logs into Edge box, bind to the local edge subdomain context
+      const effectiveSubdomain = subdomain || (isSuperAdmin && edgeInfo?.subdomain ? edgeInfo.subdomain : '');
+      if (effectiveSubdomain) {
+        localStorage.setItem('TENANT_SUBDOMAIN', effectiveSubdomain);
       } else {
         localStorage.removeItem('TENANT_SUBDOMAIN');
       }
@@ -144,10 +148,10 @@ export function LoginPage() {
           name: email.split('@')[0] || 'Người dùng',
           email: email,
           tenantId: tenantId,
-          subdomain: subdomain,
-          tenantSlug: subdomain,
-          tenantName: tenantInfo?.tenantName || '',
-          isSuperAdmin: tenantInfo?.isSuperAdmin || false,
+          subdomain: effectiveSubdomain,
+          tenantSlug: effectiveSubdomain,
+          tenantName: tenantInfo?.tenantName || edgeInfo?.restaurantName || '',
+          isSuperAdmin: isSuperAdmin,
         })
       );
 

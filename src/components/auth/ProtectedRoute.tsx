@@ -7,6 +7,13 @@ interface ProtectedRouteProps {
   allowedRoles?: string[];
 }
 
+export const isSuperAdminUser = (user: any): boolean => {
+  if (!user) return false;
+  if (user.isSuperAdmin) return true;
+  const role = (user.role || '').toLowerCase().replace(/[-_\s]/g, '');
+  return role === 'superadmin' || role === 'admin';
+};
+
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const token = localStorage.getItem('authToken');
   const refreshToken = localStorage.getItem('refreshToken');
@@ -29,9 +36,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     robotService.getEdgeNodeInfo().then((info) => {
       if (!isMounted) return;
       if (info && info.isEdgeNode && info.subdomain) {
-        const isSuperAdmin =
-          (user.role || '').toLowerCase().includes('superadmin') ||
-          Boolean(user.isSuperAdmin);
+        const isSuperAdmin = isSuperAdminUser(user);
         const userSub = (user.subdomain || '').toLowerCase().trim();
         const edgeSub = info.subdomain.toLowerCase().trim();
         if (!isSuperAdmin && userSub !== edgeSub) {
@@ -58,6 +63,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/unauthorized" replace />;
   }
 
+  // Super Admin / System Admin has universal pass to access ANY route (staff, technical, etc.)
+  if (isSuperAdminUser(user)) {
+    return <>{children}</>;
+  }
+
   if (allowedRoles && allowedRoles.length > 0) {
     const userRole = (user.role || '').toLowerCase();
     // Normalize diacritics (e.g. "Phục Vụ Bàn" -> "phuc vu ban")
@@ -72,11 +82,12 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
           cleanRole.includes('engineer') ||
           cleanRole.includes('ky thuat') ||
           userRole === 'admin' ||
-          userRole === 'superadmin'
+          userRole === 'superadmin' ||
+          userRole === 'super_admin'
         );
       }
       if (allowed === 'admin') {
-        return userRole === 'admin' || userRole === 'superadmin';
+        return userRole === 'admin' || userRole === 'superadmin' || userRole === 'super_admin';
       }
       if (allowed === 'staff') {
         return (
@@ -88,7 +99,8 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
           cleanRole.includes('phucvu') ||
           cleanRole.includes('bep') ||
           userRole === 'admin' ||
-          userRole === 'superadmin'
+          userRole === 'superadmin' ||
+          userRole === 'super_admin'
         );
       }
       return false;

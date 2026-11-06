@@ -1446,6 +1446,14 @@ export const StaffKdsPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Link
+              to="/technical"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-xs font-bold text-[#0062FF] transition-all shadow-2xs"
+              title="Chuyển sang Quản Trị Kỹ Thuật AMR"
+            >
+              <Cpu className="w-3.5 h-3.5 text-[#0062FF]" />
+              <span className="hidden sm:inline">Kỹ Thuật</span>
+            </Link>
+            <Link
               to="/login"
               onClick={() => {
                 localStorage.removeItem("authToken");
