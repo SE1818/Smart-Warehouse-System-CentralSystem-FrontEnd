@@ -322,6 +322,26 @@ export const fleetService = {
   },
 
   getRobotsByTenant: async (tenantSlug?: string, tenantId?: string): Promise<FleetAMR[]> => {
+    // 0. Nếu đang chạy trên môi trường Edge / Local hoặc Staff KDS, ưu tiên gọi thẳng local RobotService
+    const isEdgeHost =
+      typeof window !== 'undefined' &&
+      (window.location.port === '3200' ||
+        window.location.hostname?.endsWith('.local') ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '192.168.1.7');
+
+    if (isEdgeHost) {
+      try {
+        const edgeRes = await apiClient.get<any[]>('/v1/robots');
+        if (edgeRes.data && Array.isArray(edgeRes.data) && edgeRes.data.length > 0) {
+          return edgeRes.data.map((r: any) => mapRobotDtoToFleetAMR(r, tenantSlug));
+        }
+      } catch {
+        // Fallback to cloud portal client
+      }
+    }
+
     const cleanSlug = (tenantSlug || '').toLowerCase().trim();
     let effectiveTenantId = tenantId;
 
@@ -334,24 +354,29 @@ export const fleetService = {
       } catch {}
     }
 
-    if (!effectiveTenantId && cleanSlug) {
-      try {
-        const tenants = await tenantService.getTenantsList();
-        const matched = tenants.find((t) => (t.slug || '').toLowerCase() === cleanSlug);
-        if (matched?.id) effectiveTenantId = matched.id;
-      } catch {}
-    }
-
+    // Ghi chú bảo mật & Độc lập dữ liệu (Multi-tenant Data Isolation):
+    // Quán ở local tuyệt đối KHÔNG gọi API Super Admin /tenant/tenants-list để quét thông tin các quán khác.
     try {
-      const url = effectiveTenantId ? `/robots?tenantId=${effectiveTenantId}` : '/robots';
+      const url = effectiveTenantId
+        ? `/robots?tenantId=${effectiveTenantId}`
+        : cleanSlug
+          ? `/robots?subdomain=${cleanSlug}`
+          : '/robots';
+
       const allRes = await portalClient.get(url);
       if (allRes.data && Array.isArray(allRes.data)) {
-        const mapped = allRes.data.map((r: any) => mapRobotDtoToFleetAMR(r));
+        const mapped = allRes.data.map((r: any) => mapRobotDtoToFleetAMR(r, cleanSlug));
         if (!cleanSlug && !effectiveTenantId) return mapped;
 
         const filtered = mapped.filter((r) => {
-          const matchId = effectiveTenantId && r.ownerTenantId && r.ownerTenantId.toLowerCase() === effectiveTenantId.toLowerCase();
-          const matchSlug = cleanSlug && ((r.ownerTenantSlug && r.ownerTenantSlug.toLowerCase() === cleanSlug) || (r.ownerTenantId && r.ownerTenantId.toLowerCase() === cleanSlug));
+          const matchId =
+            effectiveTenantId &&
+            r.ownerTenantId &&
+            r.ownerTenantId.toLowerCase() === effectiveTenantId.toLowerCase();
+          const matchSlug =
+            cleanSlug &&
+            ((r.ownerTenantSlug && r.ownerTenantSlug.toLowerCase() === cleanSlug) ||
+              (r.ownerTenantId && r.ownerTenantId.toLowerCase() === cleanSlug));
           return matchId || matchSlug;
         });
 
