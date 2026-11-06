@@ -758,7 +758,12 @@ export const tableService = {
       const res = await portalClient.post(`/tables/${tableId}/assign-station`, { stationId });
       return { success: true, message: res.data?.message || 'Cập nhật trạm thành công' };
     } catch (err: any) {
-      return { success: false, message: extractErrorMessage(err, 'Lỗi gán trạm') };
+      try {
+        const edgeRes = await apiClient.post(`/v1/tables/${tableId}/assign-station`, { stationId });
+        return { success: true, message: edgeRes.data?.message || 'Cập nhật trạm thành công' };
+      } catch (fallbackErr: any) {
+        return { success: false, message: extractErrorMessage(err, 'Lỗi gán trạm') };
+      }
     }
   },
 

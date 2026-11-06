@@ -849,16 +849,20 @@ export const StaffKdsPage: React.FC = () => {
       // Build active tray assignments
       const trayAssignments: CargoTrayAssignmentDto[] = [];
       if (isTray1Active) {
+        const matched1 = tables.find((t) => t.name.toLowerCase() === table1.toLowerCase() || t.tableNo?.toLowerCase() === table1.toLowerCase());
         trayAssignments.push({
           cargoLevel: 1,
+          toStationId: matched1?.stationId || undefined,
           destinationTableNo: table1,
           orderReference: order1 || `ORD-${Date.now().toString().slice(-3)}`,
           priority: 1,
         });
       }
       if (isTray2Active) {
+        const matched2 = tables.find((t) => t.name.toLowerCase() === table2.toLowerCase() || t.tableNo?.toLowerCase() === table2.toLowerCase());
         trayAssignments.push({
           cargoLevel: 2,
+          toStationId: matched2?.stationId || undefined,
           destinationTableNo: table2,
           orderReference: order2 || `ORD-${(Date.now() + 1).toString().slice(-3)}`,
           priority: isTray1Active ? 2 : 1,
@@ -866,10 +870,18 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       // 1. Call Backend API /v1/tasks/sequence/start
+      const kitchenStation = stations.find((s) => s.stationType === "kitchen" || s.name.toLowerCase().includes("bếp") || s.name.toLowerCase().includes("st05")) || stations[0];
       const result = await robotService.startServiceSequence({
         robotId: effectiveRobot.id,
+        fromStationId: kitchenStation?.id,
         trayAssignments,
       });
+
+      if (!result.success) {
+        showToast(result.message || "Không thể khởi động chuỗi điều phối!", "info");
+        setIsDispatching(false);
+        return;
+      }
 
       // 2. Ghi nhận vào SQLite cho các khay hoạt động
       for (const tray of trayAssignments) {
@@ -1794,10 +1806,6 @@ export const StaffKdsPage: React.FC = () => {
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />{" "}
                     Bàn trống
                   </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />{" "}
-                    Đã gộp
-                  </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 auto-rows-max content-start">
                   {paginatedTables.map((table) => {
@@ -2632,15 +2640,18 @@ export const StaffKdsPage: React.FC = () => {
                         }}
                         className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
                       >
-                        <option value="">-- Chọn Bàn Giao Khay 1 --</option>
+                        <option value="">-- Chọn Bàn Giao Khay 1 (Đã Gán Trạm) --</option>
                         {tray1Table && !tables.some((t) => t.name === tray1Table) && (
                           <option value={tray1Table}>{tray1Table}</option>
                         )}
-                        {tables.map((t) => (
+                        {tables.filter((t) => Boolean(t.stationId || t.stationName)).map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""}
+                            {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
                           </option>
                         ))}
+                        {tables.filter((t) => Boolean(t.stationId || t.stationName)).length === 0 && (
+                          <option value="" disabled>-- Chưa có bàn nào được gán trạm --</option>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -2765,15 +2776,18 @@ export const StaffKdsPage: React.FC = () => {
                         onChange={(e) => setTray2Table(e.target.value)}
                         className="w-full px-2.5 py-2 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
                       >
-                        <option value="">-- Chọn Bàn Giao Khay 2 --</option>
+                        <option value="">-- Chọn Bàn Giao Khay 2 (Đã Gán Trạm) --</option>
                         {tray2Table && !tables.some((t) => t.name === tray2Table) && (
                           <option value={tray2Table}>{tray2Table}</option>
                         )}
-                        {tables.map((t) => (
+                        {tables.filter((t) => Boolean(t.stationId || t.stationName)).map((t) => (
                           <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""} {t.stationName ? `• Trạm: ${t.stationName}` : ""}
+                            {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
                           </option>
                         ))}
+                        {tables.filter((t) => Boolean(t.stationId || t.stationName)).length === 0 && (
+                          <option value="" disabled>-- Chưa có bàn nào được gán trạm --</option>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -2941,6 +2955,10 @@ export const StaffKdsPage: React.FC = () => {
                       nhất
                     </span>
                     <span className="text-blue-700 font-bold">Ưu tiên #1</span>
+                  </div>
+                  <div className="p-2 bg-blue-100/80 rounded-lg border border-blue-200 text-[11px] text-blue-900 font-medium flex items-center gap-1.5">
+                    <span>💡</span>
+                    <span>Đầu bếp đặt đĩa lên khay của robot <strong className="font-extrabold">{effectiveRobot.code}</strong> trước khi bấm phát lệnh.</span>
                   </div>
                 </div>
               ) : (
@@ -3722,7 +3740,8 @@ export const StaffKdsPage: React.FC = () => {
                         t.name !== curTable &&
                         t.name !== otherLegTable &&
                         t.status !== "occupied" &&
-                        t.status !== "serving"
+                        t.status !== "serving" &&
+                        Boolean(t.stationId || t.stationName)
                       );
                     })
                     .map((t) => (

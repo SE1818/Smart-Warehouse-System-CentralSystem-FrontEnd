@@ -430,54 +430,41 @@ export const robotService = {
   async startServiceSequence(request: StartServiceSequenceRequest): Promise<ServiceSequenceResult> {
 
     try {
-
       const response = await apiClient.post<ServiceSequenceResult>('/v1/tasks/sequence/start', request);
-
       return response.data;
-
-    } catch (err) {
-
-      console.warn('[robotService] Lỗi gọi API sequence/start, sinh kết quả dự phòng offline:', err);
-
+    } catch (err: any) {
+      console.warn('[robotService] Lỗi gọi API sequence/start:', err);
+      if (err?.response?.data?.message) {
+        return {
+          success: false,
+          message: err.response.data.message,
+          robotId: request.robotId || '',
+          robotName: '',
+          totalStops: 0,
+          createdTasks: []
+        };
+      }
+      // Chỉ fallback offline khi mất kết nối mạng
       const offlineTasks = request.trayAssignments.map((tray, idx) => ({
-
         id: `seq-task-${Date.now()}-${idx + 1}`,
-
         robotId: request.robotId || 'amr-01',
-
         cargoLevel: tray.cargoLevel,
-
         status: idx === 0 ? 'in_progress' : 'pending',
-
         toStationId: tray.toStationId || `station-${tray.destinationTableNo}`,
-
         destinationTableNo: tray.destinationTableNo,
-
         orderReference: tray.orderReference
-
       }));
 
       return {
-
         success: true,
-
-        message: `Đã phát lệnh chuỗi giao ${request.trayAssignments.length} chặng tới ${request.trayAssignments.map(t => t.destinationTableNo).join(', ')}`,
-
+        message: `[Offline] Đã phát lệnh chuỗi giao ${request.trayAssignments.length} chặng tới ${request.trayAssignments.map(t => t.destinationTableNo).join(', ')}`,
         robotId: request.robotId || 'amr-01',
-
         robotName: 'AMR-01',
-
         totalStops: request.trayAssignments.length,
-
         createdTasks: offlineTasks
-
       };
-
     }
-
   },
-
-
 
   // Confirm Next Table or Return Home (Dual Confirmation: Physical ESP32 Button or Web Console)
 
