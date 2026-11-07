@@ -28,6 +28,7 @@ import {
   Target,
   Eye,
   Bot,
+  XCircle,
 } from "lucide-react";
 import type { Station } from "@/types/robot";
 import {
@@ -135,12 +136,47 @@ const formatTransferStatusLabel = (raw?: string | null): string => {
   if (s === "pending") return "Chờ lệnh";
   if (s === "assigned") return "Đã gán khay";
   if (s === "in_transit" || s === "in_progress" || s === "moving" || s === "delivering") {
-    return "Đang giao";
+    return "Đang di chuyển";
   }
   if (s === "arrived") return "Chờ lấy món";
+  if (s === "accepted") return "Đã tiếp nhận";
   if (s === "delivered" || s === "completed") return "Hoàn tất";
+  if (s === "failed") return "Thất bại";
   if (s === "cancelled") return "Đã hủy";
-  return raw || "Hoàn tất";
+  return raw ? raw.replace(/_/g, " ") : "Hoàn tất";
+};
+
+const formatCommandTypeLabel = (raw?: string | null): string => {
+  const s = (raw || "").toLowerCase();
+  if (s === "dispatch_waypoint" || s === "move_to_table" || s === "move_to_dropoff") return "Điều hướng tới bàn";
+  if (s === "move_to_kitchen" || s === "return_to_kitchen") return "Quay về quầy bếp";
+  if (s === "move_to_pickup") return "Đến trạm lấy món";
+  if (s === "pause") return "Tạm dừng tránh vật cản";
+  if (s === "resume") return "Tiếp tục di chuyển";
+  if (s === "cancel") return "Hủy lệnh giao món";
+  return raw ? raw.replace(/_/g, " ") : "Điều hướng";
+};
+
+const formatCommandStatusLabel = (raw?: string | null): string => {
+  const s = (raw || "").toLowerCase();
+  if (s === "sent") return "Đã gửi lệnh";
+  if (s === "queued") return "Đang xếp hàng";
+  if (s === "executing") return "Đang thực thi";
+  if (s === "executed" || s === "completed" || s === "success") return "Đã hoàn thành";
+  if (s === "failed") return "Thất bại";
+  if (s === "cancelled") return "Đã hủy";
+  return raw ? raw.replace(/_/g, " ") : "Đang xử lý";
+};
+
+const formatExecutionResultLabel = (raw?: string | null): string => {
+  const s = (raw || "").toLowerCase();
+  if (s === "dispatched" || s === "sent") return "Đã phát lệnh tới Robot";
+  if (s === "queued") return "Đã xếp hàng đợi";
+  if (s === "executing") return "Đang thực thi chuyển động";
+  if (s === "arrived" || s === "success" || s === "executed") return "Thành công cập trạm";
+  if (s === "failed") return "Thất bại";
+  if (s === "cancelled") return "Đã hủy bỏ";
+  return raw ? raw.replace(/_/g, " ") : "Thành công";
 };
 export interface TrayItem {
   dishName: string;
@@ -1764,6 +1800,35 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
+  const handleAbortActiveMission = async () => {
+    if (!activeSequence) return;
+    if (!window.confirm("Bạn có chắc chắn muốn hủy lượt điều phối này và đưa Robot về trạng thái sẵn sàng (idle)?")) {
+      return;
+    }
+    const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+    const curTaskId = currentLeg?.taskId;
+    const robotId = effectiveRobot?.id;
+    try {
+      await robotService.abortTask(curTaskId, robotId);
+      if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
+      setMissionPhase("idle");
+      setActiveSequence(null);
+      setIsDispatching(false);
+      setIsTaskPaused(false);
+      localStorage.removeItem("vora_active_sequence");
+      setRobots((prev) =>
+        prev.map((r) =>
+          r.code === activeSequence.robotCode
+            ? { ...r, status: "idle", currentZone: "Bếp Trung Tâm" }
+            : r,
+        ),
+      );
+      showToast("Đã hủy lệnh điều phối và đưa Robot về trạng thái sẵn sàng (idle).", "success");
+    } catch {
+      showToast("Lỗi khi hủy lệnh điều phối.", "info");
+    }
+  };
+
   return (
     <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast notifications */}
@@ -2659,10 +2724,10 @@ export const StaffKdsPage: React.FC = () => {
                     return (
                       <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[10px] font-mono">
                         <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
-                          <div className="text-[9px] text-emerald-300 font-bold uppercase">1. Request &amp; Status</div>
-                          <div className="text-white font-extrabold truncate mt-0.5">{reqSt}</div>
+                          <div className="text-[9px] text-emerald-300 font-bold uppercase">1. Yêu cầu &amp; Trạng thái</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">{formatTransferStatusLabel(reqSt)}</div>
                           <div className="text-[9px] text-slate-300 truncate">
-                            {liveTaskAudit?.statusHistory?.length ?? 2} mốc t_transfer_status
+                            {liveTaskAudit?.statusHistory?.length ?? 2} mốc lịch sử
                           </div>
                         </div>
 
@@ -2673,20 +2738,20 @@ export const StaffKdsPage: React.FC = () => {
                               : "bg-blue-500/20 border-cyan-400/40"
                           }`}
                         >
-                          <div className="text-[9px] text-cyan-300 font-bold uppercase">2. Command &amp; Log</div>
+                          <div className="text-[9px] text-cyan-300 font-bold uppercase">2. Lệnh &amp; Thực thi</div>
                           <div className="text-white font-extrabold truncate mt-0.5">
-                            {cmdItem?.commandType || "move_to_table"}
+                            {formatCommandTypeLabel(cmdItem?.commandType)}
                           </div>
-                          <div className="text-[9px] text-slate-300 truncate">status: {cmdSt}</div>
+                          <div className="text-[9px] text-slate-300 truncate">Lệnh: {formatCommandStatusLabel(cmdSt)}</div>
                         </div>
 
                         <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-400/30">
-                          <div className="text-[9px] text-emerald-300 font-bold uppercase">3. Response</div>
+                          <div className="text-[9px] text-emerald-300 font-bold uppercase">3. Phản hồi Robot</div>
                           <div className="text-white font-extrabold truncate mt-0.5">
-                            {latestResp?.status || (missionPhase === "arrived" ? "arrived" : "in_transit")}
+                            {formatTransferStatusLabel(latestResp?.status || (missionPhase === "arrived" ? "arrived" : "in_transit"))}
                           </div>
                           <div className="text-[9px] text-slate-300 truncate">
-                            {respCount} bản ghi{latestResp?.currentX != null ? ` (${latestResp.currentX},${latestResp.currentY})` : ""}
+                            {respCount} lượt{latestResp?.currentX != null ? ` (${latestResp.currentX},${latestResp.currentY})` : ""}
                           </div>
                         </div>
 
@@ -2697,9 +2762,9 @@ export const StaffKdsPage: React.FC = () => {
                               : "bg-blue-500/20 border-cyan-400/40"
                           }`}
                         >
-                          <div className="text-[9px] text-cyan-300 font-bold uppercase">4. Log Transfer</div>
-                          <div className="text-white font-extrabold truncate mt-0.5">{logSt}</div>
-                          <div className="text-[9px] text-slate-300 truncate">t_log_transfers</div>
+                          <div className="text-[9px] text-cyan-300 font-bold uppercase">4. Nhật ký giao món</div>
+                          <div className="text-white font-extrabold truncate mt-0.5">{formatTransferStatusLabel(logSt)}</div>
+                          <div className="text-[9px] text-slate-300 truncate">Nhật ký hành trình</div>
                         </div>
 
                         <div
@@ -2711,10 +2776,10 @@ export const StaffKdsPage: React.FC = () => {
                         >
                           <div className="text-[9px] text-amber-300 font-bold uppercase">5. Trả Món</div>
                           <div className="text-white font-extrabold truncate mt-0.5">
-                            {missionPhase === "arrived" ? "Đang chờ lấy" : "Chưa tới bàn"}
+                            {missionPhase === "arrived" ? "Đang chờ lấy" : "Đang di chuyển"}
                           </div>
                           <div className="text-[9px] text-slate-300 truncate">
-                            {missionPhase === "arrived" ? "Sẵn sàng xác nhận" : "Đang di chuyển..."}
+                            {missionPhase === "arrived" ? "Sẵn sàng xác nhận" : "Đang đến bàn..."}
                           </div>
                         </div>
                       </div>
@@ -2825,11 +2890,11 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
 
                   {/* Operational Override & Obstacle Control */}
-                  <div className="pt-2 border-t border-white/10 flex justify-end">
+                  <div className="pt-2 border-t border-white/10 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={handleTogglePauseTask}
-                      className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         isTaskPaused
                           ? "bg-amber-500/20 text-amber-300 border-amber-400/50 hover:bg-amber-500/30 animate-pulse"
                           : "bg-slate-800/90 text-slate-300 border-white/10 hover:bg-slate-700"
@@ -2838,9 +2903,19 @@ export const StaffKdsPage: React.FC = () => {
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                       <span>
                         {isTaskPaused
-                          ? "▶ Tiếp Tục Di Chuyển (Đã Dọn Vật Cản)"
-                          : "⏸ Tạm Dừng Tránh Vật Cản Hành Lang"}
+                          ? "▶ Tiếp Tục Di Chuyển"
+                          : "⏸ Tạm Dừng Tránh Vật Cản"}
                       </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleAbortActiveMission}
+                      className="py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 bg-rose-500/20 text-rose-300 border-rose-400/40 hover:bg-rose-500/30 active:scale-95"
+                      title="Dừng khẩn cấp và hủy nhiệm vụ điều phối hiện tại"
+                    >
+                      <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Hủy Lệnh / Dừng Xe</span>
                     </button>
                   </div>
                 </div>
@@ -2850,7 +2925,7 @@ export const StaffKdsPage: React.FC = () => {
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     <span className="font-bold">
                       {missionPhase === "returning"
-                        ? "Đã xác nhận trả món! Robot đang thực thi lệnh move_to_kitchen tự động quay về Bếp..."
+                        ? "Đã xác nhận trả món! Robot đang thực thi nhiệm vụ quay về Bếp tự động..."
                         : "Toàn bộ lượt giao đã phục vụ thành công! Xe đã quay về trạm bếp an toàn (idle)."}
                     </span>
                   </div>
@@ -3718,10 +3793,10 @@ export const StaffKdsPage: React.FC = () => {
                   {!activeSequence
                     ? "● Sẵn Sàng (Tại Bếp)"
                     : isRobotInTransit
-                      ? "● in_transit (Đang Di Chuyển)"
+                      ? "● Đang di chuyển (Giao món)"
                       : liveRobotStatus === "arrived"
-                        ? "● arrived (Đã Đến Bàn)"
-                        : `● ${liveRobotStatus}`}
+                        ? "● Đã đến bàn (Chờ lấy món)"
+                        : `● ${formatTransferStatusLabel(liveRobotStatus)}`}
                 </span>
               </div>
               <div>
@@ -4856,10 +4931,10 @@ export const StaffKdsPage: React.FC = () => {
                 <div className="flex items-center justify-between pb-2 border-b border-slate-700">
                   <span className="font-bold text-cyan-300 uppercase tracking-wide flex items-center gap-1.5">
                     <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Nhật Ký Chuỗi Bản Ghi SQLite (Edge DB)</span>
+                    <span>Tiến Trình &amp; Nhật Ký Hệ Thống SQLite</span>
                   </span>
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-400/30">
-                    t_transfer_requests: {modalTaskAudit.request.status}
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-400/30 font-bold">
+                    Yêu cầu giao: {formatTransferStatusLabel(modalTaskAudit.request.status)}
                   </span>
                 </div>
 
@@ -4867,12 +4942,12 @@ export const StaffKdsPage: React.FC = () => {
                   {/* 1. Transfer Status History */}
                   <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
                     <div className="text-[10px] font-bold text-emerald-300">
-                      1. t_transfer_status ({modalTaskAudit.statusHistory.length} mốc)
+                      1. Lịch sử trạng thái ({modalTaskAudit.statusHistory.length} mốc)
                     </div>
                     <div className="space-y-0.5 max-h-24 overflow-y-auto text-[10px] text-slate-300">
                       {modalTaskAudit.statusHistory.map((st) => (
                         <div key={st.id} className="truncate">
-                          • {st.previousStatus || "init"} ➔ <strong className="text-white">{st.newStatus}</strong>
+                          • {formatTransferStatusLabel(st.previousStatus)} ➔ <strong className="text-white">{formatTransferStatusLabel(st.newStatus)}</strong>
                         </div>
                       ))}
                     </div>
@@ -4881,26 +4956,26 @@ export const StaffKdsPage: React.FC = () => {
                   {/* 2. Transfer Command + Command Status + Log Command */}
                   <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
                     <div className="text-[10px] font-bold text-cyan-300">
-                      2. t_transfer_commands ({modalTaskAudit.commands.length})
+                      2. Lệnh điều phối AMR ({modalTaskAudit.commands.length} lệnh)
                     </div>
                     <div className="space-y-0.5 text-[10px] text-slate-300">
                       {modalTaskAudit.commands.length > 0 ? (
                         modalTaskAudit.commands.slice(0, 2).map((cmd) => (
                           <div key={cmd.id} className="truncate">
-                            • {cmd.commandType} • <strong className="text-white">{cmd.status}</strong>
+                            • {formatCommandTypeLabel(cmd.commandType)} • <strong className="text-white">{formatCommandStatusLabel(cmd.status)}</strong>
                           </div>
                         ))
                       ) : (
-                        <div className="text-slate-400">Chưa có command</div>
+                        <div className="text-slate-400">Chưa có lệnh</div>
                       )}
                       {modalCmdStatuses.length > 0 && (
                         <div className="text-slate-400 truncate">
-                          cmd_status: {modalCmdStatuses.map((cs) => cs.newStatus).join(" ➔ ")}
+                          Trạng thái: {modalCmdStatuses.map((cs) => formatCommandStatusLabel(cs.newStatus)).join(" ➔ ")}
                         </div>
                       )}
                       {modalCmdLog && (
                         <div className="text-emerald-300 truncate">
-                          log_cmd: {modalCmdLog.executionResult}
+                          Kết quả: {formatExecutionResultLabel(modalCmdLog.executionResult)}
                         </div>
                       )}
                     </div>
@@ -4909,12 +4984,12 @@ export const StaffKdsPage: React.FC = () => {
                   {/* 3. Transfer Responses */}
                   <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
                     <div className="text-[10px] font-bold text-amber-300">
-                      3. t_transfer_responses ({modalTaskAudit.responses.length} phản hồi)
+                      3. Phản hồi từ Robot ({modalTaskAudit.responses.length} lượt)
                     </div>
                     <div className="space-y-0.5 max-h-20 overflow-y-auto text-[10px] text-slate-300">
                       {modalTaskAudit.responses.slice(0, 3).map((r) => (
                         <div key={r.id} className="truncate">
-                          • <strong className="text-white">{r.status}</strong>{" "}
+                          • <strong className="text-white">{formatTransferStatusLabel(r.status)}</strong>{" "}
                           {r.currentX != null ? `(${r.currentX},${r.currentY})` : ""}{" "}
                           {r.batteryAtResponse != null ? `• Pin ${r.batteryAtResponse}%` : ""}
                         </div>
@@ -4925,12 +5000,12 @@ export const StaffKdsPage: React.FC = () => {
                   {/* 4. Log Transfer */}
                   <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
                     <div className="text-[10px] font-bold text-indigo-300">
-                      4. t_log_transfers
+                      4. Nhật ký hành trình
                     </div>
                     {modalTaskAudit.transferLog ? (
                       <div className="space-y-0.5 text-[10px] text-slate-300">
                         <div>
-                          • Kết quả: <strong className="text-white">{modalTaskAudit.transferLog.statusResult}</strong>
+                          • Kết quả: <strong className="text-white">{formatTransferStatusLabel(modalTaskAudit.transferLog.statusResult)}</strong>
                         </div>
                         <div className="truncate">
                           • Bắt đầu: {new Date(modalTaskAudit.transferLog.startedAt).toLocaleTimeString("vi-VN")}
@@ -4942,7 +5017,7 @@ export const StaffKdsPage: React.FC = () => {
                         )}
                       </div>
                     ) : (
-                      <div className="text-slate-400 text-[10px]">Chưa có t_log_transfers</div>
+                      <div className="text-slate-400 text-[10px]">Chưa có nhật ký hành trình</div>
                     )}
                   </div>
                 </div>

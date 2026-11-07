@@ -467,6 +467,22 @@ export const robotService = {
     }
   },
 
+  // Emergency Abort or Cancel Sequence Task
+  async abortTask(taskId?: string, robotId?: string): Promise<boolean> {
+    try {
+      if (taskId) {
+        await apiClient.delete(`/v1/tasks/${taskId}/cancel`);
+      }
+      if (robotId) {
+        await apiClient.post(`/v1/tasks/abort`, { taskId, robotId });
+      }
+      return true;
+    } catch (err) {
+      console.warn('[robotService] Lỗi khi hủy nhiệm vụ:', err);
+      return false;
+    }
+  },
+
   // Fetch live Transfer Audit Trail from SQLite (Request, StatusHistory, Commands, Responses, LogTransfer)
   async getTaskAuditHistory(taskId: string): Promise<TransferAuditDto | null> {
     const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
