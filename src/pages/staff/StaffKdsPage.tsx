@@ -333,6 +333,10 @@ export const StaffKdsPage: React.FC = () => {
   // Physical Stations from ROS SLAM map
   const [stations, setStations] = useState<Station[]>([]);
 
+  // Abort / Cancel Mission Modal State
+  const [isAbortConfirmModalOpen, setIsAbortConfirmModalOpen] = useState<boolean>(false);
+  const [isAborting, setIsAborting] = useState<boolean>(false);
+
   // Task Progress Detail Modal State
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<{
     taskId: string;
@@ -1800,11 +1804,14 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
-  const handleAbortActiveMission = async () => {
+  const handleOpenAbortModal = () => {
     if (!activeSequence) return;
-    if (!window.confirm("Bạn có chắc chắn muốn hủy lượt điều phối này và đưa Robot về trạng thái sẵn sàng (idle)?")) {
-      return;
-    }
+    setIsAbortConfirmModalOpen(true);
+  };
+
+  const handleExecuteAbortMission = async () => {
+    if (!activeSequence) return;
+    setIsAborting(true);
     const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
     const curTaskId = currentLeg?.taskId;
     const robotId = effectiveRobot?.id;
@@ -1815,6 +1822,7 @@ export const StaffKdsPage: React.FC = () => {
       setActiveSequence(null);
       setIsDispatching(false);
       setIsTaskPaused(false);
+      setIsAbortConfirmModalOpen(false);
       localStorage.removeItem("vora_active_sequence");
       setRobots((prev) =>
         prev.map((r) =>
@@ -1823,9 +1831,11 @@ export const StaffKdsPage: React.FC = () => {
             : r,
         ),
       );
-      showToast("Đã hủy lệnh điều phối và đưa Robot về trạng thái sẵn sàng (idle).", "success");
+      showToast("Đã hủy lượt điều phối và đưa Robot về trạng thái sẵn sàng!", "success");
     } catch {
       showToast("Lỗi khi hủy lệnh điều phối.", "info");
+    } finally {
+      setIsAborting(false);
     }
   };
 
@@ -2910,7 +2920,7 @@ export const StaffKdsPage: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={handleAbortActiveMission}
+                      onClick={handleOpenAbortModal}
                       className="py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 bg-rose-500/20 text-rose-300 border-rose-400/40 hover:bg-rose-500/30 active:scale-95"
                       title="Dừng khẩn cấp và hủy nhiệm vụ điều phối hiện tại"
                     >
@@ -3741,6 +3751,86 @@ export const StaffKdsPage: React.FC = () => {
           )}
         </button>
       </div>
+      {/* MODAL XÁC NHẬN HỦY LỆNH ĐIỀU PHỐI / DỪNG XE (ĐỒNG BỘ PHONG CÁCH QUÁN / POS KDS) */}
+      {isAbortConfirmModalOpen && activeSequence && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800 animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                  <AlertTriangle className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 font-heading">
+                    Xác Nhận Dừng Xe &amp; Hủy Lệnh
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Lượt điều phối: <strong className="font-mono text-slate-800">#{activeSequence.sequenceId}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAbortConfirmModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content Info Box */}
+            <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 text-xs text-rose-950 space-y-2">
+              <div className="font-bold flex items-center gap-1.5 text-rose-900">
+                <span>⚠️ Bạn có chắc chắn muốn dừng xe và hủy lượt giao này?</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed">
+                Hành động này sẽ gửi lệnh khẩn cấp dừng robot{" "}
+                <strong className="text-slate-900 font-extrabold">{activeSequence.robotCode}</strong> ({activeSequence.robotName}), hủy nhiệm vụ giao món và đưa xe về lại trạng thái sẵn sàng (idle).
+              </p>
+              <div className="pt-1 flex items-center gap-2 text-[11px] font-mono text-slate-500">
+                <span className="px-2 py-0.5 rounded bg-white border border-rose-200 font-bold text-rose-700">
+                  Bàn đích: {activeSequence.legs[activeSequence.currentLegIndex]?.tableNo || "Bàn ăn"}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-bold">
+                  Khay: {activeSequence.legs[activeSequence.currentLegIndex]?.cargoLevel || 1}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsAbortConfirmModalOpen(false)}
+                disabled={isAborting}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
+              >
+                Giữ Lệnh (Đóng)
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteAbortMission}
+                disabled={isAborting}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 active:scale-98 shadow-md shadow-rose-600/25 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isAborting ? (
+                  <>
+                    <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang dừng xe...</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Xác Nhận Hủy &amp; Dừng Xe</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL ĐỔI BÀN & CHUYỂN HƯỚNG GIAO MÓN (HIỂN THỊ TIẾN TRÌNH QUY TRÌNH REALTIME & XỬ LÝ THEO TÌNH HUỐNG) */}
       {isRerouteModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
