@@ -26,9 +26,10 @@ import {
   Upload,
   X,
   Target,
-  Eye,
   Bot,
   XCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { Station } from "@/types/robot";
 import {
@@ -955,7 +956,7 @@ export const StaffKdsPage: React.FC = () => {
     setIsAssignStationModalOpen(true);
   };
 
-  // Robot Mission Queue: Active sequence legs + recent/queued missions (Zero duplicates)
+  // Robot Mission Queue: Active sequence legs + recent preparing/delivering missions (Zero duplicates & Exclude finished/cancelled)
   const missionQueueTasks = useMemo(() => {
     const list: Array<{
       taskId: string;
@@ -972,17 +973,20 @@ export const StaffKdsPage: React.FC = () => {
       isLive: boolean;
     }> = [];
 
-    // 1. If activeSequence is running:
-    if (activeSequence) {
+    // 1. If activeSequence is running: only show active current leg and upcoming legs
+    if (activeSequence && activeSequence.status === "in_progress") {
       activeSequence.legs.forEach((leg, idx) => {
         const isCurrentLeg = activeSequence.currentLegIndex === idx;
-        const isPassedLeg = activeSequence.currentLegIndex > idx || activeSequence.status === "completed";
-        let legStep = 1;
-        let legStatus = "Đã gán khay";
+        const isPassedLeg = activeSequence.currentLegIndex > idx;
+        
+        // Skip completed/passed legs in sequence
         if (isPassedLeg) {
-          legStep = 4;
-          legStatus = "Hoàn tất";
-        } else if (isCurrentLeg) {
+          return;
+        }
+
+        let legStep = 1;
+        let legStatus = "Chuẩn bị giao";
+        if (isCurrentLeg) {
           legStep = currentWorkflowStep;
           legStatus =
             currentWorkflowStep === 1
@@ -1018,11 +1022,28 @@ export const StaffKdsPage: React.FC = () => {
       });
     }
 
-    // 2. Add recent SQLite tasks that are not already in activeSequence:
+    // 2. Add recent SQLite tasks that are preparing or delivering:
     recentSqliteTasks.forEach((rt) => {
       if (!rt?.taskId || String(rt.taskId).startsWith("seq-task-") || String(rt.taskId).startsWith("SEQ-")) {
         return;
       }
+
+      const rawSt = String(rt.status || "").toLowerCase().trim();
+      // Strictly exclude completed, cancelled, aborted, or failed tasks
+      const isFinished =
+        rawSt === "completed" ||
+        rawSt === "cancelled" ||
+        rawSt === "failed" ||
+        rawSt === "aborted" ||
+        rawSt.includes("hủy") ||
+        rawSt.includes("hoàn tất") ||
+        rawSt.includes("thất bại") ||
+        rawSt.includes("xong");
+
+      if (isFinished) {
+        return;
+      }
+
       const rtKey = normalizeTaskKey(rt.taskId);
       const alreadyInList = list.some((l) => {
         const lKey = normalizeTaskKey(l.taskId);
@@ -1045,7 +1066,6 @@ export const StaffKdsPage: React.FC = () => {
             t.name.toLowerCase() === String(rt.destination || "").toLowerCase() ||
             t.tableNo === rt.destination,
         );
-        const rawSt = String(rt.status || "").toLowerCase();
         const wfStep =
           rawSt === "arrived"
             ? 3
@@ -1055,7 +1075,8 @@ export const StaffKdsPage: React.FC = () => {
                 rawSt === "assigned" ||
                 rawSt === "delivering"
               ? 2
-              : 4;
+              : 1;
+
         list.push({
           taskId: rt.taskId,
           missionId: formatShortTaskCode(rt.taskId),
@@ -1069,13 +1090,21 @@ export const StaffKdsPage: React.FC = () => {
           status: formatTransferStatusLabel(rt.status),
           workflowStep: wfStep,
           time: rt.time || "Gần đây",
-          isLive: wfStep < 4,
+          isLive: true,
         });
       }
     });
 
     return list;
   }, [activeSequence, currentWorkflowStep, recentSqliteTasks, tables]);
+
+  // Pagination for Robot Mission Queue (2 items per page to prevent layout overflow)
+  const {
+    currentPage: queuePage,
+    totalPages: queueTotalPages,
+    paginatedItems: paginatedQueueTasks,
+    setPage: setQueuePage,
+  } = usePagination(missionQueueTasks, 2);
 
   // Action: Select Pending Order -> Autofill Order ID & Destination Table in Active Tray
   const handleSelectPendingOrder = (order: PendingOrderDto) => {
@@ -3517,29 +3546,54 @@ export const StaffKdsPage: React.FC = () => {
                     HÀNG ĐỢI NHIỆM VỤ ROBOT
                   </h3>
                   <p className="text-[10px] text-slate-500 font-sans">
-                    Nhiệm vụ tiếp theo và chuyển hướng điều phối trực tiếp
+                    Nhiệm vụ chuẩn bị và đang thực hiện giao món
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
                   {missionQueueTasks.length} nhiệm vụ
                 </span>
+                {queueTotalPages > 1 && (
+                  <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      disabled={queuePage <= 1}
+                      onClick={() => setQueuePage(queuePage - 1)}
+                      className="w-6 h-6 rounded flex items-center justify-center text-slate-600 hover:bg-white hover:text-blue-600 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                      title="Trang trước"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[10px] font-mono font-bold text-slate-700 px-1">
+                      {queuePage}/{queueTotalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={queuePage >= queueTotalPages}
+                      onClick={() => setQueuePage(queuePage + 1)}
+                      className="w-6 h-6 rounded flex items-center justify-center text-slate-600 hover:bg-white hover:text-blue-600 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                      title="Trang kế tiếp"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* List of Queue Tasks */}
+            {/* List of Queue Tasks (Paginated & Filtered) */}
             <div className="space-y-3">
               {missionQueueTasks.length === 0 ? (
-                <div className="py-8 px-4 text-center text-xs text-slate-400 italic bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-2">
-                  <Clock className="w-6 h-6 text-slate-300" />
+                <div className="py-6 px-4 text-center text-xs text-slate-400 italic bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center gap-1.5">
+                  <Clock className="w-5 h-5 text-slate-300" />
                   <span className="font-semibold text-slate-600">Hàng đợi nhiệm vụ đang trống</span>
                   <span className="text-[11px] text-slate-400 max-w-xs leading-relaxed font-sans">
                     Nạp món vào Khay 1 / Khay 2 và nhấn [Phát Lệnh Giao Món] để tạo nhiệm vụ tiếp theo cho Robot AMR.
                   </span>
                 </div>
               ) : (
-                missionQueueTasks.map((task, idx) => {
+                paginatedQueueTasks.map((task, idx) => {
                   const isCurrent = task.isLive;
                   const isCompleted = task.workflowStep === 4 && task.status.includes("Hoàn tất");
                   return (
@@ -3636,7 +3690,7 @@ export const StaffKdsPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Bottom Action Bar: Đổi Bàn, Đổi Trạm, Xem Chi Tiết */}
+                      {/* Bottom Action Bar: Đổi Bàn, Đổi Trạm (Xem Chi Tiết chuyển về Tenant Dashboard) */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                         <button
                           type="button"
@@ -3657,22 +3711,39 @@ export const StaffKdsPage: React.FC = () => {
                           <MapPin className="w-3.5 h-3.5 text-purple-600" />
                           <span>Đổi Trạm Giao</span>
                         </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setSelectedTaskDetail(task)}
-                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 border border-blue-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ml-auto"
-                          title="Xem tiến trình chi tiết 4 bước phục vụ của nhiệm vụ này"
-                        >
-                          <Eye className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Xem Chi Tiết</span>
-                        </button>
                       </div>
                     </div>
                   );
                 })
               )}
             </div>
+
+            {/* Pagination Footer */}
+            {queueTotalPages > 1 && (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
+                <span className="text-[11px] font-medium text-slate-500">
+                  Trang {queuePage} / {queueTotalPages} ({missionQueueTasks.length} nhiệm vụ)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={queuePage <= 1}
+                    onClick={() => setQueuePage(queuePage - 1)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-2xs"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    disabled={queuePage >= queueTotalPages}
+                    onClick={() => setQueuePage(queuePage + 1)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-2xs"
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
