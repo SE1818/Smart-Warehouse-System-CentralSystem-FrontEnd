@@ -10,6 +10,7 @@ import {
   Crosshair,
   RefreshCw,
   MapPin,
+  Activity,
 } from 'lucide-react';
 import {
   rosToCanvasPixel,
@@ -49,6 +50,7 @@ export interface MapRobotItem {
   worldX?: number; // Tọa độ thực mét từ ROS / Telemetry
   worldY?: number;
   yaw?: number;
+  latencyMs?: number;
   targetTable?: string;
 }
 
@@ -1043,6 +1045,17 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold">
                   Trực quan
                 </span>
+                {robots && robots.length > 0 && (() => {
+                  const activeRobot = (selectedRobotId ? robots.find(r => r.id === selectedRobotId) : null)
+                    || robots.find(r => r.status === 'delivering')
+                    || robots[0];
+                  return (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {activeRobot.name || activeRobot.id}: {activeRobot.yaw !== undefined ? `${(activeRobot.yaw).toFixed(2)} rad` : 'Online'}
+                    </span>
+                  );
+                })()}
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
                 Click vào bàn trên sơ đồ để chọn điểm giao món ăn cho AMR
@@ -1099,6 +1112,21 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono shrink-0">
                   {effectiveMetadata.resolution}m/px
+                </span>
+                {robots && robots.length > 0 && (() => {
+                  const activeRobot = (selectedRobotId ? robots.find(r => r.id === selectedRobotId) : null)
+                    || robots.find(r => r.status === 'delivering')
+                    || robots[0];
+                  return (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">
+                      <Compass className="w-3 h-3 text-purple-400" />
+                      {activeRobot.name || activeRobot.id}: {activeRobot.yaw !== undefined ? `${(activeRobot.yaw).toFixed(2)} rad` : 'Online'}
+                    </span>
+                  );
+                })()}
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">
+                  <Activity className="w-3 h-3 text-emerald-400" />
+                  Realtime Telemetry
                 </span>
                 {resolvedWaypoints.length > 0 ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">

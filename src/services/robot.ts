@@ -425,7 +425,7 @@ export const robotService = {
 
 
 
-  // Start Multi-table 2-tray sequence dispatch (DS-07 / WF-04)
+  // Start multi-table 2-tray sequence dispatch
   async startServiceSequence(request: StartServiceSequenceRequest): Promise<ServiceSequenceResult> {
     try {
       const response = await apiClient.post<ServiceSequenceResult>('/v1/tasks/sequence/start', request);
