@@ -402,7 +402,8 @@ export const StaffKdsPage: React.FC = () => {
     newStationId: string;
   } | null>(null);
 
-  // TASK-24: Assisted Drop-off Last-Mile Handoff Alert Banner
+
+  // Staging arrival alert banner
   interface AssistedDropoffAlert {
     robotId?: string;
     robotName?: string;
@@ -1750,7 +1751,7 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
-  // Flow 3: Option B - Manual Handover & Return to Kitchen (TASK-19)
+  // Manual handover when robot already arrived at old station
   const [isSubmittingManualHandover, setIsSubmittingManualHandover] = useState(false);
   const handleConfirmManualHandover = async () => {
     if (!rerouteConflictModal) return;
@@ -3689,6 +3690,21 @@ export const StaffKdsPage: React.FC = () => {
                           <span>{task.time}</span>
                         </div>
                       </div>
+
+                      {/* Assisted Drop-off Arrival Badge */}
+                      {task.workflowStep === 3 && (
+                        <div className="p-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between gap-2 shadow-2xs animate-pulse">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-base">🔔</span>
+                            <span className="truncate">
+                              Robot đã tới {task.stationName || "Trạm Giao"} — Nhân viên bàn giao món cho Bàn {task.tableNo}
+                            </span>
+                          </div>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-950 font-mono text-[10px] shrink-0">
+                            Đã Đến Trạm
+                          </span>
+                        </div>
+                      )}
 
                       {/* Bottom Action Bar: Đổi Bàn, Đổi Trạm (Xem Chi Tiết chuyển về Tenant Dashboard) */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">

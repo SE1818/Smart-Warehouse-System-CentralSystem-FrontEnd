@@ -145,14 +145,19 @@ export const useRobotStore = create<RobotState>((set, get) => {
           const mapped: MonitorRobot = {
             id: updatedRobot.id,
             name: updatedRobot.name,
-            x: updatedRobot.x,
-            y: updatedRobot.y,
+            x: Number(updatedRobot.x ?? 0),
+            y: Number(updatedRobot.y ?? 0),
+            yaw: typeof updatedRobot.yaw === 'number' ? updatedRobot.yaw : 0,
             battery: updatedRobot.battery,
             status: updatedRobot.status,
             destination: updatedRobot.destination,
-            currentX: updatedRobot.x,
-            currentY: updatedRobot.y,
+            currentX: Number(updatedRobot.x ?? 0),
+            currentY: Number(updatedRobot.y ?? 0),
             batteryLevel: updatedRobot.battery,
+            timestamp: updatedRobot.timestamp,
+            transitLatencyMs: typeof updatedRobot.transitLatencyMs === 'number'
+              ? updatedRobot.transitLatencyMs
+              : (updatedRobot.timestamp ? Math.max(0, Date.now() - new Date(updatedRobot.timestamp).getTime()) : undefined),
           };
 
           const newRobots = [...state.robots];
@@ -196,11 +201,13 @@ export const useRobotStore = create<RobotState>((set, get) => {
                   ...newRobots[idx],
                   x: latest.x,
                   y: latest.y,
+                  yaw: latest.yaw ?? newRobots[idx].yaw,
                   currentX: latest.x,
                   currentY: latest.y,
                   battery: latest.battery ?? newRobots[idx].battery,
                   batteryLevel: latest.battery ?? newRobots[idx].batteryLevel,
                   status: (latest.status || newRobots[idx].status) as any,
+                  timestamp: latest.timestamp ?? newRobots[idx].timestamp,
                 };
                 return { robots: newRobots };
               }

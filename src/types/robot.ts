@@ -3,10 +3,13 @@ export interface Robot {
   name: string;
   x: number;
   y: number;
+  yaw?: number;
   battery: number;
   status: 'Idle' | 'Moving' | 'Charging' | 'Error' | 'Offline';
   currentAreaId?: string;
   destination?: string;
+  timestamp?: string;
+  transitLatencyMs?: number;
   createdAt?: string;
   updatedAt?: string;
 }
