@@ -21,6 +21,63 @@ import {
 } from '@/services/robot';
 import { SlamFloorMapViewer, type MapTableNode, type MapRobotItem } from '@/components/map/SlamFloorMapViewer';
 
+/**
+ * Phân giải file ảnh định dạng Netpbm PGM (.pgm) từ ROS 2 Nav2/Cartographer sang PNG DataURL
+ * để hiển thị trực tiếp trên trình duyệt HTML5.
+ */
+function parsePgmToDataUrl(arrayBuffer: ArrayBuffer): string | null {
+  try {
+    const bytes = new Uint8Array(arrayBuffer);
+    let i = 0;
+    const readNextToken = (): string => {
+      while (i < bytes.length && (bytes[i] === 32 || bytes[i] === 10 || bytes[i] === 13 || bytes[i] === 9)) i++;
+      if (i >= bytes.length) return '';
+      if (bytes[i] === 35) {
+        while (i < bytes.length && bytes[i] !== 10 && bytes[i] !== 13) i++;
+        return readNextToken();
+      }
+      let token = '';
+      while (i < bytes.length && bytes[i] !== 32 && bytes[i] !== 10 && bytes[i] !== 13 && bytes[i] !== 9) {
+        token += String.fromCharCode(bytes[i++]);
+      }
+      return token;
+    };
+
+    const magic = readNextToken();
+    if (magic !== 'P5' && magic !== 'P2') return null;
+    const width = parseInt(readNextToken(), 10);
+    const height = parseInt(readNextToken(), 10);
+    const maxVal = parseInt(readNextToken(), 10);
+    if (!width || !height || !maxVal) return null;
+
+    // Bỏ qua ký tự phân cách ngay sau header để tới binary pixel data
+    while (i < bytes.length && (bytes[i] === 32 || bytes[i] === 10 || bytes[i] === 13 || bytes[i] === 9)) i++;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const imgData = ctx.createImageData(width, height);
+    const data = imgData.data;
+
+    for (let p = 0; p < width * height; p++) {
+      const val = magic === 'P5' ? bytes[i + p] : parseInt(readNextToken(), 10);
+      const gray = Math.round((val / maxVal) * 255);
+      const idx = p * 4;
+      data[idx] = gray;
+      data[idx + 1] = gray;
+      data[idx + 2] = gray;
+      data[idx + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.warn('[PGM Parser] Không thể chuyển đổi PGM:', err);
+    return null;
+  }
+}
+
 interface MapStationManagerProps {
   onClose?: () => void;
   onMapUpdated?: (map: SlamMapResponse) => void;
@@ -113,17 +170,32 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
   const handleMapFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file format
-      const validExts = ['.png', '.jpg', '.jpeg', '.pgm'];
+      // Validate file format (.pgm standard for ROS Nav2/Cartographer)
+      const validExts = ['.pgm', '.png', '.jpg', '.jpeg'];
       const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
       if (!validExts.includes(fileExt)) {
-        showStatus('Định dạng file ảnh không hợp lệ. Vui lòng chọn .png, .jpg, hoặc .pgm.', 'error');
+        showStatus('Định dạng file ảnh không hợp lệ. Vui lòng chọn file .pgm, .png, hoặc .jpg.', 'error');
         return;
       }
       setSelectedMapFile(file);
-      const url = URL.createObjectURL(file);
-      setMapPreviewUrl(url);
-      showStatus(`Đã chọn ảnh bản đồ: ${file.name} (${Math.round(file.size / 1024)} KB)`, 'info');
+
+      // Nếu là file .pgm, chuyển đổi sang PNG DataURL để xem trước trên trình duyệt
+      if (fileExt === '.pgm') {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const buffer = event.target?.result as ArrayBuffer;
+          if (buffer) {
+            const pngDataUrl = parsePgmToDataUrl(buffer);
+            setMapPreviewUrl(pngDataUrl || URL.createObjectURL(file));
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        const url = URL.createObjectURL(file);
+        setMapPreviewUrl(url);
+      }
+
+      showStatus(`Đã chọn ảnh bản đồ ROS: ${file.name} (${Math.round(file.size / 1024)} KB)`, 'info');
     }
   };
 
@@ -404,7 +476,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <MapIcon className="w-3.5 h-3.5 text-blue-600" />
-                  <span>1. File Ảnh Bản Đồ LiDAR (.png, .jpg, .pgm)</span>
+                  <span>1. File Ảnh Bản Đồ LiDAR ROS (.pgm, .png, .jpg)</span>
                 </span>
                 {selectedMapFile && (
                   <span className="text-[10px] text-emerald-600 font-mono font-bold">
@@ -416,7 +488,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               <input
                 ref={mapFileInputRef}
                 type="file"
-                accept=".png,.jpg,.jpeg,.pgm"
+                accept=".pgm,.png,.jpg,.jpeg"
                 onChange={handleMapFileSelect}
                 className="hidden"
               />
