@@ -108,7 +108,7 @@ export interface FleetAMR {
   code: string;
   name: string;
   model: string;
-  status: 'delivering' | 'idle' | 'charging' | 'returning';
+  status: 'delivering' | 'idle' | 'charging' | 'returning' | 'maintenance';
   battery: number;
   rssi: string;
   pingMs: number;

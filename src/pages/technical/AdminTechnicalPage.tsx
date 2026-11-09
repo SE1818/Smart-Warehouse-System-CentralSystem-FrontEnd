@@ -19,11 +19,17 @@ import {
   Upload,
   LogOut,
   Store,
+  Wrench,
+  KeyRound,
+  Copy,
+  Check,
+  ShieldCheck,
 } from 'lucide-react';
 import { RobotMonitorPage } from './RobotMonitorPage';
 import { StoreEdgeSetupPage } from './StoreEdgeSetupPage';
 import { LocalSqliteSyncCard } from '@/components/technical/LocalSqliteSyncCard';
 import { useRobotStore } from '@/stores/robotStore';
+import { robotService } from '@/services/robot';
 import {
   fleetService,
   missionService,
@@ -44,8 +50,10 @@ import { MapStationManager } from '@/components/technical/MapStationManager';
 
 interface AMRNode {
   id: string;
+  robotGuid?: string;
+  code?: string;
   name: string;
-  status: 'active' | 'moving' | 'idle' | 'charging' | 'alert';
+  status: 'active' | 'moving' | 'idle' | 'charging' | 'alert' | 'maintenance';
   battery: number;
   x: number;
   y: number;
@@ -247,6 +255,137 @@ export const AdminTechnicalPage: React.FC = () => {
   const [newMissionDest, setNewMissionDest] = useState('');
   const [newMissionRobot, setNewMissionRobot] = useState('');
 
+  // Maintenance Mode Modal State (Dynamic Technician PIN)
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [targetRobotForMaintenance, setTargetRobotForMaintenance] = useState<AMRNode | null>(null);
+  const [maintenancePinInput, setMaintenancePinInput] = useState('');
+  const [generatedPin, setGeneratedPin] = useState<string | null>(null);
+  const [pinExpiresAt, setPinExpiresAt] = useState<number | null>(null);
+  const [pinCountdown, setPinCountdown] = useState<number>(0);
+  const [isGeneratingPin, setIsGeneratingPin] = useState(false);
+  const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
+  const [copiedPin, setCopiedPin] = useState(false);
+
+  useEffect(() => {
+    if (!pinExpiresAt) {
+      setPinCountdown(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((pinExpiresAt - Date.now()) / 1000));
+      setPinCountdown(remaining);
+      if (remaining <= 0) {
+        setGeneratedPin(null);
+        setPinExpiresAt(null);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [pinExpiresAt]);
+
+  const getRealRobotGuid = (node: AMRNode): string => {
+    if (node.robotGuid) return node.robotGuid;
+    const match = rawRobots.find((r) => r.id === node.id || r.code === node.id || r.name === node.name);
+    return match?.id || node.id;
+  };
+
+  const handleOpenMaintenanceModal = (robot: AMRNode) => {
+    setTargetRobotForMaintenance(robot);
+    setMaintenancePinInput('');
+    setGeneratedPin(null);
+    setPinExpiresAt(null);
+    setCopiedPin(false);
+    setShowMaintenanceModal(true);
+  };
+
+  const handleGeneratePin = async () => {
+    if (!targetRobotForMaintenance) return;
+    try {
+      setIsGeneratingPin(true);
+      const robotId = getRealRobotGuid(targetRobotForMaintenance);
+      const res = await robotService.generateMaintenancePin(robotId);
+      if (res && res.pin) {
+        setGeneratedPin(res.pin);
+        setPinExpiresAt(Date.now() + (res.expiresInSeconds || 600) * 1000);
+        setMaintenancePinInput(res.pin);
+        showToast('Đã tạo mã PIN kỹ thuật viên động thành công! Hiệu lực 10 phút.', 'success');
+      } else {
+        showToast('Không nhận được mã PIN từ máy chủ.', 'warning');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi tạo mã PIN';
+      showToast(msg, 'warning');
+    } finally {
+      setIsGeneratingPin(false);
+    }
+  };
+
+  const handleCopyPin = () => {
+    if (!generatedPin) return;
+    navigator.clipboard.writeText(generatedPin);
+    setCopiedPin(true);
+    setTimeout(() => setCopiedPin(false), 2000);
+    showToast('Đã sao chép mã PIN vào bộ nhớ tạm!', 'info');
+  };
+
+  const handleToggleMaintenanceMode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetRobotForMaintenance) return;
+    if (!maintenancePinInput.trim()) {
+      showToast('Vui lòng nhập mã PIN kỹ thuật viên.', 'warning');
+      return;
+    }
+
+    const isEnabling = targetRobotForMaintenance.status !== 'maintenance';
+    const robotId = getRealRobotGuid(targetRobotForMaintenance);
+
+    try {
+      setIsSubmittingMaintenance(true);
+      const res = await robotService.setMaintenanceMode(robotId, maintenancePinInput.trim(), isEnabling);
+
+      const newStatus = isEnabling ? 'maintenance' : 'idle';
+      setAmrNodes((prev) =>
+        prev.map((n) =>
+          n.id === targetRobotForMaintenance.id
+            ? {
+                ...n,
+                status: newStatus,
+                mission: isEnabling ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)' : 'Chờ lệnh điều phối',
+                speed: '0.0 m/s',
+              }
+            : n
+        )
+      );
+
+      if (selectedAmr && selectedAmr.id === targetRobotForMaintenance.id) {
+        setSelectedAmr((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: newStatus,
+                mission: isEnabling ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)' : 'Chờ lệnh điều phối',
+                speed: '0.0 m/s',
+              }
+            : null
+        );
+      }
+
+      setShowMaintenanceModal(false);
+      showToast(
+        res.message || (isEnabling ? 'Đã kích hoạt chế độ bảo trì thành công (phanh mở)!' : 'Đã kết thúc chế độ bảo trì thành công!'),
+        'success'
+      );
+
+      loadData();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Xác thực mã PIN thất bại hoặc không thể chuyển trạng thái.';
+      showToast(msg, 'warning');
+    } finally {
+      setIsSubmittingMaintenance(false);
+    }
+  };
+
   // Fetch real data from live services (Filtered by tenant for Technician)
   const loadData = async () => {
     try {
@@ -292,11 +431,12 @@ export const AdminTechnicalPage: React.FC = () => {
       const scopedRobotNames = new Set(scopedRobots.map((r) => r.name));
 
       const mappedNodes: AMRNode[] = scopedRobots.map((r, idx) => {
-        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert'> = {
+        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert' | 'maintenance'> = {
           delivering: 'moving',
           charging: 'charging',
           returning: 'moving',
           idle: 'idle',
+          maintenance: 'maintenance',
         };
         const st = statusMap[r.status] || 'idle';
         const posX = typeof r.worldX === 'number' ? r.worldX : 0;
@@ -304,13 +444,17 @@ export const AdminTechnicalPage: React.FC = () => {
 
         return {
           id: r.code || r.id,
+          robotGuid: r.id,
+          code: r.code,
           name: r.name || r.code || `AMR-${idx + 1}`,
-          status: st,
+          status: r.status === 'maintenance' ? 'maintenance' : st,
           battery: r.battery,
           x: posX,
           y: posY,
-          mission: (r as any).currentTask || r.targetTable || (st === 'charging' ? 'Đang sạc tại Docking Bay' : 'Chờ lệnh điều phối'),
-          speed: r.speed || (st === 'moving' ? '1.0 m/s' : '0.0 m/s'),
+          mission: r.status === 'maintenance'
+            ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)'
+            : ((r as any).currentTask || r.targetTable || (st === 'charging' ? 'Đang sạc tại Docking Bay' : 'Chờ lệnh điều phối')),
+          speed: r.status === 'maintenance' ? '0.0 m/s' : (r.speed || (st === 'moving' ? '1.0 m/s' : '0.0 m/s')),
           payload: `${r.payloadKg || 0} kg`,
         };
       });
@@ -392,11 +536,12 @@ export const AdminTechnicalPage: React.FC = () => {
       return prevNodes.map((node) => {
         const match = storeRobots.find((sr) => sr.id === node.id || sr.name === node.name);
         if (!match) return node;
-        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert'> = {
+        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert' | 'maintenance'> = {
           moving: 'moving',
           delivering: 'moving',
           charging: 'charging',
           idle: 'idle',
+          maintenance: 'maintenance',
         };
         const st = statusMap[match.status?.toLowerCase()] || node.status;
         return {
@@ -825,6 +970,18 @@ export const AdminTechnicalPage: React.FC = () => {
 
                       {/* Working Action Buttons for Selected AMR */}
                       <div className="pt-2 border-t border-slate-800 flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMaintenanceModal(selectedAmr)}
+                          className={`w-full py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                            selectedAmr.status === 'maintenance'
+                              ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow-sm'
+                              : 'bg-amber-600/90 hover:bg-amber-500 text-white'
+                          }`}
+                        >
+                          <Wrench className="w-3.5 h-3.5" />
+                          <span>{selectedAmr.status === 'maintenance' ? 'Đang Bảo Trì (Quản Lý)' : 'Bảo Trì Kỹ Thuật (Mở Phanh)'}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleSendToDock(selectedAmr.id)}
@@ -1328,12 +1485,14 @@ export const AdminTechnicalPage: React.FC = () => {
                       <tr key={robot.id} className="hover:bg-slate-50 transition-colors">
                         <td className="py-3 px-3 font-mono font-bold text-blue-700">{robot.id} ({robot.name})</td>
                         <td className="py-3 px-3">
-                          <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${robot.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                              robot.status === 'moving' ? 'bg-cyan-100 text-cyan-800' :
-                                robot.status === 'charging' ? 'bg-indigo-100 text-indigo-800' :
-                                  'bg-slate-100 text-slate-700'
-                            }`}>
-                            {robot.status.toUpperCase()}
+                          <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
+                            robot.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                            robot.status === 'moving' ? 'bg-cyan-100 text-cyan-800' :
+                            robot.status === 'charging' ? 'bg-indigo-100 text-indigo-800' :
+                            robot.status === 'maintenance' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {robot.status === 'maintenance' ? 'BẢO TRÌ' : robot.status.toUpperCase()}
                           </span>
                         </td>
                         <td className="py-3 px-3">
@@ -1348,7 +1507,20 @@ export const AdminTechnicalPage: React.FC = () => {
                         </td>
                         <td className="py-3 px-3 font-mono text-slate-600">{robot.speed}</td>
                         <td className="py-3 px-3 font-medium text-slate-800">{robot.mission}</td>
-                        <td className="py-3 px-3 text-right space-x-2">
+                        <td className="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMaintenanceModal(robot)}
+                            className={`px-2.5 py-1 rounded-lg font-bold border cursor-pointer text-[11px] inline-flex items-center gap-1 transition-colors ${
+                              robot.status === 'maintenance'
+                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300'
+                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                            }`}
+                            title="Chế độ bảo trì kỹ thuật viên (Phanh điện từ)"
+                          >
+                            <Wrench className="w-3 h-3" />
+                            <span>{robot.status === 'maintenance' ? 'Đang Bảo Trì' : 'Bảo Trì'}</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleSendToDock(robot.id)}
@@ -1634,6 +1806,190 @@ export const AdminTechnicalPage: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer shadow-xs"
                 >
                   Phát Lệnh Ngay
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TECHNICIAN MAINTENANCE MODE MODAL */}
+      {showMaintenanceModal && targetRobotForMaintenance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2.5 rounded-xl ${
+                  targetRobotForMaintenance.status === 'maintenance'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-orange-100 text-orange-700'
+                }`}>
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Chế Độ Bảo Trì Kỹ Thuật Viên
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Mở phanh điện từ động cơ để đẩy tay & hiệu chỉnh cảm biến
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMaintenanceModal(false)}
+                className="text-slate-400 hover:text-slate-700 font-bold p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Target Robot Information Card */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
+              <div className="space-y-0.5">
+                <div className="font-bold text-slate-800 text-sm">
+                  {targetRobotForMaintenance.name} ({targetRobotForMaintenance.id})
+                </div>
+                <div className="text-slate-500 flex items-center gap-3">
+                  <span>Pin: <b className="font-mono text-emerald-600">{targetRobotForMaintenance.battery}%</b></span>
+                  <span>Vị trí: <b className="font-mono text-slate-700">X:{targetRobotForMaintenance.x.toFixed(2)}, Y:{targetRobotForMaintenance.y.toFixed(2)}</b></span>
+                </div>
+              </div>
+              <div>
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-mono ${
+                  targetRobotForMaintenance.status === 'maintenance'
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {targetRobotForMaintenance.status === 'maintenance' ? 'ĐANG BẢO TRÌ' : 'HOẠT ĐỘNG THƯỜNG'}
+                </span>
+              </div>
+            </div>
+
+            {/* Current State Notice */}
+            {targetRobotForMaintenance.status === 'maintenance' ? (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Robot đang trong chế độ bảo trì kỹ thuật</p>
+                  <p className="text-amber-800/90 text-[11px]">
+                    Phanh điện từ đã mở. Nhập mã PIN kỹ thuật viên xác nhận để kết thúc bảo trì và khóa phanh, đưa robot trở về trạng thái sẵn sàng (Idle).
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Kích hoạt bảo trì an toàn</p>
+                  <p className="text-blue-800/90 text-[11px]">
+                    Khi kích hoạt, robot sẽ tạm dừng mọi điều phối tự động và nhả phanh điện từ động cơ giúp kỹ thuật viên có thể đẩy tay di chuyển thiết bị.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic PIN Generation Block */}
+            <div className="p-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white space-y-3 shadow-inner">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-slate-200">Mã PIN Kỹ Thuật Viên Động (Dynamic PIN)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGeneratePin}
+                  disabled={isGeneratingPin}
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isGeneratingPin ? 'animate-spin' : ''}`} />
+                  <span>{generatedPin ? 'Tạo Lại PIN' : 'Tạo Mã PIN'}</span>
+                </button>
+              </div>
+
+              {generatedPin ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between bg-slate-950/60 rounded-xl px-4 py-2.5 border border-slate-700/60">
+                    <div className="font-mono text-2xl font-black tracking-[0.35em] text-amber-400">
+                      {generatedPin}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyPin}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                        title="Sao chép mã PIN"
+                      >
+                        {copiedPin ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                    <span className="flex items-center gap-1 text-amber-300">
+                      <Clock className="w-3 h-3" />
+                      Hiệu lực: {Math.floor(pinCountdown / 60)}:{(pinCountdown % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-emerald-400 text-[10px]">Đã tự động điền vào ô xác thực bên dưới</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-400 italic">
+                  Chưa có mã PIN phiên làm việc. Nhấn &quot;Tạo Mã PIN&quot; để sinh mã 6 chữ số ngẫu nhiên (hết hạn sau 10 phút, không hardcode).
+                </p>
+              )}
+            </div>
+
+            {/* Confirmation Form */}
+            <form onSubmit={handleToggleMaintenanceMode} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Mã PIN Xác Nhận Kỹ Thuật Viên:
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    maxLength={10}
+                    placeholder="Nhập 6 chữ số PIN..."
+                    value={maintenancePinInput}
+                    onChange={(e) => setMaintenancePinInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-mono text-base tracking-widest font-bold focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                  />
+                  <div className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono">
+                    {maintenancePinInput.length > 0 && `${maintenancePinInput.length} ký tự`}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Chấp nhận mã PIN động vừa tạo ở trên, hoặc mã PIN tài khoản nhân viên kỹ thuật đã phân quyền trong hệ thống.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowMaintenanceModal(false)}
+                  disabled={isSubmittingMaintenance}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold cursor-pointer transition-colors"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingMaintenance || !maintenancePinInput.trim()}
+                  className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm text-white disabled:opacity-50 ${
+                    targetRobotForMaintenance.status === 'maintenance'
+                      ? 'bg-slate-800 hover:bg-slate-900'
+                      : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
+                >
+                  {isSubmittingMaintenance && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {targetRobotForMaintenance.status === 'maintenance'
+                      ? 'Kết Thúc Bảo Trì (Khóa Phanh)'
+                      : 'Kích Hoạt Bảo Trì (Mở Phanh)'}
+                  </span>
                 </button>
               </div>
             </form>

@@ -608,6 +608,30 @@ export const robotService = {
     } catch (err) {
       return { success: true, message: 'Đã tiếp tục hành trình cho robot.' };
     }
+  },
+
+  // Technician Maintenance Mode
+  async generateMaintenancePin(robotId: string): Promise<{ success: boolean; pin: string; expiresInSeconds: number; message?: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; pin: string; expiresInSeconds: number; message?: string }>(`/v1/robots/${robotId}/maintenance-pin`);
+      return response.data;
+    } catch (err: any) {
+      console.error('[robotService] Lỗi tạo mã PIN bảo trì:', err);
+      throw err;
+    }
+  },
+
+  async setMaintenanceMode(robotId: string, technicianPin: string, enable: boolean): Promise<{ success: boolean; message: string; status?: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string; status?: string }>(`/v1/robots/${robotId}/maintenance-mode`, {
+        technicianPin,
+        enable,
+      });
+      return response.data;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || (enable ? 'Không thể kích hoạt chế độ bảo trì' : 'Không thể kết thúc chế độ bảo trì');
+      throw new Error(msg);
+    }
   }
 
 };
