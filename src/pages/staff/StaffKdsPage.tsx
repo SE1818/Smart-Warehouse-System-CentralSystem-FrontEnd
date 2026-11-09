@@ -203,12 +203,34 @@ export const StaffKdsPage: React.FC = () => {
   const [selectedTableId, setSelectedTableId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "slam-map">("slam-map");
 
-  // 2-Tray Setup: Khay 1 (tầng dưới) & Khay 2 (tầng trên) with independent active toggles
+  // 2-Tray Setup: Khay 1 (tầng dưới) & Khay 2 (tầng trên) with independent active toggles & Multi-Table support
   const [isTray1Active, setIsTray1Active] = useState<boolean>(true);
   const [isTray2Active, setIsTray2Active] = useState<boolean>(false);
-  const [tray1Table, setTray1Table] = useState<string>("");
+  const [tray1Tables, setTray1Tables] = useState<string[]>([]);
+  const [tray2Tables, setTray2Tables] = useState<string[]>([]);
+  const tray1Table = tray1Tables.join(", ");
+  const tray2Table = tray2Tables.join(", ");
+  const setTray1Table = (tbl: string) => {
+    setTray1Tables(tbl ? [tbl] : []);
+  };
+  const setTray2Table = (tbl: string) => {
+    setTray2Tables(tbl ? [tbl] : []);
+  };
+  const addTableToTray1 = (tbl: string) => {
+    if (!tbl) return;
+    setTray1Tables((prev) => (prev.includes(tbl) ? prev : [...prev, tbl]));
+  };
+  const removeTableFromTray1 = (tbl: string) => {
+    setTray1Tables((prev) => prev.filter((t) => t !== tbl));
+  };
+  const addTableToTray2 = (tbl: string) => {
+    if (!tbl) return;
+    setTray2Tables((prev) => (prev.includes(tbl) ? prev : [...prev, tbl]));
+  };
+  const removeTableFromTray2 = (tbl: string) => {
+    setTray2Tables((prev) => prev.filter((t) => t !== tbl));
+  };
   const [tray1OrderId, setTray1OrderId] = useState<string>("");
-  const [tray2Table, setTray2Table] = useState<string>("");
   const [tray2OrderId, setTray2OrderId] = useState<string>("");
   // Active focused tray target when clicking tables on map/grid: 'tray1' | 'tray2'
   const [activeTrayTarget, setActiveTrayTarget] = useState<"tray1" | "tray2">(
@@ -878,28 +900,36 @@ export const StaffKdsPage: React.FC = () => {
     }
 
     if (activeTrayTarget === "tray1" || (!isTray2Active && isTray1Active)) {
-      setTray1Table(tableName);
+      setTray1Tables((prev) => {
+        if (prev.includes(tableName)) {
+          showToast(`Đã bỏ ${tableName} khỏi Khay 1 (Tầng Dưới).`, "info");
+          return prev.filter((t) => t !== tableName);
+        } else {
+          showToast(`Đã thêm ${tableName} vào Khay 1 (Tầng Dưới). Khay 1 hiện có ${prev.length + 1} bàn.`, "info");
+          return [...prev, tableName];
+        }
+      });
       setIsTray1Active(true);
       if (!tray1OrderId && matched?.currentOrders?.[0]) {
         setTray1OrderId(matched.currentOrders[0]);
       }
-      showToast(
-        `Đã gán ${tableName} vào Khay 1 (Tầng Dưới).`,
-        "info",
-      );
-      if (isTray2Active && !tray2Table) {
+      if (isTray2Active && tray2Tables.length === 0) {
         setActiveTrayTarget("tray2");
       }
     } else {
-      setTray2Table(tableName);
+      setTray2Tables((prev) => {
+        if (prev.includes(tableName)) {
+          showToast(`Đã bỏ ${tableName} khỏi Khay 2 (Tầng Trên).`, "info");
+          return prev.filter((t) => t !== tableName);
+        } else {
+          showToast(`Đã thêm ${tableName} vào Khay 2 (Tầng Trên). Khay 2 hiện có ${prev.length + 1} bàn.`, "info");
+          return [...prev, tableName];
+        }
+      });
       setIsTray2Active(true);
       if (!tray2OrderId && matched?.currentOrders?.[0]) {
         setTray2OrderId(matched.currentOrders[0]);
       }
-      showToast(
-        `Đã gán ${tableName} vào Khay 2 (Tầng Trên).`,
-        "info",
-      );
     }
   };
 
@@ -1114,7 +1144,7 @@ export const StaffKdsPage: React.FC = () => {
       setTray1OrderId(order.orderNumber);
       setIsTray1Active(true);
       if (order.tableNo) {
-        setTray1Table(order.tableNo);
+        addTableToTray1(order.tableNo);
         setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ""));
       }
       showToast(`Đã nạp đơn ${order.orderNumber} vào Khay 1.`);
@@ -1122,30 +1152,26 @@ export const StaffKdsPage: React.FC = () => {
       setTray2OrderId(order.orderNumber);
       setIsTray2Active(true);
       if (order.tableNo) {
-        setTray2Table(order.tableNo);
+        addTableToTray2(order.tableNo);
         setSelectedTableId(order.tableNo.replace(/^Bàn\s*/i, ""));
       }
       showToast(`Đã nạp đơn ${order.orderNumber} vào Khay 2.`);
     }
   };
 
-  // Unified Smart Dispatch Action: Automatically adapts to 1 or 2 active trays & stations
+  // Unified Smart Dispatch Action: Automatically adapts to 1 or 2 active trays & multiple destination tables
   const handleSmartDispatch = async () => {
     if (!isTray1Active && !isTray2Active) {
       showToast("Vui lòng bật ít nhất một khay (Khay 1 hoặc Khay 2) để giao món!", "info");
       return;
     }
-    let table1 = isTray1Active ? tray1Table.trim() : "";
-    let table2 = isTray2Active ? tray2Table.trim() : "";
-    const order1 = isTray1Active ? tray1OrderId.trim() : "";
-    const order2 = isTray2Active ? tray2OrderId.trim() : "";
 
-    if (isTray1Active && !table1) {
-      showToast("Vui lòng chọn bàn đích cho Khay 1 (Tầng Dưới)!", "info");
+    if (isTray1Active && tray1Tables.length === 0) {
+      showToast("Vui lòng chọn ít nhất một bàn đích cho Khay 1 (Tầng Dưới)!", "info");
       return;
     }
-    if (isTray2Active && !table2) {
-      showToast("Vui lòng chọn bàn đích cho Khay 2 (Tầng Trên)!", "info");
+    if (isTray2Active && tray2Tables.length === 0) {
+      showToast("Vui lòng chọn ít nhất một bàn đích cho Khay 2 (Tầng Trên)!", "info");
       return;
     }
     if (!effectiveRobot) {
@@ -1163,25 +1189,38 @@ export const StaffKdsPage: React.FC = () => {
 
       // Build active tray assignments
       const trayAssignments: CargoTrayAssignmentDto[] = [];
+      let priorityCounter = 1;
+
       if (isTray1Active) {
-        const matched1 = tables.find((t) => t.name.toLowerCase() === table1.toLowerCase() || t.tableNo?.toLowerCase() === table1.toLowerCase());
-        trayAssignments.push({
-          cargoLevel: 1,
-          toStationId: matched1?.stationId || undefined,
-          destinationTableNo: table1,
-          orderReference: order1 || `ORD-${Date.now().toString().slice(-3)}`,
-          priority: 1,
-        });
+        for (let i = 0; i < tray1Tables.length; i++) {
+          const tbl = tray1Tables[i];
+          const matched = tables.find(
+            (t) => t.name.toLowerCase() === tbl.toLowerCase() || t.tableNo?.toLowerCase() === tbl.toLowerCase(),
+          );
+          trayAssignments.push({
+            cargoLevel: 1,
+            toStationId: matched?.stationId || undefined,
+            destinationTableNo: tbl,
+            orderReference: tray1OrderId ? `${tray1OrderId}${tray1Tables.length > 1 ? `-${i + 1}` : ""}` : `ORD-K1-${priorityCounter}`,
+            priority: priorityCounter++,
+          });
+        }
       }
+
       if (isTray2Active) {
-        const matched2 = tables.find((t) => t.name.toLowerCase() === table2.toLowerCase() || t.tableNo?.toLowerCase() === table2.toLowerCase());
-        trayAssignments.push({
-          cargoLevel: 2,
-          toStationId: matched2?.stationId || undefined,
-          destinationTableNo: table2,
-          orderReference: order2 || `ORD-${(Date.now() + 1).toString().slice(-3)}`,
-          priority: isTray1Active ? 2 : 1,
-        });
+        for (let i = 0; i < tray2Tables.length; i++) {
+          const tbl = tray2Tables[i];
+          const matched = tables.find(
+            (t) => t.name.toLowerCase() === tbl.toLowerCase() || t.tableNo?.toLowerCase() === tbl.toLowerCase(),
+          );
+          trayAssignments.push({
+            cargoLevel: 2,
+            toStationId: matched?.stationId || undefined,
+            destinationTableNo: tbl,
+            orderReference: tray2OrderId ? `${tray2OrderId}${tray2Tables.length > 1 ? `-${i + 1}` : ""}` : `ORD-K2-${priorityCounter}`,
+            priority: priorityCounter++,
+          });
+        }
       }
 
       // 1. Call Backend API /v1/tasks/sequence/start
@@ -1218,55 +1257,22 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       // 3. Khởi tạo State chuỗi đang hoạt động
-      let legs: Array<{
+      const legs: Array<{
         cargoLevel: number;
         tableNo: string;
         orderId: string;
         status: "pending" | "delivering" | "completed";
         taskId: string;
-      }> = [];
-
-      if (trayAssignments.length === 1) {
-        const t = trayAssignments[0];
-        const taskId = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
-        legs = [{
+      }> = trayAssignments.map((t, idx) => {
+        const taskId = result.createdTasks?.[idx]?.id || `TSK-${Date.now()}-${idx + 1}`;
+        return {
           cargoLevel: t.cargoLevel,
           tableNo: t.destinationTableNo,
           orderId: t.orderReference || "",
-          status: "delivering",
+          status: idx === 0 ? "delivering" : "pending",
           taskId,
-        }];
-      } else if (table1 === table2) {
-        // Cả 2 khay giao cùng 1 bàn -> 1 trạm duy nhất
-        const taskId = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
-        legs = [{
-          cargoLevel: 1,
-          tableNo: table1,
-          orderId: `${trayAssignments[0].orderReference || ""} & ${trayAssignments[1].orderReference || ""}`,
-          status: "delivering",
-          taskId,
-        }];
-      } else {
-        // Giao 2 bàn khác nhau -> Chuỗi 2 chặng liên tiếp
-        const taskLeg1 = result.createdTasks?.[0]?.id || `TSK-${Date.now()}-1`;
-        const taskLeg2 = result.createdTasks?.[1]?.id || `TSK-${Date.now()}-2`;
-        legs = [
-          {
-            cargoLevel: 1,
-            tableNo: table1,
-            orderId: trayAssignments[0].orderReference || "",
-            status: "delivering",
-            taskId: taskLeg1,
-          },
-          {
-            cargoLevel: 2,
-            tableNo: table2,
-            orderId: trayAssignments[1].orderReference || "",
-            status: "pending",
-            taskId: taskLeg2,
-          },
-        ];
-      }
+        };
+      });
 
       if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
       setLiveTaskAudit(null);
@@ -1341,8 +1347,9 @@ export const StaffKdsPage: React.FC = () => {
           "success",
         );
       } else {
+        const destSummary = legs.map((l, i) => `${i + 1}. ${l.tableNo} (K${l.cargoLevel})`).join(" ➔ ");
         showToast(
-          `Đã ghi SQLite & xuất chuỗi 2 bàn ${seqCode}: ${effectiveRobot.code} đang giao Khay 1 tới ${table1}, tiếp theo Khay 2 tới ${table2}!`,
+          `Đã ghi SQLite & xuất chuỗi ${legs.length} chặng ${seqCode}: ${effectiveRobot.code} đang di chuyển: ${destSummary}!`,
           "success",
         );
       }
@@ -2095,7 +2102,7 @@ export const StaffKdsPage: React.FC = () => {
                   }`}
                 >
                   <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">1</span>
-                  <span>Khay 1: <strong className="font-mono">{tray1Table || "Chưa chọn"}</strong></span>
+                  <span>Khay 1: <strong className="font-mono">{tray1Tables.length === 0 ? "Chưa chọn" : tray1Tables.length === 1 ? tray1Tables[0] : `${tray1Tables.length} bàn (${tray1Tables.join(", ")})`}</strong></span>
                 </button>
                 {isTray2Active && (
                   <button
@@ -2108,12 +2115,12 @@ export const StaffKdsPage: React.FC = () => {
                     }`}
                   >
                     <span className="w-4 h-4 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-mono font-bold">2</span>
-                    <span>Khay 2: <strong className="font-mono">{tray2Table || "Chưa chọn"}</strong></span>
+                    <span>Khay 2: <strong className="font-mono">{tray2Tables.length === 0 ? "Chưa chọn" : tray2Tables.length === 1 ? tray2Tables[0] : `${tray2Tables.length} bàn (${tray2Tables.join(", ")})`}</strong></span>
                   </button>
                 )}
               </div>
               <span className="text-[11px] text-slate-500 italic hidden sm:inline">
-                (Click bàn trên bản đồ/thẻ để gán vào khay đang chọn)
+                (Click bàn trên bản đồ/thẻ để thêm/bỏ bàn vào khay đang chọn)
               </span>
             </div>
 
@@ -2459,42 +2466,58 @@ export const StaffKdsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setTray1Table(currentSelectedTable.name);
-                        setIsTray1Active(true);
-                        setActiveTrayTarget("tray1");
-                        showToast(
-                          `Đã nạp ${currentSelectedTable.name} vào Khay 1 (Tầng Dưới)`,
-                          "info",
-                        );
+                        if (tray1Tables.includes(currentSelectedTable.name)) {
+                          removeTableFromTray1(currentSelectedTable.name);
+                          showToast(
+                            `Đã bỏ ${currentSelectedTable.name} khỏi Khay 1 (Tầng Dưới)`,
+                            "info",
+                          );
+                        } else {
+                          addTableToTray1(currentSelectedTable.name);
+                          setIsTray1Active(true);
+                          setActiveTrayTarget("tray1");
+                          showToast(
+                            `Đã thêm ${currentSelectedTable.name} vào Khay 1 (Tầng Dưới)`,
+                            "info",
+                          );
+                        }
                       }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        isTray1Active && tray1Table === currentSelectedTable.name
+                        isTray1Active && tray1Tables.includes(currentSelectedTable.name)
                           ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
                           : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
                       }`}
-                      title="Nạp bàn này vào Khay 1 (Tầng Dưới)"
+                      title="Thêm/bỏ bàn này vào Khay 1 (Tầng Dưới)"
                     >
-                      ➔ Khay 1
+                      {isTray1Active && tray1Tables.includes(currentSelectedTable.name) ? "✓ Khay 1" : "+ Khay 1"}
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        setTray2Table(currentSelectedTable.name);
-                        setIsTray2Active(true);
-                        setActiveTrayTarget("tray2");
-                        showToast(
-                          `Đã nạp ${currentSelectedTable.name} vào Khay 2 (Tầng Trên)`,
-                          "info",
-                        );
+                        if (tray2Tables.includes(currentSelectedTable.name)) {
+                          removeTableFromTray2(currentSelectedTable.name);
+                          showToast(
+                            `Đã bỏ ${currentSelectedTable.name} khỏi Khay 2 (Tầng Trên)`,
+                            "info",
+                          );
+                        } else {
+                          addTableToTray2(currentSelectedTable.name);
+                          setIsTray2Active(true);
+                          setActiveTrayTarget("tray2");
+                          showToast(
+                            `Đã thêm ${currentSelectedTable.name} vào Khay 2 (Tầng Trên)`,
+                            "info",
+                          );
+                        }
                       }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        isTray2Active && tray2Table === currentSelectedTable.name
+                        isTray2Active && tray2Tables.includes(currentSelectedTable.name)
                           ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
                           : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
                       }`}
-                      title="Nạp bàn này vào Khay 2 (Tầng Trên)"
+                      title="Thêm/bỏ bàn này vào Khay 2 (Tầng Trên)"
                     >
-                      ➔ Khay 2
+                      {isTray2Active && tray2Tables.includes(currentSelectedTable.name) ? "✓ Khay 2" : "+ Khay 2"}
                     </button>
                   </>
                 )}
@@ -3070,25 +3093,62 @@ export const StaffKdsPage: React.FC = () => {
                 {isTray1Active ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-blue-100">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Bàn Đích Đến (Khay 1)
-                      </label>
-                      <select
-                        value={tray1Table}
-                        onChange={(e) => {
-                          setTray1Table(e.target.value);
-                        }}
-                        className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
-                      >
-                        <option value="">-- Chọn Bàn Giao Khay 1 (Đã Gán Trạm) --</option>
-                        {tray1Table && !tables.some((t) => t.name === tray1Table) && (
-                          <option value={tray1Table}>{tray1Table}</option>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          Bàn Đích Đến (Khay 1) {tray1Tables.length > 0 ? `• ${tray1Tables.length} bàn` : ""}
+                        </label>
+                        {tray1Tables.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setTray1Tables([])}
+                            className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer"
+                          >
+                            Xóa hết
+                          </button>
                         )}
-                        {tables.filter((t) => Boolean(t.stationId || t.stationName)).map((t) => (
-                          <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
-                          </option>
-                        ))}
+                      </div>
+
+                      {/* Selected Tables Tag List */}
+                      {tray1Tables.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5 p-1.5 bg-blue-50/70 rounded-lg border border-blue-200">
+                          {tray1Tables.map((tbl) => (
+                            <span
+                              key={tbl}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-600 text-white text-[11px] font-mono font-bold shadow-2xs"
+                            >
+                              <span>{tbl}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeTableFromTray1(tbl)}
+                                className="hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
+                                title={`Bỏ ${tbl} khỏi Khay 1`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Dropdown to add table */}
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            addTableToTray1(e.target.value);
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">+ Chọn thêm bàn vào Khay 1...</option>
+                        {tables
+                          .filter((t) => Boolean(t.stationId || t.stationName))
+                          .map((t) => (
+                            <option key={t.id} value={t.name}>
+                              {tray1Tables.includes(t.name) ? "✓ " : ""}
+                              {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
+                            </option>
+                          ))}
                         {tables.filter((t) => Boolean(t.stationId || t.stationName)).length === 0 && (
                           <option value="" disabled>-- Chưa có bàn nào được gán trạm --</option>
                         )}
@@ -3208,23 +3268,62 @@ export const StaffKdsPage: React.FC = () => {
               {isTray2Active ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-indigo-100">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Bàn Đích Đến (Khay 2)
-                      </label>
-                      <select
-                        value={tray2Table}
-                        onChange={(e) => setTray2Table(e.target.value)}
-                        className="w-full px-2.5 py-2 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
-                      >
-                        <option value="">-- Chọn Bàn Giao Khay 2 (Đã Gán Trạm) --</option>
-                        {tray2Table && !tables.some((t) => t.name === tray2Table) && (
-                          <option value={tray2Table}>{tray2Table}</option>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          Bàn Đích Đến (Khay 2) {tray2Tables.length > 0 ? `• ${tray2Tables.length} bàn` : ""}
+                        </label>
+                        {tray2Tables.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setTray2Tables([])}
+                            className="text-[10px] text-red-500 hover:text-red-700 font-bold cursor-pointer"
+                          >
+                            Xóa hết
+                          </button>
                         )}
-                        {tables.filter((t) => Boolean(t.stationId || t.stationName)).map((t) => (
-                          <option key={t.id} value={t.name}>
-                            {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
-                          </option>
-                        ))}
+                      </div>
+
+                      {/* Selected Tables Tag List */}
+                      {tray2Tables.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5 p-1.5 bg-indigo-50/70 rounded-lg border border-indigo-200">
+                          {tray2Tables.map((tbl) => (
+                            <span
+                              key={tbl}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[11px] font-mono font-bold shadow-2xs"
+                            >
+                              <span>{tbl}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeTableFromTray2(tbl)}
+                                className="hover:bg-indigo-700 rounded-full p-0.5 cursor-pointer"
+                                title={`Bỏ ${tbl} khỏi Khay 2`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Dropdown to add table */}
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            addTableToTray2(e.target.value);
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-900 font-mono focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">+ Chọn thêm bàn vào Khay 2...</option>
+                        {tables
+                          .filter((t) => Boolean(t.stationId || t.stationName))
+                          .map((t) => (
+                            <option key={t.id} value={t.name}>
+                              {tray2Tables.includes(t.name) ? "✓ " : ""}
+                              {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
+                            </option>
+                          ))}
                         {tables.filter((t) => Boolean(t.stationId || t.stationName)).length === 0 && (
                           <option value="" disabled>-- Chưa có bàn nào được gán trạm --</option>
                         )}
@@ -3285,39 +3384,42 @@ export const StaffKdsPage: React.FC = () => {
                     <span>
                       {!isTray1Active && !isTray2Active
                         ? "Chưa chọn khay giao món:"
-                        : isTray1Active && isTray2Active
-                          ? tray1Table === tray2Table
-                            ? "Lộ trình giao 1 bàn (Cả 2 khay):"
-                            : "Lộ trình chuỗi 2 bàn liên tiếp:"
-                          : "Lộ trình giao 1 bàn:"}
+                        : (() => {
+                            const total = (isTray1Active ? tray1Tables.length : 0) + (isTray2Active ? tray2Tables.length : 0);
+                            if (total === 0) return "Chưa chọn bàn giao món:";
+                            if (total === 1) return "Lộ trình giao 1 bàn:";
+                            return `Lộ trình chuỗi ${total} chặng dừng liên tiếp:`;
+                          })()}
                     </span>
                   </span>
                   <div className="flex items-center gap-1 font-mono text-[10px] text-slate-800 font-bold bg-white px-2 py-1 rounded border border-slate-200 shadow-2xs overflow-x-auto">
                     <span className="text-emerald-700">Bếp</span>
-                    {isTray1Active && (() => {
-                      const matched = tables.find((t) => t.name.toLowerCase() === tray1Table.toLowerCase());
-                      const stLabel = matched?.stationName ? ` [Trạm: ${matched.stationName}]` : "";
-                      return (
-                        <>
-                          <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="text-blue-700 font-extrabold whitespace-nowrap">
-                            {tray1Table || "Chưa chọn"}{stLabel} (Khay 1)
-                          </span>
-                        </>
-                      );
-                    })()}
-                    {isTray2Active && (() => {
-                      const matched = tables.find((t) => t.name.toLowerCase() === tray2Table.toLowerCase());
-                      const stLabel = matched?.stationName ? ` [Trạm: ${matched.stationName}]` : "";
-                      return (
-                        <>
-                          <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="text-indigo-700 font-extrabold whitespace-nowrap">
-                            {tray2Table || "Chưa chọn"}{stLabel} (Khay 2)
-                          </span>
-                        </>
-                      );
-                    })()}
+                    {isTray1Active &&
+                      tray1Tables.map((tbl, idx) => {
+                        const matched = tables.find((t) => t.name.toLowerCase() === tbl.toLowerCase());
+                        const stLabel = matched?.stationName ? ` [Trạm: ${matched.stationName}]` : "";
+                        return (
+                          <React.Fragment key={`k1-${tbl}-${idx}`}>
+                            <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="text-blue-700 font-extrabold whitespace-nowrap">
+                              {tbl}{stLabel} (Khay 1)
+                            </span>
+                          </React.Fragment>
+                        );
+                      })}
+                    {isTray2Active &&
+                      tray2Tables.map((tbl, idx) => {
+                        const matched = tables.find((t) => t.name.toLowerCase() === tbl.toLowerCase());
+                        const stLabel = matched?.stationName ? ` [Trạm: ${matched.stationName}]` : "";
+                        return (
+                          <React.Fragment key={`k2-${tbl}-${idx}`}>
+                            <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="text-indigo-700 font-extrabold whitespace-nowrap">
+                              {tbl}{stLabel} (Khay 2)
+                            </span>
+                          </React.Fragment>
+                        );
+                      })}
                     <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
                     <span className="text-slate-500">Về Bếp</span>
                   </div>
@@ -3471,8 +3573,8 @@ export const StaffKdsPage: React.FC = () => {
                 isDispatching ||
                 !effectiveRobot ||
                 (!isTray1Active && !isTray2Active) ||
-                (isTray1Active && !tray1Table.trim()) ||
-                (isTray2Active && !tray2Table.trim())
+                (isTray1Active && tray1Tables.length === 0) ||
+                (isTray2Active && tray2Tables.length === 0)
               }
               onClick={handleSmartDispatch}
               className={`w-full py-3.5 px-4 rounded-xl text-sm font-extrabold flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${
@@ -3480,8 +3582,8 @@ export const StaffKdsPage: React.FC = () => {
                   ? "bg-blue-400 text-white cursor-not-allowed"
                   : !effectiveRobot ||
                       (!isTray1Active && !isTray2Active) ||
-                      (isTray1Active && !tray1Table.trim()) ||
-                      (isTray2Active && !tray2Table.trim())
+                      (isTray1Active && tray1Tables.length === 0) ||
+                      (isTray2Active && tray2Tables.length === 0)
                     ? "bg-slate-200 text-slate-400 border border-slate-300 shadow-none cursor-not-allowed opacity-75"
                     : "bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg shadow-blue-500/25 cursor-pointer"
               }`}
@@ -3501,32 +3603,30 @@ export const StaffKdsPage: React.FC = () => {
                   <AlertTriangle className="w-4 h-4 text-slate-400" />
                   <span>VUI LÒNG BẬT ÍT NHẤT 1 KHAY ĐỂ GIAO</span>
                 </>
-              ) : isTray1Active && !tray1Table.trim() ? (
+              ) : isTray1Active && tray1Tables.length === 0 ? (
                 <>
                   <Send className="w-4 h-4 text-slate-400" />
                   <span>VUI LÒNG CHỌN BÀN CHO KHAY 1</span>
                 </>
-              ) : isTray2Active && !tray2Table.trim() ? (
+              ) : isTray2Active && tray2Tables.length === 0 ? (
                 <>
                   <Send className="w-4 h-4 text-slate-400" />
                   <span>VUI LÒNG CHỌN BÀN CHO KHAY 2</span>
                 </>
-              ) : isTray1Active && isTray2Active ? (
-                tray1Table === tray2Table ? (
-                  <>
-                    <Send className="w-4 h-4 text-white" />
-                    <span>PHÁT LỆNH GIAO 2 KHAY TỚI {tray1Table}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 text-white" />
-                    <span>PHÁT LỆNH GIAO 2 BÀN: {tray1Table} ➔ {tray2Table}</span>
-                  </>
-                )
               ) : (
                 <>
                   <Send className="w-4 h-4 text-white" />
-                  <span>PHÁT LỆNH GIAO MÓN TỚI {isTray1Active ? tray1Table : tray2Table}</span>
+                  <span>
+                    PHÁT LỆNH GIAO{" "}
+                    {(isTray1Active ? tray1Tables.length : 0) + (isTray2Active ? tray2Tables.length : 0)} CHẶNG BÀN (
+                    {[
+                      isTray1Active ? `Khay 1: ${tray1Tables.length} bàn` : null,
+                      isTray2Active ? `Khay 2: ${tray2Tables.length} bàn` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")}
+                    )
+                  </span>
                 </>
               )}
             </button>
@@ -3798,8 +3898,8 @@ export const StaffKdsPage: React.FC = () => {
             isDispatching ||
             !effectiveRobot ||
             (!isTray1Active && !isTray2Active) ||
-            (isTray1Active && !tray1Table.trim()) ||
-            (isTray2Active && !tray2Table.trim())
+            (isTray1Active && tray1Tables.length === 0) ||
+            (isTray2Active && tray2Tables.length === 0)
           }
           onClick={handleSmartDispatch}
           className={`px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all active:scale-95 shrink-0 flex items-center gap-2 min-h-[46px] ${
@@ -3807,8 +3907,8 @@ export const StaffKdsPage: React.FC = () => {
               ? "bg-blue-400 text-white cursor-not-allowed"
               : !effectiveRobot ||
                   (!isTray1Active && !isTray2Active) ||
-                  (isTray1Active && !tray1Table.trim()) ||
-                  (isTray2Active && !tray2Table.trim())
+                  (isTray1Active && tray1Tables.length === 0) ||
+                  (isTray2Active && tray2Tables.length === 0)
                 ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed"
                 : "bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-blue-500/25 cursor-pointer"
           }`}
@@ -3818,22 +3918,14 @@ export const StaffKdsPage: React.FC = () => {
               <RotateCcw className="w-4 h-4 animate-spin" />
               <span>Đang Lệnh...</span>
             </>
-          ) : isTray1Active && isTray2Active ? (
-            tray1Table === tray2Table ? (
-              <>
-                <Send className="w-4 h-4" />
-                <span>GIAO 2 KHAY ({tray1Table})</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span>CHUỖI 2 BÀN ({tray1Table} ➔ {tray2Table})</span>
-              </>
-            )
           ) : (
             <>
               <Send className="w-4 h-4" />
-              <span>XUẤT LỆNH ({isTray1Active ? tray1Table : tray2Table})</span>
+              <span>
+                XUẤT LỆNH (
+                {(isTray1Active ? tray1Tables.length : 0) + (isTray2Active ? tray2Tables.length : 0)} BÀN
+                )
+              </span>
             </>
           )}
         </button>
