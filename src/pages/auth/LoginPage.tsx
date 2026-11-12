@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { authService, tenantService, robotService } from '@/services';
 import type { EdgeNodeInfo } from '@/services/robot';
 import { Icons } from '@/components/common/Icons';
@@ -273,9 +273,17 @@ export function LoginPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-              Mật khẩu bảo mật
-            </label>
+            <div className="flex justify-between items-center">
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                Mật khẩu bảo mật
+              </label>
+              <Link
+                to="/forgot-password"
+                className="text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+              >
+                Quên mật khẩu?
+              </Link>
+            </div>
             <input
               type="password"
               value={password}
