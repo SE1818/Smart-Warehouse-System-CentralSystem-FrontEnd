@@ -650,10 +650,6 @@ export interface CargoTrayAssignmentDto {
 
   priority?: number;
 
-  deliveryMode?: 'direct' | 'assisted_dropoff';
-
-  stagingStationName?: string;
-
 }
 
 
