@@ -245,6 +245,29 @@ export const StaffKdsPage: React.FC = () => {
     "idle" | "moving" | "arrived" | "returning"
   >("idle");
   const transitTimerRef = React.useRef<any>(null);
+  const lastChimedLegRef = React.useRef<string>("");
+  const playStationArrivalChime = React.useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      [587.33, 880].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+        gain.gain.setValueAtTime(0.12, now + idx * 0.14);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.14);
+        osc.stop(now + idx * 0.14 + 0.26);
+      });
+    } catch {
+      // Ignore audio autoplay restriction in headless browsers
+    }
+  }, []);
 
   // Active Multi-Table Sequence Mission (Realtime Tracking & Dual Confirmation)
   const [activeSequence, setActiveSequence] = useState<{
@@ -324,6 +347,16 @@ export const StaffKdsPage: React.FC = () => {
     if (liveRobotStatus === "returning") return 4;
     return 2;
   }, [activeSequence, liveRobotStatus, missionPhase]);
+
+  useEffect(() => {
+    if (activeSequence && currentWorkflowStep === 3) {
+      const legKey = `${activeSequence.sequenceId}-${activeSequence.currentLegIndex}`;
+      if (lastChimedLegRef.current !== legKey) {
+        lastChimedLegRef.current = legKey;
+        playStationArrivalChime();
+      }
+    }
+  }, [activeSequence, currentWorkflowStep, playStationArrivalChime]);
 
   // Only allow table transfer when robot is actively in_transit via SignalR/SQLite
   const isRobotInTransit = useMemo(() => {
@@ -1520,6 +1553,12 @@ export const StaffKdsPage: React.FC = () => {
     const leg = activeSequence.legs[rerouteLegIndex];
     if (!leg) return;
 
+    if (!isSignalRConnected) {
+      console.warn(
+        "[KDS Reroute] Mất kết nối realtime với Robot Hub — fallback gửi lệnh chuyển bàn qua HTTP REST.",
+      );
+    }
+
     setIsSubmittingReroute(true);
     try {
       const targetNode = tables.find(
@@ -1588,7 +1627,9 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       showToast(
-        `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`,
+        isSignalRConnected
+          ? `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`
+          : `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công (qua HTTP REST, SignalR đang kết nối lại)!`,
         "success",
       );
       setIsRerouteModalOpen(false);
