@@ -30,7 +30,7 @@ export interface MapTableNode {
   id: string;
   name: string;
   zone: string;
-  status: 'occupied' | 'serving' | 'empty' | 'waiting' | 'merged';
+  status: 'occupied' | 'serving' | 'empty' | 'waiting';
   guestsCount?: number;
   currentOrders?: string[];
   assignedRobot?: string | null;

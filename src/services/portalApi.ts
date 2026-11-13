@@ -584,7 +584,6 @@ export const tableService = {
               : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
               : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
               : t.status === 'Served' || t.status === 'serving' ? 'serving'
-              : t.status === 'Merged' || t.status === 'merged' ? 'merged'
               : 'empty') as DiningTableDto['status'],
             assignedRobotCode: t.assignedRobotCode || null,
             stationId: t.stationId || null,
@@ -644,12 +643,10 @@ export const tableService = {
             : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
             : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
             : t.status === 'Served' || t.status === 'serving' ? 'serving'
-            : t.status === 'Merged' || t.status === 'merged' ? 'merged'
             : 'empty') as DiningTableDto['status'],
           assignedRobotCode: t.assignedRobotCode || null,
           stationId: t.stationId || null,
           stationName: t.stationName || null,
-          mergedIntoTableId: t.mergedIntoTableId || null,
           qrCodeUrl: t.qrCodeUrl || null,
           currentOrders: t.currentOrders || [],
           orderTime: t.orderTime || null,

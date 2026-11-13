@@ -1489,7 +1489,8 @@ export const StaffKdsPage: React.FC = () => {
         t.name !== curTable &&
         t.name !== otherLegTable &&
         t.status !== "occupied" &&
-        t.status !== "serving",
+        t.status !== "serving" &&
+        t.status !== "waiting",
     );
     setRerouteNewTable(defaultTarget?.name || "");
     setIsRerouteModalOpen(true);
@@ -3424,8 +3425,6 @@ export const StaffKdsPage: React.FC = () => {
                     <span className="text-slate-500">Về Bếp</span>
                   </div>
                 </div>
-                {/* Merged table warning if active trays have merged tables */}
-                
               </div>
             </div>
           </div>
@@ -4269,7 +4268,8 @@ export const StaffKdsPage: React.FC = () => {
                                 t.name !== leg.tableNo &&
                                 t.name !== other &&
                                 t.status !== "occupied" &&
-                                t.status !== "serving",
+                                t.status !== "serving" &&
+                                t.status !== "waiting",
                             );
                             setRerouteNewTable(avail?.name || "");
                           }}
@@ -4310,7 +4310,8 @@ export const StaffKdsPage: React.FC = () => {
                             t.name !== tray1Table &&
                             t.name !== tray2Table &&
                             t.status !== "occupied" &&
-                            t.status !== "serving",
+                            t.status !== "serving" &&
+                            t.status !== "waiting",
                         );
                         setRerouteNewTable(avail?.name || "");
                       }}
@@ -4336,7 +4337,8 @@ export const StaffKdsPage: React.FC = () => {
                             t.name !== tray2Table &&
                             t.name !== tray1Table &&
                             t.status !== "occupied" &&
-                            t.status !== "serving",
+                            t.status !== "serving" &&
+                            t.status !== "waiting",
                         );
                         setRerouteNewTable(avail?.name || "");
                       }}
@@ -4413,6 +4415,7 @@ export const StaffKdsPage: React.FC = () => {
                         t.name !== otherLegTable &&
                         t.status !== "occupied" &&
                         t.status !== "serving" &&
+                        t.status !== "waiting" &&
                         Boolean(t.stationId || t.stationName)
                       );
                     })
