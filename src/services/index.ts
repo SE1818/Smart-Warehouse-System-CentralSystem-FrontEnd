@@ -2,7 +2,6 @@ export { default as apiClient } from './api';
 export { authService } from './auth';
 export { robotService } from './robot';
 export { robotMonitorService } from './robotMonitorService';
-export { fileService } from './file';
 export {
   fleetService,
   missionService,
