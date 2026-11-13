@@ -1520,11 +1520,6 @@ export const StaffKdsPage: React.FC = () => {
     const leg = activeSequence.legs[rerouteLegIndex];
     if (!leg) return;
 
-    if (!isSignalRConnected) {
-      showToast("Mất kết nối realtime với Robot Hub. Vui lòng kiểm tra mạng.", "info");
-      return;
-    }
-
     setIsSubmittingReroute(true);
     try {
       const targetNode = tables.find(
