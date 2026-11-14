@@ -97,6 +97,8 @@ export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
       stationId: t.stationId,
       stationName: t.stationName,
       qrCodeUrl: t.qrCodeUrl,
+      isRestricted: t.isRestricted,
+      aisleWidth: t.aisleWidth,
       worldX: t.worldX,
       worldY: t.worldY,
     };
@@ -246,6 +248,7 @@ export const StaffKdsPage: React.FC = () => {
   >("idle");
   const transitTimerRef = React.useRef<any>(null);
   const lastChimedLegRef = React.useRef<string>("");
+  const lastAssistedLegRef = React.useRef<string>("");
   const playStationArrivalChime = React.useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -299,6 +302,7 @@ export const StaffKdsPage: React.FC = () => {
   const {
     robots: liveRobots,
     status: signalRStatus,
+    connection: signalRConnection,
     connect: connectRobotHub,
     disconnect: disconnectRobotHub,
   } = useRobotStore();
@@ -535,6 +539,84 @@ export const StaffKdsPage: React.FC = () => {
   const [robots, setRobots] = useState<RobotFleetItem[]>([]);
   // Tables State - Loaded from tableService API with comprehensive restaurant defaults
   const [tables, setTables] = useState<TableNode[]>([]);
+
+  // Subscribe to SignalR AssistedDropoffArrived events for restricted/shared-station banner (DS-03c)
+  useEffect(() => {
+    if (!signalRConnection) return;
+
+    const handleAssistedDropoffArrived = (payload: any) => {
+      if (!payload) return;
+      const taskId = String(payload.taskId ?? payload.TaskId ?? "");
+      if (!taskId) return;
+
+      setAssistedDropoffAlert({
+        robotId: payload.robotId ? String(payload.robotId) : undefined,
+        robotName: payload.robotName || "AMR",
+        taskId,
+        orderId: payload.orderId ? String(payload.orderId) : undefined,
+        stagingStationName: payload.stagingStationName || "Trạm Đệm",
+        destinationTableNo: payload.destinationTableNo || "Bàn khách",
+        cargoLevel: Number(payload.cargoLevel ?? 1),
+      });
+      playStationArrivalChime();
+    };
+
+    signalRConnection.on("AssistedDropoffArrived", handleAssistedDropoffArrived);
+    return () => {
+      signalRConnection.off("AssistedDropoffArrived", handleAssistedDropoffArrived);
+    };
+  }, [signalRConnection, playStationArrivalChime]);
+
+  // Fallback for activeSequence arrival when step reaches 3 (Trả Món) for restricted/shared-station tables
+  useEffect(() => {
+    if (!activeSequence || currentWorkflowStep !== 3) {
+      lastAssistedLegRef.current = "";
+      return;
+    }
+
+    const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+    if (!currentLeg) return;
+
+    const legKey = `${activeSequence.sequenceId}-${activeSequence.currentLegIndex}-${currentLeg.taskId}`;
+    if (
+      lastAssistedLegRef.current === legKey ||
+      assistedDropoffAlert?.taskId === currentLeg.taskId
+    ) {
+      return;
+    }
+
+    const normalizedLegTable = currentLeg.tableNo
+      .replace(/^Bàn\s+/i, "")
+      .trim()
+      .toLowerCase();
+    const matchedTable = tables.find((t) => {
+      const tNo = (t.tableNo || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+      const tName = (t.name || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+      return (
+        (normalizedLegTable &&
+          (tNo === normalizedLegTable || tName === normalizedLegTable)) ||
+        t.name.trim().toLowerCase() === currentLeg.tableNo.trim().toLowerCase()
+      );
+    });
+
+    const hasNoDedicatedStation = Boolean(matchedTable && !matchedTable.stationId);
+    const sharesStation =
+      Boolean(matchedTable?.stationId) &&
+      tables.filter((t) => t.stationId === matchedTable?.stationId).length > 1;
+
+    if (matchedTable?.isRestricted || hasNoDedicatedStation || sharesStation) {
+      lastAssistedLegRef.current = legKey;
+      setAssistedDropoffAlert({
+        robotId: activeSequence.robotCode,
+        robotName: activeSequence.robotName,
+        taskId: currentLeg.taskId,
+        orderId: currentLeg.orderId,
+        stagingStationName: matchedTable?.stationName || "Trạm Đệm",
+        destinationTableNo: currentLeg.tableNo,
+        cargoLevel: currentLeg.cargoLevel ?? 1,
+      });
+    }
+  }, [activeSequence, currentWorkflowStep, tables, assistedDropoffAlert?.taskId]);
   // Load Real Data on Mount
   useEffect(() => {
     const initKds = async () => {
