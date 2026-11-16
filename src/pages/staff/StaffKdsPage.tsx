@@ -191,7 +191,7 @@ interface RobotFleetItem {
   id: string;
   code: string;
   name: string;
-  status: "idle" | "delivering" | "charging" | "offline";
+  status: "idle" | "delivering" | "swapping_battery" | "offline";
   battery: number;
   currentZone: string;
   dockNumber?: number;
@@ -656,8 +656,8 @@ export const StaffKdsPage: React.FC = () => {
           status:
             r.status === "delivering" || r.status === "returning"
               ? "delivering"
-              : r.status === "charging"
-                ? "charging"
+              : r.status === "swapping_battery"
+                ? "swapping_battery"
                 : "idle",
           battery: typeof r.battery === "number" ? r.battery : 100,
           currentZone: r.currentLocation || "Quầy Bếp",

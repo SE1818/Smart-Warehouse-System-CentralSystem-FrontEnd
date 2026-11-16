@@ -5,7 +5,7 @@ export interface Robot {
   y: number;
   yaw?: number;
   battery: number;
-  status: 'Idle' | 'Moving' | 'Charging' | 'Error' | 'Offline';
+  status: 'Idle' | 'Moving' | 'SwappingBattery' | 'Error' | 'Offline';
   currentAreaId?: string;
   destination?: string;
   timestamp?: string;
@@ -43,7 +43,7 @@ export interface MoveRequest {
 }
 
 export interface StatusRequest {
-  status: 'Idle' | 'Moving' | 'Charging' | 'Error' | 'Offline';
+  status: 'Idle' | 'Moving' | 'SwappingBattery' | 'Error' | 'Offline';
 }
 
 export interface FulfillmentRequest {

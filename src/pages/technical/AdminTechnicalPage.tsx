@@ -53,7 +53,7 @@ interface AMRNode {
   robotGuid?: string;
   code?: string;
   name: string;
-  status: 'active' | 'moving' | 'idle' | 'charging' | 'alert' | 'maintenance';
+  status: 'active' | 'moving' | 'idle' | 'swapping_battery' | 'alert' | 'maintenance';
   battery: number;
   x: number;
   y: number;
@@ -221,7 +221,7 @@ export const AdminTechnicalPage: React.FC = () => {
           case 'moving':
             util = 85;
             break;
-          case 'charging':
+          case 'swapping_battery':
             util = 40;
             break;
           case 'idle':
@@ -431,9 +431,10 @@ export const AdminTechnicalPage: React.FC = () => {
       const scopedRobotNames = new Set(scopedRobots.map((r) => r.name));
 
       const mappedNodes: AMRNode[] = scopedRobots.map((r, idx) => {
-        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert' | 'maintenance'> = {
+        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'swapping_battery' | 'alert' | 'maintenance'> = {
           delivering: 'moving',
-          charging: 'charging',
+          swapping_battery: 'swapping_battery',
+          low_battery_waiting_swap: 'swapping_battery',
           returning: 'moving',
           idle: 'idle',
           maintenance: 'maintenance',
@@ -453,7 +454,7 @@ export const AdminTechnicalPage: React.FC = () => {
           y: posY,
           mission: r.status === 'maintenance'
             ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)'
-            : ((r as any).currentTask || r.targetTable || (st === 'charging' ? 'Đang sạc tại Docking Bay' : 'Chờ lệnh điều phối')),
+            : ((r as any).currentTask || r.targetTable || (st === 'swapping_battery' ? 'Đang thay pin tại ST_BATTERY_RACK' : 'Chờ lệnh điều phối')),
           speed: r.status === 'maintenance' ? '0.0 m/s' : (r.speed || (st === 'moving' ? '1.0 m/s' : '0.0 m/s')),
           payload: `${r.payloadKg || 0} kg`,
         };
@@ -525,7 +526,7 @@ export const AdminTechnicalPage: React.FC = () => {
             worldX: sr.currentX,
             worldY: sr.currentY,
             battery: sr.batteryLevel,
-            status: (sr.status.toLowerCase() === 'moving' ? 'delivering' : sr.status.toLowerCase() === 'charging' ? 'charging' : 'idle') as any,
+            status: (sr.status.toLowerCase() === 'moving' ? 'delivering' : (sr.status.toLowerCase() === 'swapping_battery' || sr.status.toLowerCase() === 'low_battery_waiting_swap') ? 'swapping_battery' : 'idle') as any,
           };
         }
       });
@@ -536,10 +537,11 @@ export const AdminTechnicalPage: React.FC = () => {
       return prevNodes.map((node) => {
         const match = storeRobots.find((sr) => sr.id === node.id || sr.name === node.name);
         if (!match) return node;
-        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'charging' | 'alert' | 'maintenance'> = {
+        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'swapping_battery' | 'alert' | 'maintenance'> = {
           moving: 'moving',
           delivering: 'moving',
-          charging: 'charging',
+          swapping_battery: 'swapping_battery',
+          low_battery_waiting_swap: 'swapping_battery',
           idle: 'idle',
           maintenance: 'maintenance',
         };
@@ -576,7 +578,7 @@ export const AdminTechnicalPage: React.FC = () => {
       id: r.id,
       code: r.code,
       name: r.name,
-      status: r.status === 'delivering' || r.status === 'returning' ? 'delivering' : r.status === 'charging' ? 'charging' : 'idle',
+      status: r.status === 'delivering' || r.status === 'returning' ? 'delivering' : r.status === 'swapping_battery' ? 'swapping_battery' : 'idle',
       battery: r.battery,
       currentZone: r.currentLocation,
       worldX: r.worldX,
@@ -593,17 +595,17 @@ export const AdminTechnicalPage: React.FC = () => {
     showToast(`Đã xử lý sự cố cho ${robot}. Trạng thái đã bình thường hóa.`, 'success');
   };
 
-  // Action: Send to Dock
+  // Action: Send to Battery Swap Rack
   const handleSendToDock = async (robotId: string) => {
-    await fleetService.updateRobotStatus(robotId, { status: 'charging' });
+    await fleetService.updateRobotStatus(robotId, { status: 'swapping_battery' as any });
     setAmrNodes((prev) =>
       prev.map((n) =>
         n.id === robotId
-          ? { ...n, status: 'charging', mission: 'Đang điều hướng về Trạm Sạc Dock 02', targetX: 140, targetY: 310 }
+          ? { ...n, status: 'swapping_battery', mission: 'Đang điều hướng về Trạm Thay Pin (ST_BATTERY_RACK)', targetX: 140, targetY: 310 }
           : n
       )
     );
-    showToast(`Đã phát lệnh điều hướng ${robotId} về trạm sạc Docking!`, 'success');
+    showToast(`Đã phát lệnh điều hướng ${robotId} về trạm thay pin ST_BATTERY_RACK!`, 'success');
     setSelectedAmr(null);
   };
 
@@ -1016,7 +1018,7 @@ export const AdminTechnicalPage: React.FC = () => {
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Idle ({amrNodes.filter(n => n.status === 'idle').length})
                     </span>
                     <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Charging ({amrNodes.filter(n => n.status === 'charging').length})
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Swapping Battery ({amrNodes.filter(n => n.status === 'swapping_battery').length})
                     </span>
                   </div>
                   <span className="hidden md:inline text-slate-500 shrink-0">Tần số quét SLAM: 20 Hz • MQTT Active</span>
@@ -1488,7 +1490,7 @@ export const AdminTechnicalPage: React.FC = () => {
                           <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
                             robot.status === 'active' ? 'bg-blue-100 text-blue-800' :
                             robot.status === 'moving' ? 'bg-cyan-100 text-cyan-800' :
-                            robot.status === 'charging' ? 'bg-indigo-100 text-indigo-800' :
+                            robot.status === 'swapping_battery' ? 'bg-indigo-100 text-indigo-800' :
                             robot.status === 'maintenance' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                             'bg-slate-100 text-slate-700'
                           }`}>

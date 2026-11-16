@@ -39,7 +39,7 @@ describe('robotService', () => {
   it('updateRobotStatus sends correct payload', async () => {
     put.mockResolvedValue({ data: {} });
     const cur: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 5, y: 8, battery: 70 };
-    await robotService.updateRobotStatus('r1', 'Charging', cur);
+    await robotService.updateRobotStatus('r1', 'SwappingBattery', cur);
     expect(put).toHaveBeenCalled();
   });
 

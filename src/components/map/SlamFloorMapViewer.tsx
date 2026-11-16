@@ -44,7 +44,7 @@ export interface MapRobotItem {
   id: string;
   code: string;
   name: string;
-  status: 'idle' | 'delivering' | 'charging' | 'offline';
+  status: 'idle' | 'delivering' | 'swapping_battery' | 'offline';
   battery: number;
   currentZone: string;
   worldX?: number; // Tọa độ thực mét từ ROS / Telemetry

@@ -108,7 +108,7 @@ export interface FleetAMR {
   code: string;
   name: string;
   model: string;
-  status: 'delivering' | 'idle' | 'charging' | 'returning' | 'maintenance';
+  status: 'delivering' | 'idle' | 'swapping_battery' | 'returning' | 'maintenance';
   battery: number;
   rssi: string;
   pingMs: number;
@@ -265,11 +265,11 @@ export const tenantService = {
 
 function mapRobotDtoToFleetAMR(dto: any, tenantSlug?: string, tenantName?: string): FleetAMR {
   const statusStr = (dto.status || 'idle').toLowerCase();
-  const normalizedStatus: 'delivering' | 'idle' | 'charging' | 'returning' = 
+  const normalizedStatus: 'delivering' | 'idle' | 'swapping_battery' | 'returning' = 
     statusStr.includes('mov') || statusStr.includes('deliv') || statusStr === 'active'
       ? 'delivering'
-      : statusStr.includes('charg')
-      ? 'charging'
+      : statusStr.includes('swap') || statusStr.includes('low_battery')
+      ? 'swapping_battery'
       : statusStr.includes('return')
       ? 'returning'
       : 'idle';
@@ -294,7 +294,7 @@ function mapRobotDtoToFleetAMR(dto: any, tenantSlug?: string, tenantName?: strin
     lastHeartbeat: dto.lastHeartbeat || 'Vừa xong',
     firmware: dto.firmware || 'v2.4.2',
     currentLocation: dto.currentLocation || (dto.x ? `Tọa độ (${dto.x}, ${dto.y})` : 'Trạm Chờ Bếp'),
-    targetTable: dto.targetTable || (normalizedStatus === 'charging' ? 'Trạm Sạc Tự Động' : 'Sẵn sàng'),
+    targetTable: dto.targetTable || (normalizedStatus === 'swapping_battery' ? 'Trạm Thay Pin (ST_BATTERY_RACK)' : 'Sẵn sàng'),
     trays: Array.isArray(dto.trays) ? dto.trays : [],
     totalTripsToday: dto.totalTripsToday || 0,
     speed: dto.speed || (normalizedStatus === 'delivering' ? '1.2 m/s' : '0.0 m/s'),
