@@ -16,7 +16,6 @@ import {
   X,
   Plus,
   Power,
-  Upload,
   LogOut,
   Store,
   Wrench,
@@ -181,6 +180,8 @@ export const AdminTechnicalPage: React.FC = () => {
 
   const amrPagination = usePagination(amrNodes, 6);
   const missionPagination = usePagination(missions, 6);
+  const alertPagination = usePagination(alerts, 3);
+  const dashboardMissionPagination = usePagination(missions, 4);
 
   // Derived Battery levels from live AMR fleet
   const fleetBatteries = amrNodes.map((node) => ({
@@ -238,9 +239,9 @@ export const AdminTechnicalPage: React.FC = () => {
       const shortName = node.name.split(' ')[0];
       const taskCount = missionStats?.byRobot
         ? (missionStats.byRobot[node.name] ??
-           missionStats.byRobot[node.id] ??
-           missionStats.byRobot[shortName] ??
-           0)
+          missionStats.byRobot[node.id] ??
+          missionStats.byRobot[shortName] ??
+          0)
         : 0;
 
       let util = 0;
@@ -381,11 +382,11 @@ export const AdminTechnicalPage: React.FC = () => {
         prev.map((n) =>
           n.id === targetRobotForMaintenance.id
             ? {
-                ...n,
-                status: newStatus,
-                mission: isEnabling ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)' : 'Chờ lệnh điều phối',
-                speed: '0.0 m/s',
-              }
+              ...n,
+              status: newStatus,
+              mission: isEnabling ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)' : 'Chờ lệnh điều phối',
+              speed: '0.0 m/s',
+            }
             : n
         )
       );
@@ -394,11 +395,11 @@ export const AdminTechnicalPage: React.FC = () => {
         setSelectedAmr((prev) =>
           prev
             ? {
-                ...prev,
-                status: newStatus,
-                mission: isEnabling ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)' : 'Chờ lệnh điều phối',
-                speed: '0.0 m/s',
-              }
+              ...prev,
+              status: newStatus,
+              mission: isEnabling ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)' : 'Chờ lệnh điều phối',
+              speed: '0.0 m/s',
+            }
             : null
         );
       }
@@ -712,26 +713,26 @@ export const AdminTechnicalPage: React.FC = () => {
     groupTitle: string;
     items: { id: TechSubTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[];
   }[] = [
-    {
-      groupTitle: 'ĐIỀU PHỐI & BẢN ĐỒ',
-      items: [
-        { id: 'dashboard', label: 'Dashboard Tổng Quan', icon: LayoutGrid },
-        { id: 'map-stations', label: 'Bản Đồ & Trạm (SLAM)', icon: MapPin },
-        { id: 'robots', label: 'Đội Xe Robots', icon: Bot, badge: String(amrNodes.length) },
-        { id: 'missions', label: 'Hàng Đợi Missions', icon: Navigation, badge: String(missions.length) },
-      ],
-    },
-    {
-      groupTitle: 'HẠ TẦNG & TELEMETRY',
-      items: [
-        { id: 'monitor', label: 'AMR Monitor & Logs', icon: Terminal },
-        { id: 'sqlite-sync', label: 'SQLite & VPS Sync', icon: Database },
-        { id: 'edge-setup', label: 'Edge Box & POS', icon: Server },
-        { id: 'analytics', label: 'Analytics & Hiệu Suất', icon: BarChart3 },
-        { id: 'settings', label: 'Cấu Hình SLAM / ROS2', icon: Settings },
-      ],
-    },
-  ];
+      {
+        groupTitle: 'ĐIỀU PHỐI & BẢN ĐỒ',
+        items: [
+          { id: 'dashboard', label: 'Dashboard Tổng Quan', icon: LayoutGrid },
+          { id: 'map-stations', label: 'Bản Đồ & Trạm (SLAM)', icon: MapPin },
+          { id: 'robots', label: 'Đội Xe Robots', icon: Bot, badge: String(amrNodes.length) },
+          { id: 'missions', label: 'Hàng Đợi Missions', icon: Navigation, badge: String(missions.length) },
+        ],
+      },
+      {
+        groupTitle: 'HẠ TẦNG & TELEMETRY',
+        items: [
+          { id: 'monitor', label: 'AMR Monitor & Logs', icon: Terminal },
+          { id: 'sqlite-sync', label: 'SQLite & VPS Sync', icon: Database },
+          { id: 'edge-setup', label: 'Edge Box & POS', icon: Server },
+          { id: 'analytics', label: 'Analytics & Hiệu Suất', icon: BarChart3 },
+          { id: 'settings', label: 'Cấu Hình SLAM / ROS2', icon: Settings },
+        ],
+      },
+    ];
 
   const activeTechTabLabel =
     techNavGroups.flatMap((g) => g.items).find((i) => i.id === activeSubTab)?.label || 'Dashboard Tổng Quan';
@@ -805,13 +806,12 @@ export const AdminTechnicalPage: React.FC = () => {
               </div>
             </div>
             <span
-              className={`w-2 h-2 rounded-full shrink-0 ${
-                signalRStatus === 'connected'
+              className={`w-2 h-2 rounded-full shrink-0 ${signalRStatus === 'connected'
                   ? 'bg-emerald-500 ring-4 ring-emerald-500/15'
                   : signalRStatus === 'connecting'
                     ? 'bg-amber-400 animate-pulse'
                     : 'bg-slate-400'
-              }`}
+                }`}
               title="Trạng thái SignalR Hub"
             />
           </div>
@@ -846,19 +846,17 @@ export const AdminTechnicalPage: React.FC = () => {
                       setActiveSubTab(item.id);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
-                      isActive
+                    className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${isActive
                         ? 'bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
-                    } ${collapsed ? 'justify-center px-0' : ''}`}
+                      } ${collapsed ? 'justify-center px-0' : ''}`}
                     title={collapsed ? item.label : undefined}
                   >
                     <div
-                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                        isActive
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${isActive
                           ? 'bg-blue-600 text-white shadow-2xs'
                           : 'bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700'
-                      }`}
+                        }`}
                     >
                       <Icon className="w-3.5 h-3.5 shrink-0" />
                     </div>
@@ -867,11 +865,10 @@ export const AdminTechnicalPage: React.FC = () => {
                         <span className="truncate">{item.label}</span>
                         {item.badge !== undefined && (
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono tabular-nums ${
-                              isActive
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono tabular-nums ${isActive
                                 ? 'bg-blue-100 text-blue-700 border-blue-200'
                                 : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
+                              }`}
                           >
                             {item.badge}
                           </span>
@@ -989,10 +986,10 @@ export const AdminTechnicalPage: React.FC = () => {
         <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none animate-in slide-in-from-top-2 duration-200">
           <div
             className={`pointer-events-auto px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2.5 text-xs font-bold border ${toastMessage.type === 'success'
-                ? 'bg-emerald-600 text-white border-emerald-500'
-                : toastMessage.type === 'warning'
-                  ? 'bg-rose-600 text-white border-rose-500'
-                  : 'bg-blue-600 text-white border-blue-500'
+              ? 'bg-emerald-600 text-white border-emerald-500'
+              : toastMessage.type === 'warning'
+                ? 'bg-rose-600 text-white border-rose-500'
+                : 'bg-blue-600 text-white border-blue-500'
               }`}
           >
             <CheckCircle2 className="w-4 h-4 shrink-0 text-white" />
@@ -1003,9 +1000,8 @@ export const AdminTechnicalPage: React.FC = () => {
 
       {/* Desktop Fixed App Shell Sidebar */}
       <aside
-        className={`hidden lg:flex flex-col shrink-0 h-full transition-all duration-200 border-r border-slate-200/80 bg-white z-30 ${
-          isSidebarCollapsed ? 'w-20' : 'w-[268px]'
-        }`}
+        className={`hidden lg:flex flex-col shrink-0 h-full transition-all duration-200 border-r border-slate-200/80 bg-white z-30 ${isSidebarCollapsed ? 'w-20' : 'w-[268px]'
+          }`}
       >
         {renderTechSidebarContent(isSidebarCollapsed)}
       </aside>
@@ -1084,11 +1080,10 @@ export const AdminTechnicalPage: React.FC = () => {
                 setIsSimulationRunning((prev) => !prev);
                 showToast(isSimulationRunning ? 'Đã tạm dừng mô phỏng chuyển động robot.' : 'Đã tiếp tục mô phỏng robot.', 'info');
               }}
-              className={`hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
-                isSimulationRunning
+              className={`hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs ${isSimulationRunning
                   ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   : 'bg-amber-50 border-amber-300 text-amber-800'
-              }`}
+                }`}
               title="Tạm dừng hoặc chạy tiếp mô phỏng chuyển động AMR"
             >
               {isSimulationRunning ? (
@@ -1104,16 +1099,6 @@ export const AdminTechnicalPage: React.FC = () => {
               )}
             </button>
 
-            {/* KDS Switcher */}
-            <Link
-              to="/staff"
-              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-xs font-bold text-emerald-700 transition-all shadow-2xs flex items-center gap-1.5"
-              title="Chuyển sang Giao diện Phục Vụ / KDS Bếp (Staff Console)"
-            >
-              <Store className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden md:inline">KDS Bếp</span>
-            </Link>
-
             {/* Global E-Stop Button */}
             <button
               type="button"
@@ -1121,11 +1106,10 @@ export const AdminTechnicalPage: React.FC = () => {
                 setEmergencyStop((prev) => !prev);
                 showToast(emergencyStop ? 'Khôi phục vận hành đội xe bình thường!' : 'CẢNH BÁO: ĐÃ KÍCH HOẠT DỪNG KHẨN CẤP TOÀN BỘ AMR!', emergencyStop ? 'success' : 'warning');
               }}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all active:scale-[0.97] cursor-pointer ${
-                emergencyStop
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all active:scale-[0.97] cursor-pointer ${emergencyStop
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/25 animate-pulse'
                   : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white shadow-sm shadow-rose-600/20 border border-rose-500/30'
-              }`}
+                }`}
               title={emergencyStop ? 'Khôi phục vận hành' : 'Dừng khẩn cấp toàn bộ AMR'}
             >
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
@@ -1134,16 +1118,6 @@ export const AdminTechnicalPage: React.FC = () => {
               </span>
               <span className="sm:hidden">{emergencyStop ? 'Khôi Phục' : 'E-Stop'}</span>
             </button>
-
-            <Link
-              to="/login"
-              onClick={handleTechLogout}
-              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs flex items-center gap-1.5"
-              title="Đăng xuất khỏi hệ thống"
-            >
-              <LogOut className="w-3.5 h-3.5 text-rose-500" />
-              <span className="hidden sm:inline">Đăng Xuất</span>
-            </Link>
           </div>
         </header>
 
@@ -1171,850 +1145,894 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* SUBTAB 1: DASHBOARD (Matching Reference Image 1) */}
             {/* ============================================================== */}
             {activeSubTab === 'dashboard' && (
-          <div className="space-y-4 sm:space-y-5">
-            {/* Local SQLite Storage & VPS Sync Status Card */}
-            <LocalSqliteSyncCard />
-
-            {/* TOP ROW: 2D LiDAR Map & Recent Alerts / Mission Queue */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
-              {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
-              {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
-              <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs relative">
-                {/* Header Bar with Quick Upload Link */}
-                <div className="px-3 sm:px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
-                  <span className="font-extrabold text-slate-800 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                    <span>Sơ Đồ Tầng SLAM 2D & Đội Xe</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSubTab('map-stations')}
-                    className="px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-                  >
-                    <Upload className="w-3 h-3" />
-                    <span>Nạp Bản Đồ & Trạm</span>
-                  </button>
-                </div>
-                {/* SLAM Map Viewer in Technical Mode */}
-                <div className="relative flex-1 min-h-[340px] sm:min-h-[480px] flex flex-col">
-                  <SlamFloorMapViewer
-                    tables={mapTables}
-                    robots={mapRobots}
-                    selectedTableId={selectedTableId || undefined}
-                    onSelectTable={(tableId) => {
-                      setSelectedTableId(tableId);
-                      const t = tables.find((x) => x.id === tableId || x.tableNo === tableId);
-                      showToast(`Đã chọn ${t ? `Bàn ${t.tableNo || t.id}` : tableId} trên bản đồ kỹ thuật`, 'info');
-                    }}
-                    selectedRobotId={selectedAmr?.id}
-                    onSelectRobot={(robotId) => {
-                      const foundNode = amrNodes.find((n) => n.id === robotId || n.name === robotId);
-                      if (foundNode) {
-                        setSelectedAmr(foundNode);
-                        showToast(`Đã chọn AMR ${foundNode.name} (${foundNode.battery}%)`, 'info');
-                      }
-                    }}
-                    mode="technical"
-                    className="w-full flex-1"
-                  />
-
-                  {/* Interactive Selected AMR Telemetry Popover Modal */}
-                  {selectedAmr && (
-                    <div className="absolute top-14 sm:top-16 right-2 sm:right-4 bg-slate-900/95 text-white border border-cyan-500/80 rounded-2xl p-3.5 sm:p-4 shadow-2xl backdrop-blur-md w-72 max-w-[calc(100%-1rem)] space-y-3 text-xs z-30 animate-in zoom-in-95 duration-150">
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-cyan-400 font-mono text-sm">{selectedAmr.id}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${selectedAmr.battery < 20 ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
-                            {selectedAmr.battery}% Pin
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedAmr(null)}
-                          className="text-slate-400 hover:text-white p-1 cursor-pointer font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      <div className="space-y-1.5 text-xs text-slate-300">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Nhiệm vụ:</span>
-                          <span className="font-semibold text-white truncate max-w-[150px]">{selectedAmr.mission}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Tốc độ:</span>
-                          <span className="font-mono text-cyan-400 font-bold">{selectedAmr.speed}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Tải trọng:</span>
-                          <span className="font-mono text-slate-200">{selectedAmr.payload}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Tọa độ ROS2 (m):</span>
-                          <span className="font-mono text-cyan-300">X:{selectedAmr.x.toFixed(2)}, Y:{selectedAmr.y.toFixed(2)}</span>
-                        </div>
-                      </div>
-
-                      {/* Working Action Buttons for Selected AMR */}
-                      <div className="pt-2 border-t border-slate-800 flex flex-col gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenMaintenanceModal(selectedAmr)}
-                          className={`w-full py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                            selectedAmr.status === 'maintenance'
-                              ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow-sm'
-                              : 'bg-amber-600/90 hover:bg-amber-500 text-white'
-                          }`}
-                        >
-                          <Wrench className="w-3.5 h-3.5" />
-                          <span>{selectedAmr.status === 'maintenance' ? 'Đang Bảo Trì (Quản Lý)' : 'Bảo Trì Kỹ Thuật (Mở Phanh)'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSendToDock(selectedAmr.id)}
-                          className="w-full py-1.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <BatteryCharging className="w-3.5 h-3.5" />
-                          <span>Điều Về Trạm Sạc Docking</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePauseAmr(selectedAmr.id)}
-                          className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <Power className="w-3.5 h-3.5" />
-                          <span>{selectedAmr.status === 'idle' ? 'Kích Hoạt AMR' : 'Tạm Dừng AMR'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Map Footer Status Bar */}
-                <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-mono">
-                  <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-0.5">
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Active ({amrNodes.filter(n => n.status === 'active').length})
-                    </span>
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Moving ({amrNodes.filter(n => n.status === 'moving').length})
-                    </span>
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Idle ({amrNodes.filter(n => n.status === 'idle').length})
-                    </span>
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Swapping Battery ({amrNodes.filter(n => n.status === 'swapping_battery').length})
-                    </span>
-                  </div>
-                  <span className="hidden md:inline text-slate-500 shrink-0">Tần số quét SLAM: 20 Hz • MQTT Active</span>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: Recent Alerts & Mission Queue (4 COLS) */}
-              <div className="lg:col-span-4 flex flex-col gap-4">
-                {/* Recent Alerts (Matching Reference Image 1) */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col shadow-xs">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                    <div className="flex items-center gap-2">
-                      <ShieldAlert className="w-4 h-4 text-amber-500" />
-                      <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">Recent Alerts</h3>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 font-bold">
-                      {alerts.length} Sự cố
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5 overflow-y-auto max-h-[175px] pr-1">
-                    {alerts.length === 0 ? (
-                      <div className="text-xs text-slate-400 text-center py-4">Không có cảnh báo mới</div>
-                    ) : (
-                      alerts.map((alt) => (
-                        <div
-                          key={alt.id}
-                          className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2 transition-all ${alt.type === 'critical'
-                              ? 'bg-rose-50 border-rose-200 text-rose-900'
-                              : alt.type === 'warning'
-                                ? 'bg-amber-50 border-amber-200 text-amber-900'
-                                : 'bg-blue-50 border-blue-200 text-blue-900'
-                            }`}
-                        >
-                          <div className="flex items-start gap-2 min-w-0 flex-1">
-                            <AlertTriangle
-                              className={`w-4 h-4 shrink-0 mt-0.5 ${alt.type === 'critical'
-                                  ? 'text-rose-600'
-                                  : alt.type === 'warning'
-                                    ? 'text-amber-600'
-                                    : 'text-blue-600'
-                                }`}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between mb-0.5">
-                                <span className="font-mono font-bold text-xs">{alt.robot}</span>
-                                <span className="text-[10px] opacity-75 font-mono">{alt.time}</span>
-                              </div>
-                              <p className="text-[11px] leading-snug line-clamp-2">{alt.message}</p>
-                            </div>
-                          </div>
-
-                          {/* Action Button: Xử Lý / Dismiss */}
-                          <button
-                            type="button"
-                            onClick={() => handleResolveAlert(alt.id, alt.robot)}
-                            className="px-2 py-1 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-700 shrink-0 cursor-pointer shadow-2xs"
-                            title="Xác nhận & giải quyết cảnh báo"
-                          >
-                            Xử Lý
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Mission Queue (Matching Reference Image 1) */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex-1 flex flex-col shadow-xs min-h-0">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-blue-600" />
-                      <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">Mission Queue</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowNewMissionModal(true)}
-                        className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] rounded-lg border border-blue-200 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Tạo Lệnh</span>
-                      </button>
-                      <span className="text-[10px] font-mono text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200 font-bold">
-                        {missions.filter((m) => m.status === 'running').length} Active
+              <div className="space-y-4 sm:space-y-5">
+                {/* TOP ROW: 2D LiDAR Map & Recent Alerts / Mission Queue */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-start">
+                  {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
+                  <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs relative">
+                    {/* Header Bar */}
+                    <div className="px-3 sm:px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+                      <span className="font-extrabold text-slate-800 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                        <span>Sơ Đồ Tầng SLAM 2D & Đội Xe</span>
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200">
+                        2D LiDAR Realtime
                       </span>
                     </div>
-                  </div>
+                    {/* SLAM Map Viewer in Technical Mode */}
+                    <div className="relative flex-1 min-h-[340px] sm:min-h-[480px] flex flex-col">
+                      <SlamFloorMapViewer
+                        tables={mapTables}
+                        robots={mapRobots}
+                        selectedTableId={selectedTableId || undefined}
+                        onSelectTable={(tableId) => {
+                          setSelectedTableId(tableId);
+                          const t = tables.find((x) => x.id === tableId || x.tableNo === tableId);
+                          showToast(`Đã chọn ${t ? `Bàn ${t.tableNo || t.id}` : tableId} trên bản đồ kỹ thuật`, 'info');
+                        }}
+                        selectedRobotId={selectedAmr?.id}
+                        onSelectRobot={(robotId) => {
+                          const foundNode = amrNodes.find((n) => n.id === robotId || n.name === robotId);
+                          if (foundNode) {
+                            setSelectedAmr(foundNode);
+                            showToast(`Đã chọn AMR ${foundNode.name} (${foundNode.battery}%)`, 'info');
+                          }
+                        }}
+                        mode="technical"
+                        className="w-full flex-1"
+                      />
 
-                  <div className="space-y-2 overflow-y-auto flex-1 min-h-0 pr-1">
-                    {missions.length === 0 ? (
-                      <div className="text-xs text-slate-400 text-center py-8">
-                        Chưa có lệnh điều phối trong hàng đợi. Bấm &quot;Tạo Lệnh&quot; để phát lệnh mới.
-                      </div>
-                    ) : (
-                      missions.map((mission) => (
-                        <div
-                          key={mission.id}
-                          className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 text-xs flex items-center justify-between gap-3 group transition-all"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-mono font-bold text-[11px] text-blue-700">{mission.id}</span>
-                              <span
-                                className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${mission.priority === 'Cao'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : 'bg-slate-200 text-slate-700'
-                                  }`}
-                              >
-                                {mission.priority}
+                      {/* Interactive Selected AMR Telemetry Popover Modal */}
+                      {selectedAmr && (
+                        <div className="absolute top-14 sm:top-16 right-2 sm:right-4 bg-slate-900/95 text-white border border-cyan-500/80 rounded-2xl p-3.5 sm:p-4 shadow-2xl backdrop-blur-md w-72 max-w-[calc(100%-1rem)] space-y-3 text-xs z-30 animate-in zoom-in-95 duration-150">
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-cyan-400 font-mono text-sm">{selectedAmr.id}</span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded font-mono ${selectedAmr.battery < 20 ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+                                {selectedAmr.battery}% Pin
                               </span>
                             </div>
-                            <div className="text-[11px] font-semibold text-slate-800 truncate">{mission.title}</div>
-                            <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 font-mono">
-                              <span>AMR: {mission.assignedTo}</span>
-                              <span>•</span>
-                              <span>Đích: {mission.destination}</span>
-                            </div>
-                          </div>
-
-                          {/* Working Actions for Queue */}
-                          <div className="flex items-center gap-1 shrink-0">
-                            {mission.priority !== 'Cao' && (
-                              <button
-                                type="button"
-                                onClick={() => handlePrioritizeMission(mission.id)}
-                                className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-white text-[10px] cursor-pointer"
-                                title="Đẩy lên ưu tiên cao nhất"
-                              >
-                                <TrendingUp className="w-3.5 h-3.5" />
-                              </button>
-                            )}
                             <button
                               type="button"
-                              onClick={() => handleCancelMission(mission.id)}
-                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white text-[10px] cursor-pointer"
-                              title="Hủy lệnh này"
+                              onClick={() => setSelectedAmr(null)}
+                              className="text-slate-400 hover:text-white p-1 cursor-pointer font-bold"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              ✕
                             </button>
-                            <div className="text-right pl-1">
-                              <span className="text-[10px] font-mono text-emerald-700 font-bold block">{mission.eta}</span>
+                          </div>
+
+                          <div className="space-y-1.5 text-xs text-slate-300">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Nhiệm vụ:</span>
+                              <span className="font-semibold text-white truncate max-w-[150px]">{selectedAmr.mission}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Tốc độ:</span>
+                              <span className="font-mono text-cyan-400 font-bold">{selectedAmr.speed}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Tải trọng:</span>
+                              <span className="font-mono text-slate-200">{selectedAmr.payload}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Tọa độ ROS2 (m):</span>
+                              <span className="font-mono text-cyan-300">X:{selectedAmr.x.toFixed(2)}, Y:{selectedAmr.y.toFixed(2)}</span>
                             </div>
                           </div>
+
+                          {/* Working Action Buttons for Selected AMR */}
+                          <div className="pt-2 border-t border-slate-800 flex flex-col gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMaintenanceModal(selectedAmr)}
+                              className={`w-full py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${selectedAmr.status === 'maintenance'
+                                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow-sm'
+                                  : 'bg-amber-600/90 hover:bg-amber-500 text-white'
+                                }`}
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                              <span>{selectedAmr.status === 'maintenance' ? 'Đang Bảo Trì (Quản Lý)' : 'Bảo Trì Kỹ Thuật (Mở Phanh)'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSendToDock(selectedAmr.id)}
+                              className="w-full py-1.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <BatteryCharging className="w-3.5 h-3.5" />
+                              <span>Điều Về Trạm Sạc Docking</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePauseAmr(selectedAmr.id)}
+                              className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                              <span>{selectedAmr.status === 'idle' ? 'Kích Hoạt AMR' : 'Tạm Dừng AMR'}</span>
+                            </button>
+                          </div>
                         </div>
-                      ))
-                    )}
+                      )}
+                    </div>
+
+                    {/* Map Footer Status Bar */}
+                    <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-mono">
+                      <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-0.5">
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Active ({amrNodes.filter(n => n.status === 'active').length})
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Moving ({amrNodes.filter(n => n.status === 'moving').length})
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Idle ({amrNodes.filter(n => n.status === 'idle').length})
+                        </span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Swapping Battery ({amrNodes.filter(n => n.status === 'swapping_battery').length})
+                        </span>
+                      </div>
+                      <span className="hidden md:inline text-slate-500 shrink-0">Tần số quét SLAM: 20 Hz • MQTT Active</span>
+                    </div>
+                  </div>
+
+                  {/* RIGHT COLUMN: Recent Alerts & Mission Queue (4 COLS) */}
+                  <div className="lg:col-span-4 flex flex-col gap-4">
+                    {/* Recent Alerts (Paginated) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col shadow-xs">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldAlert className="w-4 h-4 text-amber-500" />
+                          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">Recent Alerts</h3>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 font-bold">
+                          {alerts.length} Sự cố
+                        </span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {alerts.length === 0 ? (
+                          <div className="text-xs text-slate-400 text-center py-4">Không có cảnh báo mới</div>
+                        ) : (
+                          alertPagination.paginatedItems.map((alt) => (
+                            <div
+                              key={alt.id}
+                              className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2 transition-all ${alt.type === 'critical'
+                                ? 'bg-rose-50 border-rose-200 text-rose-900'
+                                : alt.type === 'warning'
+                                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                                  : 'bg-blue-50 border-blue-200 text-blue-900'
+                                }`}
+                            >
+                              <div className="flex items-start gap-2 min-w-0 flex-1">
+                                <AlertTriangle
+                                  className={`w-4 h-4 shrink-0 mt-0.5 ${alt.type === 'critical'
+                                    ? 'text-rose-600'
+                                    : alt.type === 'warning'
+                                      ? 'text-amber-600'
+                                      : 'text-blue-600'
+                                    }`}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <span className="font-mono font-bold text-xs">{alt.robot}</span>
+                                    <span className="text-[10px] opacity-75 font-mono">{alt.time}</span>
+                                  </div>
+                                  <p className="text-[11px] leading-snug line-clamp-2">{alt.message}</p>
+                                </div>
+                              </div>
+
+                              {/* Action Button: Xử Lý / Dismiss */}
+                              <button
+                                type="button"
+                                onClick={() => handleResolveAlert(alt.id, alt.robot)}
+                                className="px-2 py-1 bg-white hover:bg-slate-100 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-700 shrink-0 cursor-pointer shadow-2xs"
+                                title="Xác nhận & giải quyết cảnh báo"
+                              >
+                                Xử Lý
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {alertPagination.totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-slate-100 text-[11px] text-slate-500">
+                          <span className="font-mono">
+                            Trang {alertPagination.currentPage}/{alertPagination.totalPages}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={alertPagination.currentPage <= 1}
+                              onClick={() => alertPagination.setPage(alertPagination.currentPage - 1)}
+                              className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                              title="Trang trước"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={alertPagination.currentPage >= alertPagination.totalPages}
+                              onClick={() => alertPagination.setPage(alertPagination.currentPage + 1)}
+                              className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                              title="Trang kế tiếp"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mission Queue (Paginated) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col shadow-xs">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">Mission Queue</h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowNewMissionModal(true)}
+                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] rounded-lg border border-blue-200 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Tạo Lệnh</span>
+                          </button>
+                          <span className="text-[10px] font-mono text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200 font-bold">
+                            {missions.filter((m) => m.status === 'running').length} Active
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {missions.length === 0 ? (
+                          <div className="text-xs text-slate-400 text-center py-8">
+                            Chưa có lệnh điều phối trong hàng đợi. Bấm &quot;Tạo Lệnh&quot; để phát lệnh mới.
+                          </div>
+                        ) : (
+                          dashboardMissionPagination.paginatedItems.map((mission) => (
+                            <div
+                              key={mission.id}
+                              className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 hover:border-slate-300 text-xs flex items-center justify-between gap-3 group transition-all"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="font-mono font-bold text-[11px] text-blue-700">{mission.id}</span>
+                                  <span
+                                    className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${mission.priority === 'Cao'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-slate-200 text-slate-700'
+                                      }`}
+                                  >
+                                    {mission.priority}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] font-semibold text-slate-800 truncate">{mission.title}</div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 font-mono">
+                                  <span>AMR: {mission.assignedTo}</span>
+                                  <span>•</span>
+                                  <span>Đích: {mission.destination}</span>
+                                </div>
+                              </div>
+
+                              {/* Working Actions for Queue */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {mission.priority !== 'Cao' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePrioritizeMission(mission.id)}
+                                    className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-white text-[10px] cursor-pointer"
+                                    title="Đẩy lên ưu tiên cao nhất"
+                                  >
+                                    <TrendingUp className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelMission(mission.id)}
+                                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white text-[10px] cursor-pointer"
+                                  title="Hủy lệnh này"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                                <div className="text-right pl-1">
+                                  <span className="text-[10px] font-mono text-emerald-700 font-bold block">{mission.eta}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      {dashboardMissionPagination.totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-xs text-slate-500">
+                          <span className="text-[11px] font-medium font-mono">
+                            Trang {dashboardMissionPagination.currentPage}/{dashboardMissionPagination.totalPages} ({missions.length} lệnh)
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={dashboardMissionPagination.currentPage <= 1}
+                              onClick={() => dashboardMissionPagination.setPage(dashboardMissionPagination.currentPage - 1)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                              <span>Trước</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={dashboardMissionPagination.currentPage >= dashboardMissionPagination.totalPages}
+                              onClick={() => dashboardMissionPagination.setPage(dashboardMissionPagination.currentPage + 1)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                            >
+                              <span>Sau</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* MIDDLE ROW: Fleet Status Summary & Battery Levels (Matching Image 1) */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-emerald-600" />
-                  <span>Fleet Status Summary</span>
-                </h3>
-                <span className="text-[11px] font-mono text-slate-500">{amrNodes.length} AMR Units Connected</span>
-              </div>
+                {/* MIDDLE ROW: Fleet Status Summary & Battery Levels (Matching Image 1) */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-emerald-600" />
+                      <span>Fleet Status Summary</span>
+                    </h3>
+                    <span className="text-[11px] font-mono text-slate-500">{amrNodes.length} AMR Units Connected</span>
+                  </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Active AMRs Card */}
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                  <span className="text-xs text-slate-500 font-bold">Active AMRs:</span>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
-                      {amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length}
-                    </span>
-                    <span className="text-sm font-bold text-slate-400 font-mono">/ {amrNodes.length}</span>
-                  </div>
-                  <div className="mt-2 w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-full rounded-full transition-all duration-300"
-                      style={{
-                        width:
-                          amrNodes.length > 0
-                            ? `${Math.round(
-                              (amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length /
-                                amrNodes.length) *
-                              100
-                            )}%`
-                            : '0%',
-                      }}
-                    />
-                  </div>
-                </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Active AMRs Card */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                      <span className="text-xs text-slate-500 font-bold">Active AMRs:</span>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
+                          {amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length}
+                        </span>
+                        <span className="text-sm font-bold text-slate-400 font-mono">/ {amrNodes.length}</span>
+                      </div>
+                      <div className="mt-2 w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-blue-600 h-full rounded-full transition-all duration-300"
+                          style={{
+                            width:
+                              amrNodes.length > 0
+                                ? `${Math.round(
+                                  (amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length /
+                                    amrNodes.length) *
+                                  100
+                                )}%`
+                                : '0%',
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                {/* Active Missions Card */}
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                  <span className="text-xs text-slate-500 font-bold">Active Missions:</span>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-2xl sm:text-3xl font-black text-cyan-600 font-mono">
-                      {missionStats?.active ?? missions.filter((m) => m.status === 'running').length}
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium">đang điều phối</span>
-                  </div>
-                  <div className="mt-2 w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-cyan-500 h-full rounded-full transition-all duration-300"
-                      style={{
-                        width:
-                          (missionStats?.totalToday ?? missions.length) > 0
-                            ? `${Math.round(
-                              ((missionStats?.active ?? missions.filter((m) => m.status === 'running').length) /
-                                Math.max(1, missionStats?.totalToday ?? missions.length)) * 100
-                            )}%`
-                            : '0%',
-                      }}
-                    />
-                  </div>
-                </div>
+                    {/* Active Missions Card */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                      <span className="text-xs text-slate-500 font-bold">Active Missions:</span>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-2xl sm:text-3xl font-black text-cyan-600 font-mono">
+                          {missionStats?.active ?? missions.filter((m) => m.status === 'running').length}
+                        </span>
+                        <span className="text-xs text-slate-500 font-medium">đang điều phối</span>
+                      </div>
+                      <div className="mt-2 w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-cyan-500 h-full rounded-full transition-all duration-300"
+                          style={{
+                            width:
+                              (missionStats?.totalToday ?? missions.length) > 0
+                                ? `${Math.round(
+                                  ((missionStats?.active ?? missions.filter((m) => m.status === 'running').length) /
+                                    Math.max(1, missionStats?.totalToday ?? missions.length)) * 100
+                                )}%`
+                                : '0%',
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                {/* Fleet Health Card */}
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                  <span className="text-xs text-slate-500 font-bold">Fleet Health:</span>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">
-                      {amrNodes.length > 0
-                        ? Math.round(
-                          (amrNodes.filter((n) => n.status !== 'alert').length / amrNodes.length) * 100
-                        )
-                        : 100}
-                      %
-                    </span>
-                    <span className="text-xs text-emerald-700 font-bold">Tốt</span>
-                  </div>
-                  <div className="mt-2 w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${amrNodes.length > 0
+                    {/* Fleet Health Card */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                      <span className="text-xs text-slate-500 font-bold">Fleet Health:</span>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">
+                          {amrNodes.length > 0
                             ? Math.round(
                               (amrNodes.filter((n) => n.status !== 'alert').length / amrNodes.length) * 100
                             )
-                            : 100
-                          }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Battery Levels Chart Card */}
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
-                    <span>Battery Levels</span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {fleetBatteries.length > 0
-                        ? `${fleetBatteries[0].code.split(' ')[0]} - ${fleetBatteries[fleetBatteries.length - 1].code.split(' ')[0]}`
-                        : 'N/A'}
-                    </span>
-                  </div>
-
-                  {/* Dynamic Battery Bars */}
-                  <div className="mt-2 h-10 flex items-end gap-1 sm:gap-1.5 w-full">
-                    {fleetBatteries.length === 0 ? (
-                      <div className="w-full text-center text-xs text-slate-400 py-2">Chưa có kết nối pin</div>
-                    ) : (
-                      fleetBatteries.map((b) => (
+                            : 100}
+                          %
+                        </span>
+                        <span className="text-xs text-emerald-700 font-bold">Tốt</span>
+                      </div>
+                      <div className="mt-2 w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                         <div
-                          key={b.code}
-                          onClick={() => showToast(`Pin ${b.code}: ${b.val}%`, 'info')}
-                          className="flex-1 flex flex-col items-center group relative cursor-pointer"
-                        >
-                          <div
-                            className={`w-full rounded-t transition-all ${b.status === 'critical'
-                                ? 'bg-rose-500 animate-pulse'
-                                : b.status === 'warning'
-                                  ? 'bg-amber-500'
-                                  : 'bg-blue-600 group-hover:bg-cyan-500'
-                              }`}
-                            style={{ height: `${b.val}%` }}
-                          />
-                          {/* Tooltip on hover */}
-                          <div className="absolute -top-7 hidden group-hover:block bg-slate-900 text-[9px] font-mono text-white px-1.5 py-0.5 rounded shadow z-10 whitespace-nowrap">
-                            {b.code}: {b.val}%
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="mt-1 flex justify-between text-[9px] font-mono text-slate-400">
-                    <span className="truncate max-w-[70px]">{fleetBatteries[0]?.code.split(' ')[0] || '—'}</span>
-                    <span className="truncate max-w-[70px]">{fleetBatteries[Math.floor(fleetBatteries.length / 2)]?.code.split(' ')[0] || '—'}</span>
-                    <span className="truncate max-w-[70px]">{fleetBatteries[fleetBatteries.length - 1]?.code.split(' ')[0] || '—'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* BOTTOM ROW: Telemetry Charts (Matching Image 1) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-              {/* Average Mission Completion Time (Last 24h) */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-cyan-600" />
-                    <span>Average Mission Completion Time (Last 24h)</span>
-                  </h4>
-                  <span className="text-xs font-mono font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
-                    {avgCompletionDuration}
-                  </span>
-                </div>
-
-                {/* Dynamic SVG Line Chart */}
-                <div className="h-44 w-full pt-2 flex items-center justify-center">
-                  <svg className="w-full h-full" viewBox="0 0 500 140" fill="none">
-                    <defs>
-                      <linearGradient id="lightTimeGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#0062FF" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#0062FF" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-
-                    {/* Horizontal reference lines */}
-                    <line x1="40" y1="25" x2="480" y2="25" stroke="#E2E8F0" strokeDasharray="3,3" />
-                    <line x1="40" y1="65" x2="480" y2="65" stroke="#E2E8F0" strokeDasharray="3,3" />
-                    <line x1="40" y1="105" x2="480" y2="105" stroke="#E2E8F0" strokeDasharray="3,3" />
-
-                    {/* Y-axis labels */}
-                    <text x="12" y="29" fill="#94A3B8" fontSize="9" fontFamily="monospace">
-                      {Math.max(1, missionStats?.completed ?? 1)} đơn
-                    </text>
-                    <text x="12" y="69" fill="#94A3B8" fontSize="9" fontFamily="monospace">
-                      {Math.max(1, Math.round((missionStats?.completed ?? 1) / 2))} đơn
-                    </text>
-                    <text x="12" y="109" fill="#94A3B8" fontSize="9" fontFamily="monospace">0</text>
-
-                    {/* Chart Area Fill */}
-                    {curveAreaD && (
-                      <path d={curveAreaD} fill="url(#lightTimeGrad)" />
-                    )}
-
-                    {/* Chart Stroke Curve */}
-                    {curvePathD && (
-                      <path
-                        d={curvePathD}
-                        fill="none"
-                        stroke="#0062FF"
-                        strokeWidth="2.5"
-                      />
-                    )}
-
-                    {/* Dynamic Data Points */}
-                    {hourlyPoints.map((pt, i) => (
-                      <g key={pt.label} className="cursor-pointer" onClick={() => showToast(`Khung giờ ${pt.label}: ${pt.count} đơn hoàn tất`, 'info')}>
-                        <circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r={i % 2 === 0 ? 4 : 3.5}
-                          fill="#0062FF"
-                          stroke="#FFFFFF"
-                          strokeWidth={i % 2 === 0 ? 2 : 1}
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${amrNodes.length > 0
+                              ? Math.round(
+                                (amrNodes.filter((n) => n.status !== 'alert').length / amrNodes.length) * 100
+                              )
+                              : 100
+                              }%`,
+                          }}
                         />
-                      </g>
-                    ))}
-
-                    {/* X-axis time marks */}
-                    {hourlyPoints.map((pt) => (
-                      <text key={pt.label} x={pt.x} y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">
-                        {pt.label}
-                      </text>
-                    ))}
-                  </svg>
-                </div>
-              </div>
-
-              {/* Robot Utilization (%) */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                  <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-blue-600" />
-                    <span>Robot Utilization (%)</span>
-                  </h4>
-                  <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    {robotUtilizationList.length > 0
-                      ? `${avgFleetUtilization}% Trung Bình`
-                      : '0% (Chưa có AMR)'}
-                  </span>
-                </div>
-
-                {/* Dynamic Utilization Bar Chart */}
-                <div className="h-44 w-full pt-2 flex items-end justify-between gap-2 px-2">
-                  {robotUtilizationList.length > 0 ? (
-                    robotUtilizationList.map((item) => {
-                      const utilPercent = item.utilization;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => showToast(`Hiệu suất ${item.name}: ${utilPercent}%`, 'info')}
-                          className="flex-1 flex flex-col items-center gap-1.5 group cursor-pointer"
-                        >
-                          <span className="text-[9px] font-mono text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {utilPercent}%
-                          </span>
-                          <div className="w-full bg-slate-100 rounded-t h-28 flex items-end">
-                            <div
-                              className="w-full bg-blue-600 group-hover:bg-cyan-500 rounded-t transition-all duration-300"
-                              style={{ height: `${utilPercent}%` }}
-                            />
-                          </div>
-                          <span className="text-[9px] font-mono text-slate-600 font-bold truncate max-w-[42px]" title={item.name}>
-                            {item.name.split(' ')[0]}
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="w-full text-center py-10 text-xs text-slate-400">
-                      Chưa có dữ liệu hiệu suất vận hành AMR
+                      </div>
                     </div>
-                  )}
+
+                    {/* Battery Levels Chart Card */}
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                      <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
+                        <span>Battery Levels</span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          {fleetBatteries.length > 0
+                            ? `${fleetBatteries[0].code.split(' ')[0]} - ${fleetBatteries[fleetBatteries.length - 1].code.split(' ')[0]}`
+                            : 'N/A'}
+                        </span>
+                      </div>
+
+                      {/* Dynamic Battery Bars */}
+                      <div className="mt-2 h-10 flex items-end gap-1 sm:gap-1.5 w-full">
+                        {fleetBatteries.length === 0 ? (
+                          <div className="w-full text-center text-xs text-slate-400 py-2">Chưa có kết nối pin</div>
+                        ) : (
+                          fleetBatteries.map((b) => (
+                            <div
+                              key={b.code}
+                              onClick={() => showToast(`Pin ${b.code}: ${b.val}%`, 'info')}
+                              className="flex-1 flex flex-col items-center group relative cursor-pointer"
+                            >
+                              <div
+                                className={`w-full rounded-t transition-all ${b.status === 'critical'
+                                  ? 'bg-rose-500 animate-pulse'
+                                  : b.status === 'warning'
+                                    ? 'bg-amber-500'
+                                    : 'bg-blue-600 group-hover:bg-cyan-500'
+                                  }`}
+                                style={{ height: `${b.val}%` }}
+                              />
+                              {/* Tooltip on hover */}
+                              <div className="absolute -top-7 hidden group-hover:block bg-slate-900 text-[9px] font-mono text-white px-1.5 py-0.5 rounded shadow z-10 whitespace-nowrap">
+                                {b.code}: {b.val}%
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div className="mt-1 flex justify-between text-[9px] font-mono text-slate-400">
+                        <span className="truncate max-w-[70px]">{fleetBatteries[0]?.code.split(' ')[0] || '—'}</span>
+                        <span className="truncate max-w-[70px]">{fleetBatteries[Math.floor(fleetBatteries.length / 2)]?.code.split(' ')[0] || '—'}</span>
+                        <span className="truncate max-w-[70px]">{fleetBatteries[fleetBatteries.length - 1]?.code.split(' ')[0] || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BOTTOM ROW: Telemetry Charts (Matching Image 1) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                  {/* Average Mission Completion Time (Last 24h) */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                      <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-cyan-600" />
+                        <span>Average Mission Completion Time (Last 24h)</span>
+                      </h4>
+                      <span className="text-xs font-mono font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
+                        {avgCompletionDuration}
+                      </span>
+                    </div>
+
+                    {/* Dynamic SVG Line Chart */}
+                    <div className="h-44 w-full pt-2 flex items-center justify-center">
+                      <svg className="w-full h-full" viewBox="0 0 500 140" fill="none">
+                        <defs>
+                          <linearGradient id="lightTimeGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#0062FF" stopOpacity="0.25" />
+                            <stop offset="100%" stopColor="#0062FF" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+
+                        {/* Horizontal reference lines */}
+                        <line x1="40" y1="25" x2="480" y2="25" stroke="#E2E8F0" strokeDasharray="3,3" />
+                        <line x1="40" y1="65" x2="480" y2="65" stroke="#E2E8F0" strokeDasharray="3,3" />
+                        <line x1="40" y1="105" x2="480" y2="105" stroke="#E2E8F0" strokeDasharray="3,3" />
+
+                        {/* Y-axis labels */}
+                        <text x="12" y="29" fill="#94A3B8" fontSize="9" fontFamily="monospace">
+                          {Math.max(1, missionStats?.completed ?? 1)} đơn
+                        </text>
+                        <text x="12" y="69" fill="#94A3B8" fontSize="9" fontFamily="monospace">
+                          {Math.max(1, Math.round((missionStats?.completed ?? 1) / 2))} đơn
+                        </text>
+                        <text x="12" y="109" fill="#94A3B8" fontSize="9" fontFamily="monospace">0</text>
+
+                        {/* Chart Area Fill */}
+                        {curveAreaD && (
+                          <path d={curveAreaD} fill="url(#lightTimeGrad)" />
+                        )}
+
+                        {/* Chart Stroke Curve */}
+                        {curvePathD && (
+                          <path
+                            d={curvePathD}
+                            fill="none"
+                            stroke="#0062FF"
+                            strokeWidth="2.5"
+                          />
+                        )}
+
+                        {/* Dynamic Data Points */}
+                        {hourlyPoints.map((pt, i) => (
+                          <g key={pt.label} className="cursor-pointer" onClick={() => showToast(`Khung giờ ${pt.label}: ${pt.count} đơn hoàn tất`, 'info')}>
+                            <circle
+                              cx={pt.x}
+                              cy={pt.y}
+                              r={i % 2 === 0 ? 4 : 3.5}
+                              fill="#0062FF"
+                              stroke="#FFFFFF"
+                              strokeWidth={i % 2 === 0 ? 2 : 1}
+                            />
+                          </g>
+                        ))}
+
+                        {/* X-axis time marks */}
+                        {hourlyPoints.map((pt) => (
+                          <text key={pt.label} x={pt.x} y="134" fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">
+                            {pt.label}
+                          </text>
+                        ))}
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Robot Utilization (%) */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                      <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-blue-600" />
+                        <span>Robot Utilization (%)</span>
+                      </h4>
+                      <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        {robotUtilizationList.length > 0
+                          ? `${avgFleetUtilization}% Trung Bình`
+                          : '0% (Chưa có AMR)'}
+                      </span>
+                    </div>
+
+                    {/* Dynamic Utilization Bar Chart */}
+                    <div className="h-44 w-full pt-2 flex items-end justify-between gap-2 px-2">
+                      {robotUtilizationList.length > 0 ? (
+                        robotUtilizationList.map((item) => {
+                          const utilPercent = item.utilization;
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => showToast(`Hiệu suất ${item.name}: ${utilPercent}%`, 'info')}
+                              className="flex-1 flex flex-col items-center gap-1.5 group cursor-pointer"
+                            >
+                              <span className="text-[9px] font-mono text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {utilPercent}%
+                              </span>
+                              <div className="w-full bg-slate-100 rounded-t h-28 flex items-end">
+                                <div
+                                  className="w-full bg-blue-600 group-hover:bg-cyan-500 rounded-t transition-all duration-300"
+                                  style={{ height: `${utilPercent}%` }}
+                                />
+                              </div>
+                              <span className="text-[9px] font-mono text-slate-600 font-bold truncate max-w-[42px]" title={item.name}>
+                                {item.name.split(' ')[0]}
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="w-full text-center py-10 text-xs text-slate-400">
+                          Chưa có dữ liệu hiệu suất vận hành AMR
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* ============================================================== */}
-        {/* SUBTAB 2: ROBOTS (Detailed Fleet List with Actions) */}
-        {/* ============================================================== */}
-        {activeSubTab === 'robots' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-                  Danh Sách Thiết Bị AMR Trong Đội Xe ({amrNodes.length})
-                </h3>
-                <p className="text-xs text-slate-500">Giám sát trạng thái telemetry, firmware, pin LiFePO4 và gửi lệnh trực tiếp.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  loadData();
-                  showToast('Đang quét kết nối Wi-Fi & DDS toàn bộ đội AMR...', 'info');
-                }}
-                className="px-3 py-1.5 bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 flex items-center gap-1.5 hover:bg-blue-100 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Quét Toàn Bộ Đội Xe</span>
-              </button>
-            </div>
+            {/* ============================================================== */}
+            {/* SUBTAB 2: ROBOTS (Detailed Fleet List with Actions) */}
+            {/* ============================================================== */}
+            {activeSubTab === 'robots' && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                      Danh Sách Thiết Bị AMR Trong Đội Xe ({amrNodes.length})
+                    </h3>
+                    <p className="text-xs text-slate-500">Giám sát trạng thái telemetry, firmware, pin LiFePO4 và gửi lệnh trực tiếp.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loadData();
+                      showToast('Đang quét kết nối Wi-Fi & DDS toàn bộ đội AMR...', 'info');
+                    }}
+                    className="px-3 py-1.5 bg-blue-50 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 flex items-center gap-1.5 hover:bg-blue-100 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Quét Toàn Bộ Đội Xe</span>
+                  </button>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
-                    <th className="py-2.5 px-3">Mã AMR</th>
-                    <th className="py-2.5 px-3">Trạng Thái</th>
-                    <th className="py-2.5 px-3">Pin LiFePO4</th>
-                    <th className="py-2.5 px-3">Tốc Độ</th>
-                    <th className="py-2.5 px-3">Nhiệm Vụ Hiện Tại</th>
-                    <th className="py-2.5 px-3 text-right">Thao Tác Kỹ Thuật</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {amrNodes.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
-                        Chưa có thiết bị AMR nào kết nối trong hệ thống.
-                      </td>
-                    </tr>
-                  ) : (
-                    amrPagination.paginatedItems.map((robot) => (
-                      <tr key={robot.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-3 font-mono font-bold text-blue-700">{robot.id} ({robot.name})</td>
-                        <td className="py-3 px-3">
-                          <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
-                            robot.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                            robot.status === 'moving' ? 'bg-cyan-100 text-cyan-800' :
-                            robot.status === 'swapping_battery' ? 'bg-indigo-100 text-indigo-800' :
-                            robot.status === 'maintenance' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                            'bg-slate-100 text-slate-700'
-                          }`}>
-                            {robot.status === 'maintenance' ? 'BẢO TRÌ' : robot.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-mono font-bold ${robot.battery < 20 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                              {robot.battery}%
-                            </span>
-                            <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${robot.battery < 20 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${robot.battery}%` }} />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 font-mono text-slate-600">{robot.speed}</td>
-                        <td className="py-3 px-3 font-medium text-slate-800">{robot.mission}</td>
-                        <td className="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenMaintenanceModal(robot)}
-                            className={`px-2.5 py-1 rounded-lg font-bold border cursor-pointer text-[11px] inline-flex items-center gap-1 transition-colors ${
-                              robot.status === 'maintenance'
-                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300'
-                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
-                            }`}
-                            title="Chế độ bảo trì kỹ thuật viên (Phanh điện từ)"
-                          >
-                            <Wrench className="w-3 h-3" />
-                            <span>{robot.status === 'maintenance' ? 'Đang Bảo Trì' : 'Bảo Trì'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSendToDock(robot.id)}
-                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 cursor-pointer text-[11px]"
-                          >
-                            Về Dock Sạc
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePauseAmr(robot.id)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer text-[11px]"
-                          >
-                            {robot.status === 'idle' ? 'Chạy' : 'Dừng'}
-                          </button>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
+                        <th className="py-2.5 px-3">Mã AMR</th>
+                        <th className="py-2.5 px-3">Trạng Thái</th>
+                        <th className="py-2.5 px-3">Pin LiFePO4</th>
+                        <th className="py-2.5 px-3">Tốc Độ</th>
+                        <th className="py-2.5 px-3">Nhiệm Vụ Hiện Tại</th>
+                        <th className="py-2.5 px-3 text-right">Thao Tác Kỹ Thuật</th>
                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {amrNodes.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
+                            Chưa có thiết bị AMR nào kết nối trong hệ thống.
+                          </td>
+                        </tr>
+                      ) : (
+                        amrPagination.paginatedItems.map((robot) => (
+                          <tr key={robot.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-3 px-3 font-mono font-bold text-blue-700">{robot.id} ({robot.name})</td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${robot.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                                  robot.status === 'moving' ? 'bg-cyan-100 text-cyan-800' :
+                                    robot.status === 'swapping_battery' ? 'bg-indigo-100 text-indigo-800' :
+                                      robot.status === 'maintenance' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                        'bg-slate-100 text-slate-700'
+                                }`}>
+                                {robot.status === 'maintenance' ? 'BẢO TRÌ' : robot.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-mono font-bold ${robot.battery < 20 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                  {robot.battery}%
+                                </span>
+                                <div className="w-16 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${robot.battery < 20 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${robot.battery}%` }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-slate-600">{robot.speed}</td>
+                            <td className="py-3 px-3 font-medium text-slate-800">{robot.mission}</td>
+                            <td className="py-3 px-3 text-right space-x-1.5 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenMaintenanceModal(robot)}
+                                className={`px-2.5 py-1 rounded-lg font-bold border cursor-pointer text-[11px] inline-flex items-center gap-1 transition-colors ${robot.status === 'maintenance'
+                                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300'
+                                    : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                                  }`}
+                                title="Chế độ bảo trì kỹ thuật viên (Phanh điện từ)"
+                              >
+                                <Wrench className="w-3 h-3" />
+                                <span>{robot.status === 'maintenance' ? 'Đang Bảo Trì' : 'Bảo Trì'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSendToDock(robot.id)}
+                                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 cursor-pointer text-[11px]"
+                              >
+                                Về Dock Sạc
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePauseAmr(robot.id)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer text-[11px]"
+                              >
+                                {robot.status === 'idle' ? 'Chạy' : 'Dừng'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <Pagination
+                  currentPage={amrPagination.currentPage}
+                  totalPages={amrPagination.totalPages}
+                  totalItems={amrPagination.totalItems}
+                  pageSize={amrPagination.pageSize}
+                  pageSizeOptions={[4, 6, 12, 24]}
+                  onPageChange={amrPagination.setPage}
+                  onPageSizeChange={amrPagination.setPageSize}
+                  itemLabel="thiết bị AMR"
+                />
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* SUBTAB 3: MISSIONS (Full Missions Manager) */}
+            {/* ============================================================== */}
+            {activeSubTab === 'missions' && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Quản Lý Toàn Bộ Nhiệm Vụ Điều Phối</h3>
+                    <p className="text-xs text-slate-500">Giám sát các hành trình đang chạy và xếp thứ tự ưu tiên hàng đợi.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewMissionModal(true)}
+                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tạo Nhiệm Vụ Mới</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {missions.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 text-xs">
+                      Hiện tại chưa có nhiệm vụ nào trong hàng đợi điều phối. Bấm &quot;Tạo Nhiệm Vụ Mới&quot; để phát lệnh điều phối.
+                    </div>
+                  ) : (
+                    missionPagination.paginatedItems.map((m) => (
+                      <div key={m.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-mono font-bold text-xs text-blue-700">{m.id}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${m.priority === 'Cao' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-700'
+                              }`}>
+                              Ưu Tiên: {m.priority}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500">Gán cho: <strong>{m.assignedTo}</strong></span>
+                          </div>
+                          <div className="font-bold text-slate-900 text-sm">{m.title}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">Đích đến: <strong>{m.destination}</strong> • ETA: <strong>{m.eta}</strong></div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handlePrioritizeMission(m.id)}
+                            className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs border border-blue-200 cursor-pointer"
+                          >
+                            Đẩy Lên Ưu Tiên
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelMission(m.id)}
+                            className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200 cursor-pointer"
+                          >
+                            Hủy Lệnh
+                          </button>
+                        </div>
+                      </div>
                     ))
                   )}
-                </tbody>
-              </table>
-            </div>
-
-            <Pagination
-              currentPage={amrPagination.currentPage}
-              totalPages={amrPagination.totalPages}
-              totalItems={amrPagination.totalItems}
-              pageSize={amrPagination.pageSize}
-              pageSizeOptions={[4, 6, 12, 24]}
-              onPageChange={amrPagination.setPage}
-              onPageSizeChange={amrPagination.setPageSize}
-              itemLabel="thiết bị AMR"
-            />
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* SUBTAB 3: MISSIONS (Full Missions Manager) */}
-        {/* ============================================================== */}
-        {activeSubTab === 'missions' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Quản Lý Toàn Bộ Nhiệm Vụ Điều Phối</h3>
-                <p className="text-xs text-slate-500">Giám sát các hành trình đang chạy và xếp thứ tự ưu tiên hàng đợi.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowNewMissionModal(true)}
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tạo Nhiệm Vụ Mới</span>
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              {missions.length === 0 ? (
-                <div className="text-center py-12 text-slate-400 text-xs">
-                  Hiện tại chưa có nhiệm vụ nào trong hàng đợi điều phối. Bấm &quot;Tạo Nhiệm Vụ Mới&quot; để phát lệnh điều phối.
                 </div>
-              ) : (
-                missionPagination.paginatedItems.map((m) => (
-                  <div key={m.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono font-bold text-xs text-blue-700">{m.id}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${m.priority === 'Cao' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-700'
-                          }`}>
-                          Ưu Tiên: {m.priority}
-                        </span>
-                        <span className="text-[10px] font-mono text-slate-500">Gán cho: <strong>{m.assignedTo}</strong></span>
-                      </div>
-                      <div className="font-bold text-slate-900 text-sm">{m.title}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">Đích đến: <strong>{m.destination}</strong> • ETA: <strong>{m.eta}</strong></div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handlePrioritizeMission(m.id)}
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold text-xs border border-blue-200 cursor-pointer"
-                      >
-                        Đẩy Lên Ưu Tiên
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCancelMission(m.id)}
-                        className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200 cursor-pointer"
-                      >
-                        Hủy Lệnh
-                      </button>
+                <Pagination
+                  currentPage={missionPagination.currentPage}
+                  totalPages={missionPagination.totalPages}
+                  totalItems={missionPagination.totalItems}
+                  pageSize={missionPagination.pageSize}
+                  pageSizeOptions={[4, 6, 12, 24]}
+                  onPageChange={missionPagination.setPage}
+                  onPageSizeChange={missionPagination.setPageSize}
+                  itemLabel="nhiệm vụ"
+                />
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* SUBTAB: AMR MONITOR & TELEMETRY LOGS */}
+            {/* ============================================================== */}
+            {activeSubTab === 'monitor' && (
+              <div className="space-y-4">
+                <RobotMonitorPage />
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* SUBTAB 4: ANALYTICS (Detailed Metrics) */}
+            {/* ============================================================== */}
+            {activeSubTab === 'analytics' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase font-mono">Tổng Quãng Đường Di Chuyển</span>
+                  <div className="text-3xl font-black font-mono text-slate-900">142.8 km</div>
+                  <p className="text-xs text-emerald-600 font-semibold">+12% so với tuần trước</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase font-mono">Tỉ Lệ Tránh Vật Cản Thành Công</span>
+                  <div className="text-3xl font-black font-mono text-blue-700">99.4%</div>
+                  <p className="text-xs text-slate-500">Dựa trên 1,480 lần phát hiện bằng LiDAR</p>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase font-mono">Thời Gian Hoạt Động (Uptime)</span>
+                  <div className="text-3xl font-black font-mono text-emerald-600">99.92%</div>
+                  <p className="text-xs text-slate-500">Chu kỳ sạc BMS LifePO4 đạt chuẩn</p>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* SUBTAB: MAP & STATIONS SLAM MANAGEMENT */}
+            {/* ============================================================== */}
+            {activeSubTab === 'map-stations' && (
+              <div className="space-y-4">
+                <MapStationManager
+                  tables={mapTables}
+                  robots={mapRobots}
+                  onMapUpdated={(updatedMap) => {
+                    showToast(`Đã đồng bộ bản đồ ${updatedMap.name} (${updatedMap.stations?.length || 0} trạm)!`, 'success');
+                  }}
+                />
+              </div>
+            )}
+
+            {/* ============================================================== */}
+            {/* SUBTAB 5: SETTINGS (SLAM & ROS 2 Parameters) */}
+            {/* ============================================================== */}
+            {activeSubTab === 'settings' && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs max-w-2xl space-y-5">
+                <h3 className="text-base font-extrabold text-slate-900">Cấu Hình Vận Hành LiDAR & SLAM ROS 2</h3>
+                <div className="space-y-4 text-xs">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <span className="font-bold text-slate-800 block">Tần Số Quét LiDAR (LiDAR Scan Rate)</span>
+                      <span className="text-slate-500">Tần số thu nhận đám mây điểm 360 độ</span>
                     </div>
+                    <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-1 rounded border border-slate-200">20 Hz (Chuẩn)</span>
                   </div>
-                ))
-              )}
-            </div>
-
-            <Pagination
-              currentPage={missionPagination.currentPage}
-              totalPages={missionPagination.totalPages}
-              totalItems={missionPagination.totalItems}
-              pageSize={missionPagination.pageSize}
-              pageSizeOptions={[4, 6, 12, 24]}
-              onPageChange={missionPagination.setPage}
-              onPageSizeChange={missionPagination.setPageSize}
-              itemLabel="nhiệm vụ"
-            />
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* SUBTAB: AMR MONITOR & TELEMETRY LOGS */}
-        {/* ============================================================== */}
-        {activeSubTab === 'monitor' && (
-          <div className="space-y-4">
-            <RobotMonitorPage />
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* SUBTAB 4: ANALYTICS (Detailed Metrics) */}
-        {/* ============================================================== */}
-        {activeSubTab === 'analytics' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
-              <span className="text-xs font-bold text-slate-500 uppercase font-mono">Tổng Quãng Đường Di Chuyển</span>
-              <div className="text-3xl font-black font-mono text-slate-900">142.8 km</div>
-              <p className="text-xs text-emerald-600 font-semibold">+12% so với tuần trước</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
-              <span className="text-xs font-bold text-slate-500 uppercase font-mono">Tỉ Lệ Tránh Vật Cản Thành Công</span>
-              <div className="text-3xl font-black font-mono text-blue-700">99.4%</div>
-              <p className="text-xs text-slate-500">Dựa trên 1,480 lần phát hiện bằng LiDAR</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
-              <span className="text-xs font-bold text-slate-500 uppercase font-mono">Thời Gian Hoạt Động (Uptime)</span>
-              <div className="text-3xl font-black font-mono text-emerald-600">99.92%</div>
-              <p className="text-xs text-slate-500">Chu kỳ sạc BMS LifePO4 đạt chuẩn</p>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* SUBTAB: MAP & STATIONS SLAM MANAGEMENT */}
-        {/* ============================================================== */}
-        {activeSubTab === 'map-stations' && (
-          <div className="space-y-4">
-            <MapStationManager
-              tables={mapTables}
-              robots={mapRobots}
-              onMapUpdated={(updatedMap) => {
-                showToast(`Đã đồng bộ bản đồ ${updatedMap.name} (${updatedMap.stations?.length || 0} trạm)!`, 'success');
-              }}
-            />
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* SUBTAB 5: SETTINGS (SLAM & ROS 2 Parameters) */}
-        {/* ============================================================== */}
-        {activeSubTab === 'settings' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs max-w-2xl space-y-5">
-            <h3 className="text-base font-extrabold text-slate-900">Cấu Hình Vận Hành LiDAR & SLAM ROS 2</h3>
-            <div className="space-y-4 text-xs">
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div>
-                  <span className="font-bold text-slate-800 block">Tần Số Quét LiDAR (LiDAR Scan Rate)</span>
-                  <span className="text-slate-500">Tần số thu nhận đám mây điểm 360 độ</span>
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <span className="font-bold text-slate-800 block">Khoảng Cách An Toàn Phanh Dừng</span>
+                      <span className="text-slate-500">Vùng đệm laser giảm tốc tự động</span>
+                    </div>
+                    <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-1 rounded border border-slate-200">0.45 m</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <span className="font-bold text-slate-800 block">Giao Thức Đồng Bộ MQTT Broker</span>
+                      <span className="text-slate-500">Cổng kết nối nội bộ Edge Node LAN</span>
+                    </div>
+                    <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">192.168.1.120:1883</span>
+                  </div>
                 </div>
-                <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-1 rounded border border-slate-200">20 Hz (Chuẩn)</span>
               </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div>
-                  <span className="font-bold text-slate-800 block">Khoảng Cách An Toàn Phanh Dừng</span>
-                  <span className="text-slate-500">Vùng đệm laser giảm tốc tự động</span>
-                </div>
-                <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-1 rounded border border-slate-200">0.45 m</span>
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <div>
-                  <span className="font-bold text-slate-800 block">Giao Thức Đồng Bộ MQTT Broker</span>
-                  <span className="text-slate-500">Cổng kết nối nội bộ Edge Node LAN</span>
-                </div>
-                <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">192.168.1.120:1883</span>
-              </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* ============================================================== */}
-        {/* SUBTAB: EDGE BOX & POS INTEGRATION */}
-        {/* ============================================================== */}
-        {activeSubTab === 'edge-setup' && (
-          <div className="space-y-4">
-            <StoreEdgeSetupPage />
-          </div>
-        )}
+            {/* ============================================================== */}
+            {/* SUBTAB: EDGE BOX & POS INTEGRATION */}
+            {/* ============================================================== */}
+            {activeSubTab === 'edge-setup' && (
+              <div className="space-y-4">
+                <StoreEdgeSetupPage />
+              </div>
+            )}
 
-        {/* ============================================================== */}
-        {/* SUBTAB: SQLITE LOCAL DATABASE & VPS SUPERADMIN SYNC */}
-        {/* ============================================================== */}
-        {activeSubTab === 'sqlite-sync' && (
-          <div className="space-y-4">
-            <LocalSqliteSyncCard />
-          </div>
-        )}
+            {/* ============================================================== */}
+            {/* SUBTAB: SQLITE LOCAL DATABASE & VPS SUPERADMIN SYNC */}
+            {/* ============================================================== */}
+            {activeSubTab === 'sqlite-sync' && (
+              <div className="space-y-4">
+                <LocalSqliteSyncCard />
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -2110,11 +2128,10 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className={`p-2.5 rounded-xl ${
-                  targetRobotForMaintenance.status === 'maintenance'
+                <div className={`p-2.5 rounded-xl ${targetRobotForMaintenance.status === 'maintenance'
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-orange-100 text-orange-700'
-                }`}>
+                  }`}>
                   <Wrench className="w-5 h-5" />
                 </div>
                 <div>
@@ -2147,11 +2164,10 @@ export const AdminTechnicalPage: React.FC = () => {
                 </div>
               </div>
               <div>
-                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-mono ${
-                  targetRobotForMaintenance.status === 'maintenance'
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-mono ${targetRobotForMaintenance.status === 'maintenance'
                     ? 'bg-amber-100 text-amber-800 border border-amber-300'
                     : 'bg-slate-200 text-slate-700'
-                }`}>
+                  }`}>
                   {targetRobotForMaintenance.status === 'maintenance' ? 'ĐANG BẢO TRÌ' : 'HOẠT ĐỘNG THƯỜNG'}
                 </span>
               </div>
@@ -2268,11 +2284,10 @@ export const AdminTechnicalPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmittingMaintenance || !maintenancePinInput.trim()}
-                  className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm text-white disabled:opacity-50 ${
-                    targetRobotForMaintenance.status === 'maintenance'
+                  className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm text-white disabled:opacity-50 ${targetRobotForMaintenance.status === 'maintenance'
                       ? 'bg-slate-800 hover:bg-slate-900'
                       : 'bg-amber-600 hover:bg-amber-700'
-                  }`}
+                    }`}
                 >
                   {isSubmittingMaintenance && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>
