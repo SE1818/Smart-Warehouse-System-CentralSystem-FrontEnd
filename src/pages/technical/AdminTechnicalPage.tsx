@@ -24,7 +24,19 @@ import {
   Copy,
   Check,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  MapPin,
+  Database,
+  Bot,
+  Navigation,
+  Terminal,
+  Server,
+  Settings,
+  LayoutGrid,
 } from 'lucide-react';
+import { fixMojibake, getUserInitials } from '@/utils/textUtils';
 import { RobotMonitorPage } from './RobotMonitorPage';
 import { StoreEdgeSetupPage } from './StoreEdgeSetupPage';
 import { LocalSqliteSyncCard } from '@/components/technical/LocalSqliteSyncCard';
@@ -86,10 +98,30 @@ interface MissionQueueItem {
 export const AdminTechnicalPage: React.FC = () => {
   // Navigation Sub-tabs
   const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'map-stations' | 'robots' | 'missions' | 'monitor' | 'edge-setup' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('tech_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   const [selectedAmr, setSelectedAmr] = useState<AMRNode | null>(null);
   const [emergencyStop, setEmergencyStop] = useState(false);
   const [_loading, setLoading] = useState(true);
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('tech_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   // In-page Toast Notifications
   const [toastMessage, setToastMessage] = useState<{ id: number; text: string; type: 'success' | 'info' | 'warning' } | null>(null);
@@ -668,8 +700,290 @@ export const AdminTechnicalPage: React.FC = () => {
     showToast(`Đã tạo và phát lệnh nhiệm vụ ${created.id} cho ${created.assignedTo}!`, 'success');
   };
 
+  const cleanTechName = fixMojibake(
+    currentUser?.name || currentUser?.email?.split('@')[0] || 'Kỹ Thuật Viên'
+  );
+  const cleanTechEmail =
+    currentUser?.email || (tenantSlug ? `tech@${tenantSlug}.vn` : 'technical@vora.vn');
+  const techInitials = getUserInitials(cleanTechName);
+
+  type TechSubTab = typeof activeSubTab;
+  const techNavGroups: {
+    groupTitle: string;
+    items: { id: TechSubTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[];
+  }[] = [
+    {
+      groupTitle: 'ĐIỀU PHỐI & BẢN ĐỒ',
+      items: [
+        { id: 'dashboard', label: 'Dashboard Tổng Quan', icon: LayoutGrid },
+        { id: 'map-stations', label: 'Bản Đồ & Trạm (SLAM)', icon: MapPin },
+        { id: 'robots', label: 'Đội Xe Robots', icon: Bot, badge: String(amrNodes.length) },
+        { id: 'missions', label: 'Hàng Đợi Missions', icon: Navigation, badge: String(missions.length) },
+      ],
+    },
+    {
+      groupTitle: 'HẠ TẦNG & TELEMETRY',
+      items: [
+        { id: 'monitor', label: 'AMR Monitor & Logs', icon: Terminal },
+        { id: 'sqlite-sync', label: 'SQLite & VPS Sync', icon: Database },
+        { id: 'edge-setup', label: 'Edge Box & POS', icon: Server },
+        { id: 'analytics', label: 'Analytics & Hiệu Suất', icon: BarChart3 },
+        { id: 'settings', label: 'Cấu Hình SLAM / ROS2', icon: Settings },
+      ],
+    },
+  ];
+
+  const activeTechTabLabel =
+    techNavGroups.flatMap((g) => g.items).find((i) => i.id === activeSubTab)?.label || 'Dashboard Tổng Quan';
+
+  const handleTechLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+  };
+
+  const renderTechSidebarContent = (collapsed: boolean) => (
+    <div className="flex flex-col h-full bg-white text-slate-700 select-none overflow-hidden">
+      {/* Brand Header */}
+      <div className="h-16 px-4 flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/40 shrink-0">
+        <Link
+          to="/technical"
+          onClick={() => setIsMobileMenuOpen(false)}
+          className={`flex items-center gap-3 transition-opacity ${collapsed ? 'justify-center w-full' : ''}`}
+          title="Trang Điều Phối Kỹ Thuật AMR"
+        >
+          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 shadow-2xs p-1 flex items-center justify-center shrink-0">
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
+          </div>
+          {!collapsed && (
+            <div className="overflow-hidden">
+              <div className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-1.5">
+                <span className="font-display">VORA FMS</span>
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-md font-mono font-extrabold bg-blue-50 text-blue-700 border border-blue-200/90 tracking-wider">
+                  CENTRAL OS
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 truncate mt-0.5 font-medium">
+                Điều Phối Kỹ Thuật AMR
+              </div>
+            </div>
+          )}
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="lg:hidden p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
+          aria-label="Đóng thanh điều hướng"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Tenant & Telemetry Context Banner */}
+      {!collapsed && (
+        <div className="px-3 py-2.5 mx-3 mt-3 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-2 shrink-0 shadow-2xs">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-200/90 shadow-2xs">
+                <Store className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="truncate">
+                <span
+                  className="text-xs font-extrabold text-slate-900 block truncate tracking-tight"
+                  title={currentUser?.tenantName || tenantSlug || 'VORA Fleet'}
+                >
+                  {currentUser?.tenantName || (tenantSlug ? tenantSlug.toUpperCase() : 'VORA Fleet')}
+                </span>
+                <span className="text-[11px] text-slate-500 block truncate font-mono">
+                  {signalRStatus === 'connected'
+                    ? 'SignalR: Trực Tuyến'
+                    : signalRStatus === 'connecting'
+                      ? 'SignalR: Đang kết nối...'
+                      : 'SignalR: Ngoại tuyến'}
+                </span>
+              </div>
+            </div>
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                signalRStatus === 'connected'
+                  ? 'bg-emerald-500 ring-4 ring-emerald-500/15'
+                  : signalRStatus === 'connecting'
+                    ? 'bg-amber-400 animate-pulse'
+                    : 'bg-slate-400'
+              }`}
+              title="Trạng thái SignalR Hub"
+            />
+          </div>
+
+          {emergencyStop && (
+            <div className="px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5 animate-pulse">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <span className="truncate">CẢNH BÁO: ĐANG E-STOP</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Navigation Groups */}
+      <div className="flex-1 overflow-y-auto py-3.5 px-3 space-y-4">
+        {techNavGroups.map((group) => (
+          <div key={group.groupTitle} className="space-y-1">
+            {!collapsed && (
+              <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
+                {group.groupTitle}
+              </div>
+            )}
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeSubTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveSubTab(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
+                    } ${collapsed ? 'justify-center px-0' : ''}`}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                    </div>
+                    {!collapsed && (
+                      <div className="flex-1 flex items-center justify-between overflow-hidden gap-1.5">
+                        <span className="truncate">{item.label}</span>
+                        {item.badge !== undefined && (
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono tabular-nums ${
+                              isActive
+                                ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Telemetry Card & Quick Switch */}
+      {!collapsed && (
+        <div className="p-3 mx-3 mb-2.5 rounded-xl bg-slate-50/90 border border-slate-200/90 text-xs text-slate-700 space-y-2 shrink-0 shadow-2xs">
+          <div className="flex items-center justify-between font-bold text-slate-900">
+            <span className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-tight">
+              <Zap className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span>FMS Core / ROS 2 Live</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="px-2 py-1.5 rounded-lg bg-white border border-slate-200/80">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                ĐỘI XE AMR
+              </div>
+              <div className="text-[11px] font-mono font-bold text-slate-800 truncate tabular-nums mt-0.5">
+                {amrNodes.length} Robot
+              </div>
+            </div>
+            <div className="px-2 py-1.5 rounded-lg bg-white border border-slate-200/80">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                MISSIONS
+              </div>
+              <div className="text-[11px] font-mono font-bold text-blue-600 truncate tabular-nums mt-0.5">
+                {missions.length} Lệnh
+              </div>
+            </div>
+          </div>
+          <Link
+            to="/staff"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 text-[11px] font-bold transition-colors"
+            title="Chuyển sang Giao diện Phục Vụ / KDS Bếp"
+          >
+            <span className="flex items-center gap-1.5">
+              <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Mở Giao Diện KDS Bếp</span>
+            </span>
+            <ChevronRight className="w-3.5 h-3.5 text-emerald-500" />
+          </Link>
+        </div>
+      )}
+
+      {/* User Footer */}
+      <div className="px-3 py-2.5 border-t border-slate-200/80 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0">
+        <div className={`flex items-center gap-2.5 overflow-hidden ${collapsed ? 'justify-center w-full' : ''}`}>
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center font-extrabold text-xs shrink-0 shadow-2xs bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200/90 text-blue-700 font-mono"
+            title={cleanTechName}
+          >
+            {techInitials}
+          </div>
+          {!collapsed && (
+            <div className="truncate">
+              <div className="text-xs font-extrabold text-slate-900 truncate" title={cleanTechName}>
+                {cleanTechName}
+              </div>
+              <div className="text-[11px] text-slate-500 truncate font-mono" title={cleanTechEmail}>
+                {cleanTechEmail}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!collapsed && (
+          <Link
+            to="/login"
+            onClick={handleTechLogout}
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="Đăng xuất khỏi hệ thống"
+          >
+            <LogOut className="w-4 h-4" />
+          </Link>
+        )}
+      </div>
+
+      {/* Desktop Collapse / Expand Rail Button */}
+      <div className="hidden lg:block px-3 py-1.5 border-t border-slate-200/80 bg-slate-50/30 shrink-0">
+        <button
+          type="button"
+          onClick={toggleSidebarCollapse}
+          className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors font-semibold cursor-pointer"
+          title={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}
+        >
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <>
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Thu gọn menu</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-900 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className="fixed inset-0 flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast Notification Container */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none animate-in slide-in-from-top-2 duration-200">
@@ -687,204 +1001,176 @@ export const AdminTechnicalPage: React.FC = () => {
         </div>
       )}
 
-      {/* TOP HEADER: Dark Navy Banner Matching Reference Image 1 */}
-      <header className="h-14 sm:h-16 px-3 sm:px-6 bg-[#0A192F] text-white flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-md">
-        {/* Brand & Title */}
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          <Link to="/technical" className="flex items-center gap-2 group shrink-0" title="Trang Điều Phối Kỹ Thuật AMR">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-slate-700/80 p-1 flex items-center justify-center shadow-[0_0_16px_rgba(0,98,255,0.35)] group-hover:border-[#00D2FF] group-hover:shadow-[0_0_20px_rgba(0,210,255,0.5)] transition-all shrink-0">
-              <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-black text-base sm:text-lg tracking-tight text-white font-heading group-hover:text-[#00D2FF] transition-colors">
-                VORA
-              </span>
-              <span className="hidden sm:inline-flex text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/40">
-                CENTRAL OS
-              </span>
-              {tenantSlug ? (
-                <span className="hidden md:inline-flex text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40">
-                  Tenant: {currentUser?.tenantName || tenantSlug.toUpperCase()}
-                </span>
-              ) : null}
-            </div>
-          </Link>
+      {/* Desktop Fixed App Shell Sidebar */}
+      <aside
+        className={`hidden lg:flex flex-col shrink-0 h-full transition-all duration-200 border-r border-slate-200/80 bg-white z-30 ${
+          isSidebarCollapsed ? 'w-20' : 'w-[268px]'
+        }`}
+      >
+        {renderTechSidebarContent(isSidebarCollapsed)}
+      </aside>
 
-          <div className="h-4 w-px bg-slate-700 hidden md:block shrink-0" />
-
-          <div className="min-w-0 hidden md:block">
-            <div className="text-xs sm:text-sm font-extrabold text-white tracking-wide uppercase flex items-center gap-2 font-mono truncate">
-              <span className="truncate">FLEET COMMAND CENTER - AMR ORCHESTRATION</span>
-              <span className="hidden lg:inline-flex text-[10px] bg-blue-500/20 text-blue-300 border border-blue-400/40 px-2 py-0.5 rounded-full font-bold">
-                LiDAR v3.4 Live
-              </span>
-            </div>
+      {/* Mobile Slide-Over Drawer */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 bg-white">
+            {renderTechSidebarContent(false)}
           </div>
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-
-          {/* Manual Refresh Button */}
-          <button
-            type="button"
-            onClick={() => {
-              loadData();
-              showToast('Đang làm mới dữ liệu từ máy chủ...', 'info');
-            }}
-            className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 hover:text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-            title="Làm mới toàn bộ dữ liệu"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-            <span className="hidden md:inline">Làm Mới</span>
-          </button>
-
-          {/* User Actions */}
-          <div className="flex items-center gap-1.5">
-            <Link
-              to="/staff"
-              className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-emerald-600/50 bg-emerald-950/40 hover:bg-emerald-900/60 text-xs font-bold text-emerald-300 hover:text-emerald-100 transition-all shadow-xs flex items-center gap-1.5"
-              title="Chuyển sang Giao diện Phục Vụ / KDS Bếp (Staff Console)"
-            >
-              <Store className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">KDS Bếp</span>
-            </Link>
-            <Link
-              to="/login"
-              onClick={() => {
-                localStorage.removeItem('authToken');
-                localStorage.removeItem('refreshToken');
-                localStorage.removeItem('user');
-              }}
-              className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-rose-950/60 hover:border-rose-600/60 text-xs font-bold text-slate-300 hover:text-rose-200 transition-all shadow-xs flex items-center gap-1.5"
-              title="Đăng xuất khỏi hệ thống"
-            >
-              <LogOut className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden sm:inline">Đăng Xuất</span>
-            </Link>
-          </div>
-
-          {/* Simulation Toggle Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsSimulationRunning((prev) => !prev);
-              showToast(isSimulationRunning ? 'Đã tạm dừng mô phỏng chuyển động robot.' : 'Đã tiếp tục mô phỏng robot.', 'info');
-            }}
-            className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${isSimulationRunning
-                ? 'bg-slate-800 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700'
-                : 'bg-amber-950/80 border-amber-600 text-amber-300'
-              }`}
-            title="Tạm dừng hoặc chạy tiếp mô phỏng chuyển động AMR"
-          >
-            {isSimulationRunning ? (
-              <>
-                <Pause className="w-3.5 h-3.5 text-blue-400" />
-                <span>Mô Phỏng: Bật</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5 text-amber-400" />
-                <span>Mô Phỏng: Dừng</span>
-              </>
-            )}
-          </button>
-
-          {/* Global E-Stop Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setEmergencyStop((prev) => !prev);
-              showToast(emergencyStop ? 'Khôi phục vận hành đội xe bình thường!' : 'CẢNH BÁO: ĐÃ KÍCH HOẠT DỪNG KHẨN CẤP TOÀN BỘ AMR!', emergencyStop ? 'success' : 'warning');
-            }}
-            className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${emergencyStop
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
-                : 'bg-rose-600 hover:bg-rose-500 text-white'
-              }`}
-            title={emergencyStop ? 'Khôi phục vận hành' : 'Dừng khẩn cấp toàn bộ AMR'}
-          >
-            <AlertTriangle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">
-              {emergencyStop ? 'Khôi Phục Vận Hành' : 'Dừng Khẩn Cấp (E-Stop)'}
-            </span>
-            <span className="sm:hidden">{emergencyStop ? 'Khôi Phục' : 'E-Stop'}</span>
-          </button>
-        </div>
-      </header>
-
-      {/* SUB-NAVIGATION TABS (Dashboard | Robots | Missions | Monitor | Edge-Setup | Analytics | Settings) */}
-      <div className="h-12 px-3 sm:px-6 bg-white border-b border-slate-200 flex items-center justify-between text-xs shadow-2xs overflow-x-auto no-scrollbar sticky top-14 sm:top-16 z-20">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {[
-            { id: 'dashboard', label: 'Dashboard', desc: 'Bản Đồ & Tổng Quan' },
-            { id: 'map-stations', label: 'Bản Đồ & Trạm (SLAM)', desc: 'Upload Sơ Đồ & Cấu Hình Waypoint' },
-            { id: 'sqlite-sync', label: 'SQLite & VPS Sync', desc: 'CSDL Cục Bộ & Kênh Ngầm' },
-            { id: 'robots', label: `Robots (${amrNodes.length})`, desc: 'Chi Tiết Đội Xe' },
-            { id: 'missions', label: `Missions (${missions.length})`, desc: 'Hàng Đợi Lệnh' },
-            { id: 'monitor', label: 'AMR Monitor & Logs', desc: 'Giám Sát Trực Tuyến' },
-            { id: 'edge-setup', label: 'Edge Box & POS', desc: 'Trạm IoT & POS' },
-            { id: 'analytics', label: 'Analytics', desc: 'Báo Cáo Telemetry' },
-            { id: 'settings', label: 'Settings', desc: 'Cấu Hình SLAM / ROS2' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveSubTab(tab.id as any)}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap text-[11px] sm:text-xs ${activeSubTab === tab.id
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-            >
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="hidden md:flex items-center gap-4 text-[11px] text-slate-500 font-mono">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                signalRStatus === 'connected'
-                  ? 'bg-emerald-500 shadow-[0_0_6px_#10B981]'
-                  : signalRStatus === 'connecting'
-                  ? 'bg-amber-400 animate-pulse'
-                  : 'bg-slate-400'
-              }`}
-            />
-            <span>
-              SignalR Hub: {signalRStatus === 'connected' ? 'Trực Tuyến (Live)' : signalRStatus === 'connecting' ? 'Đang kết nối...' : 'Ngoại tuyến'}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-blue-600" />
-            <span>FMS Core / ROS 2 Live</span>
-          </div>
-        </div>
-      </div>
-
-      {/* EMERGENCY STOP TOP BANNER */}
-      {emergencyStop && (
-        <div className="bg-rose-50 border-b border-rose-300 px-6 py-2.5 text-rose-800 text-xs font-bold flex items-center justify-between animate-pulse">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>HỆ THỐNG ĐANG Ở TRẠNG THÁI DỪNG KHẨN CẤP (E-STOP). MỌI AMR ĐÃ PHANH DỪNG TẠI CHỖ.</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setEmergencyStop(false)}
-            className="px-3 py-1 rounded bg-rose-600 text-white hover:bg-rose-700 text-xs cursor-pointer font-semibold"
-          >
-            Khôi Phục Ngay
-          </button>
         </div>
       )}
 
-      {/* MAIN VIEW CONTENT CONTAINER */}
-      <main className="flex-1 p-3 sm:p-5 lg:p-6 max-w-[1920px] mx-auto w-full">
-        {/* ============================================================== */}
-        {/* SUBTAB 1: DASHBOARD (Matching Reference Image 1) */}
-        {/* ============================================================== */}
-        {activeSubTab === 'dashboard' && (
+      {/* Main Operational Workspace Canvas */}
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <header className="shrink-0 z-20 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs flex items-center justify-between px-4 sm:px-6 gap-3">
+          {/* Left: Mobile Trigger & Breadcrumb */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+              aria-label="Mở menu điều hướng"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0">
+              <span className="font-bold text-slate-800 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/70">
+                <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+                <span>FLEET COMMAND</span>
+              </span>
+              {tenantSlug && (
+                <>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden md:inline shrink-0" />
+                  <span className="hidden md:inline-flex text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/80 truncate max-w-[160px]">
+                    {currentUser?.tenantName || tenantSlug.toUpperCase()}
+                  </span>
+                </>
+              )}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden sm:inline shrink-0" />
+              <span className="font-extrabold text-blue-700 bg-gradient-to-r from-blue-50 to-indigo-50/60 px-3 py-1 rounded-lg border border-blue-200/80 shadow-2xs truncate">
+                {activeTechTabLabel}
+              </span>
+              <span className="hidden xl:inline-flex text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
+                LiDAR v3.4 Live
+              </span>
+            </nav>
+          </div>
+
+          {/* Right Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Manual Refresh Button */}
+            <button
+              type="button"
+              onClick={() => {
+                loadData();
+                showToast('Đang làm mới dữ liệu từ máy chủ...', 'info');
+              }}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200/90 bg-slate-50 hover:bg-blue-50 text-xs font-bold text-slate-700 hover:text-blue-700 hover:border-blue-200 transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+              title="Làm mới toàn bộ dữ liệu"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden md:inline">Làm Mới</span>
+            </button>
+
+            {/* Simulation Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsSimulationRunning((prev) => !prev);
+                showToast(isSimulationRunning ? 'Đã tạm dừng mô phỏng chuyển động robot.' : 'Đã tiếp tục mô phỏng robot.', 'info');
+              }}
+              className={`hidden xl:flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                isSimulationRunning
+                  ? 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                  : 'bg-amber-50 border-amber-300 text-amber-800'
+              }`}
+              title="Tạm dừng hoặc chạy tiếp mô phỏng chuyển động AMR"
+            >
+              {isSimulationRunning ? (
+                <>
+                  <Pause className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Mô Phỏng: Bật</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Mô Phỏng: Dừng</span>
+                </>
+              )}
+            </button>
+
+            {/* KDS Switcher */}
+            <Link
+              to="/staff"
+              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-xs font-bold text-emerald-700 transition-all shadow-2xs flex items-center gap-1.5"
+              title="Chuyển sang Giao diện Phục Vụ / KDS Bếp (Staff Console)"
+            >
+              <Store className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden md:inline">KDS Bếp</span>
+            </Link>
+
+            {/* Global E-Stop Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setEmergencyStop((prev) => !prev);
+                showToast(emergencyStop ? 'Khôi phục vận hành đội xe bình thường!' : 'CẢNH BÁO: ĐÃ KÍCH HOẠT DỪNG KHẨN CẤP TOÀN BỘ AMR!', emergencyStop ? 'success' : 'warning');
+              }}
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all active:scale-[0.97] cursor-pointer ${
+                emergencyStop
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/25 animate-pulse'
+                  : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white shadow-sm shadow-rose-600/20 border border-rose-500/30'
+              }`}
+              title={emergencyStop ? 'Khôi phục vận hành' : 'Dừng khẩn cấp toàn bộ AMR'}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">
+                {emergencyStop ? 'Khôi Phục Vận Hành' : 'Dừng Khẩn Cấp (E-Stop)'}
+              </span>
+              <span className="sm:hidden">{emergencyStop ? 'Khôi Phục' : 'E-Stop'}</span>
+            </button>
+
+            <Link
+              to="/login"
+              onClick={handleTechLogout}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs flex items-center gap-1.5"
+              title="Đăng xuất khỏi hệ thống"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              <span className="hidden sm:inline">Đăng Xuất</span>
+            </Link>
+          </div>
+        </header>
+
+        {/* EMERGENCY STOP TOP BANNER */}
+        {emergencyStop && (
+          <div className="bg-rose-50 border-b border-rose-300 px-6 py-2.5 text-rose-800 text-xs font-bold flex items-center justify-between animate-pulse shrink-0">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>HỆ THỐNG ĐANG Ở TRẠNG THÁI DỪNG KHẨN CẤP (E-STOP). MỌI AMR ĐÃ PHANH DỪNG TẠI CHỖ.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEmergencyStop(false)}
+              className="px-3 py-1 rounded bg-rose-600 text-white hover:bg-rose-700 text-xs cursor-pointer font-semibold"
+            >
+              Khôi Phục Ngay
+            </button>
+          </div>
+        )}
+
+        {/* MAIN VIEW CONTENT CONTAINER */}
+        <main className="flex-1 overflow-y-auto bg-transparent p-3 sm:p-5 lg:p-6">
+          <div className="max-w-[1920px] mx-auto w-full">
+            {/* ============================================================== */}
+            {/* SUBTAB 1: DASHBOARD (Matching Reference Image 1) */}
+            {/* ============================================================== */}
+            {activeSubTab === 'dashboard' && (
           <div className="space-y-4 sm:space-y-5">
             {/* Local SQLite Storage & VPS Sync Status Card */}
             <LocalSqliteSyncCard />
@@ -1729,7 +2015,9 @@ export const AdminTechnicalPage: React.FC = () => {
             <LocalSqliteSyncCard />
           </div>
         )}
-      </main>
+          </div>
+        </main>
+      </div>
 
       {/* NEW MISSION MODAL */}
       {showNewMissionModal && (

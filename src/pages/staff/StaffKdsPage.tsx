@@ -30,6 +30,7 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
+  Menu,
 } from "lucide-react";
 import type { Station } from "@/types/robot";
 import {
@@ -49,7 +50,7 @@ import {
 import { sqliteService } from "@/services/sqliteService";
 import apiClient from "@/services/api";
 import { useRobotStore } from "@/stores/robotStore";
-import { fixMojibake } from "@/utils/textUtils";
+import { fixMojibake, getUserInitials } from "@/utils/textUtils";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/common/Pagination";
 import { SlamFloorMapViewer } from "@/components/map/SlamFloorMapViewer";
@@ -204,6 +205,26 @@ export const StaffKdsPage: React.FC = () => {
   const [_isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedTableId, setSelectedTableId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "slam-map">("slam-map");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("kds_sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("kds_sidebar_collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   // 2-Tray Setup: Khay 1 (tầng dưới) & Khay 2 (tầng trên) with independent active toggles & Multi-Table support
   const [isTray1Active, setIsTray1Active] = useState<boolean>(true);
@@ -1995,8 +2016,397 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
+  const kdsUser = useMemo(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const cleanKdsUserName = fixMojibake(
+    kdsUser?.name || kdsUser?.email?.split("@")[0] || "Nhân Viên KDS",
+  );
+  const cleanKdsUserEmail =
+    kdsUser?.email || (_subdomain ? `kds@${_subdomain}.vn` : "kds@vora.vn");
+  const kdsUserInitials = getUserInitials(cleanKdsUserName);
+
+  const handleKdsLogout = () => {
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
+  };
+
+  const handleOpenQuickCreateTable = () => {
+    const nextNum = (tables.length + 1).toString().padStart(2, "0");
+    setNewTableNo(`T${nextNum}`);
+    setNewTableName(`Bàn ${nextNum}`);
+    setNewTableCapacity(4);
+    setNewTableStationId("");
+    setNewTableZone("Khu Bàn Ăn");
+    setIsCreateTableModalOpen(true);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleOpenQuickAssignStation = () => {
+    setAssignStationTableId(currentSelectedTable.id);
+    setAssignStationTargetStationId(currentSelectedTable.stationId || "");
+    setIsAssignStationModalOpen(true);
+    setIsMobileMenuOpen(false);
+  };
+
+  const readyRobotsCount = robots.filter((r) => r.status === "idle").length;
+  const waitingTablesCount = tables.filter((t) => t.status === "waiting").length;
+
+  const renderKdsSidebarContent = (collapsed: boolean) => (
+    <div className="flex flex-col h-full bg-white text-slate-700 select-none overflow-hidden">
+      {/* Brand Header */}
+      <div className="h-16 px-4 flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/40 shrink-0">
+        <Link
+          to="/staff"
+          onClick={() => setIsMobileMenuOpen(false)}
+          className={`flex items-center gap-3 transition-opacity ${
+            collapsed ? "justify-center w-full" : ""
+          }`}
+          title="VORA Staff KDS"
+        >
+          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/90 shadow-2xs p-1 flex items-center justify-center shrink-0">
+            <img
+              src="/brand/vora-icon.png"
+              alt="VORA Emblem"
+              className="w-full h-full object-contain"
+            />
+          </div>
+          {!collapsed && (
+            <div className="overflow-hidden">
+              <div className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-1.5">
+                <span className="font-display">VORA KDS</span>
+                <span className="text-[9px] uppercase px-1.5 py-0.5 rounded-md font-mono font-extrabold bg-blue-50 text-blue-700 border border-blue-200/90 tracking-wider">
+                  STAFF WEB
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-500 truncate mt-0.5 font-medium">
+                Hệ Thống Điều Phối Bếp &amp; AMR
+              </div>
+            </div>
+          )}
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="lg:hidden p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
+          aria-label="Đóng thanh điều hướng"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Store Identity Card */}
+      {!collapsed && (
+        <div className="px-3 py-2.5 mx-3 mt-3 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-1.5 shrink-0 shadow-2xs">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 border border-emerald-200/90 shadow-2xs">
+                <Store className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="truncate">
+                <span
+                  className="text-xs font-extrabold text-slate-900 block truncate tracking-tight"
+                  title={storeName}
+                >
+                  {storeName}
+                </span>
+                <span className="text-[11px] text-slate-500 block truncate font-mono">
+                  Bếp Trung Tâm • {isSignalRConnected ? "Realtime Live" : "Đang kết nối"}
+                </span>
+              </div>
+            </div>
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                isSignalRConnected
+                  ? "bg-emerald-500 ring-4 ring-emerald-500/15"
+                  : "bg-amber-400 animate-pulse"
+              }`}
+              title={isSignalRConnected ? "SignalR Realtime Đã Kết Nối" : "Đang kết nối SignalR"}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Groups */}
+      <div className="flex-1 overflow-y-auto py-3.5 px-3 space-y-4">
+        {/* Group 1: View Mode */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
+              CHẾ ĐỘ HIỂN THỊ SƠ ĐỒ
+            </div>
+          )}
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("slam-map");
+                setIsMobileMenuOpen(false);
+              }}
+              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
+                viewMode === "slam-map"
+                  ? "bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent"
+              } ${collapsed ? "justify-center px-0" : ""}`}
+              title={collapsed ? "Bản Đồ SLAM (ROS 2)" : undefined}
+            >
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  viewMode === "slam-map"
+                    ? "bg-blue-600 text-white shadow-2xs"
+                    : "bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700"
+                }`}
+              >
+                <MapIcon className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              {!collapsed && <span className="truncate">Bản Đồ SLAM (ROS 2)</span>}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("grid");
+                setIsMobileMenuOpen(false);
+              }}
+              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
+                viewMode === "grid"
+                  ? "bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent"
+              } ${collapsed ? "justify-center px-0" : ""}`}
+              title={collapsed ? "Dạng Thẻ Bàn (Grid)" : undefined}
+            >
+              <div
+                className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  viewMode === "grid"
+                    ? "bg-blue-600 text-white shadow-2xs"
+                    : "bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700"
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              {!collapsed && (
+                <div className="flex-1 flex items-center justify-between overflow-hidden gap-1.5">
+                  <span className="truncate">Dạng Thẻ Bàn (Grid)</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono tabular-nums ${
+                      viewMode === "grid"
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "bg-slate-100 text-slate-600 border-slate-200"
+                    }`}
+                  >
+                    {tables.length} Bàn
+                  </span>
+                </div>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Group 2: Quick Table & Station Operations */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
+              THAO TÁC BÀN &amp; TRẠM NHANH
+            </div>
+          )}
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={handleOpenQuickCreateTable}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-blue-700 hover:bg-blue-50/70 border border-transparent hover:border-blue-200/70 transition-all group cursor-pointer ${
+                collapsed ? "justify-center px-0" : ""
+              }`}
+              title="Thêm Bàn Ăn Mới"
+            >
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              {!collapsed && <span className="truncate">Thêm Bàn Ăn Mới</span>}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenQuickAssignStation}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-purple-700 hover:bg-purple-50/70 border border-transparent hover:border-purple-200/70 transition-all group cursor-pointer ${
+                collapsed ? "justify-center px-0" : ""
+              }`}
+              title="Gán Trạm Robot (SLAM)"
+            >
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              {!collapsed && <span className="truncate">Gán Trạm Robot (SLAM)</span>}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleOpenWorkflowRerouteModal();
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-amber-700 hover:bg-amber-50/70 border border-transparent hover:border-amber-200/70 transition-all group cursor-pointer ${
+                collapsed ? "justify-center px-0" : ""
+              }`}
+              title="Đổi Bàn Giao Món"
+            >
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                <ArrowRightLeft className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              {!collapsed && <span className="truncate">Đổi Bàn Giao Món</span>}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setImportResult(null);
+                setImportCsvFile(null);
+                setIsImportCsvModalOpen(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-emerald-700 hover:bg-emerald-50/70 border border-transparent hover:border-emerald-200/70 transition-all group cursor-pointer ${
+                collapsed ? "justify-center px-0" : ""
+              }`}
+              title="Nhập Bàn Excel / CSV"
+            >
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+              </div>
+              {!collapsed && <span className="truncate">Nhập Bàn Excel / CSV</span>}
+            </button>
+          </div>
+        </div>
+
+        {/* Group 3: Switch Interface */}
+        <div className="space-y-1">
+          {!collapsed && (
+            <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
+              CHUYỂN GIAO DIỆN
+            </div>
+          )}
+          <Link
+            to="/technical"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-blue-700 hover:bg-blue-50/80 border border-transparent hover:border-blue-200/80 transition-all group ${
+              collapsed ? "justify-center px-0" : ""
+            }`}
+            title="Quản Trị Kỹ Thuật AMR"
+          >
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-slate-100 text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              <Cpu className="w-3.5 h-3.5 shrink-0" />
+            </div>
+            {!collapsed && <span className="truncate">Quản Trị Kỹ Thuật AMR</span>}
+          </Link>
+        </div>
+      </div>
+
+      {/* Telemetry Status Card */}
+      {!collapsed && (
+        <div className="p-3 mx-3 mb-2.5 rounded-xl bg-slate-50/90 border border-slate-200/90 text-xs text-slate-700 space-y-2 shrink-0 shadow-2xs">
+          <div className="flex items-center justify-between font-bold text-slate-900">
+            <span className="flex items-center gap-2 text-[11px] font-extrabold tracking-tight">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  isSignalRConnected
+                    ? "bg-emerald-500 shadow-[0_0_6px_#10B981] animate-pulse"
+                    : "bg-amber-400 animate-pulse"
+                }`}
+              />
+              <span>Trạng Thái Bếp &amp; AMR</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="px-2 py-1.5 rounded-lg bg-white border border-slate-200/80">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                ROBOT
+              </div>
+              <div className="text-[11px] font-mono font-bold text-emerald-600 truncate tabular-nums mt-0.5">
+                {readyRobotsCount} Sẵn
+              </div>
+            </div>
+            <div className="px-2 py-1.5 rounded-lg bg-white border border-slate-200/80">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                CHỜ MÓN
+              </div>
+              <div className="text-[11px] font-mono font-bold text-amber-600 truncate tabular-nums mt-0.5">
+                {waitingTablesCount} Bàn
+              </div>
+            </div>
+            <div className="px-2 py-1.5 rounded-lg bg-white border border-slate-200/80">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                ĐƠN BẾP
+              </div>
+              <div className="text-[11px] font-mono font-bold text-blue-600 truncate tabular-nums mt-0.5">
+                {pendingOrders.length} Đơn
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Footer */}
+      <div className="px-3 py-2.5 border-t border-slate-200/80 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0">
+        <div className={`flex items-center gap-2.5 overflow-hidden ${collapsed ? "justify-center w-full" : ""}`}>
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center font-extrabold text-xs shrink-0 shadow-2xs bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200/90 text-blue-700 font-mono"
+            title={cleanKdsUserName}
+          >
+            {kdsUserInitials}
+          </div>
+          {!collapsed && (
+            <div className="truncate">
+              <div className="text-xs font-extrabold text-slate-900 truncate" title={cleanKdsUserName}>
+                {cleanKdsUserName}
+              </div>
+              <div className="text-[11px] text-slate-500 truncate font-mono" title={cleanKdsUserEmail}>
+                {cleanKdsUserEmail}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!collapsed && (
+          <Link
+            to="/login"
+            onClick={handleKdsLogout}
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="Đăng xuất khỏi hệ thống"
+          >
+            <LogOut className="w-4 h-4" />
+          </Link>
+        )}
+      </div>
+
+      {/* Desktop Collapse / Expand Rail Button */}
+      <div className="hidden lg:block px-3 py-1.5 border-t border-slate-200/80 bg-slate-50/30 shrink-0">
+        <button
+          type="button"
+          onClick={toggleSidebarCollapse}
+          className="w-full flex items-center justify-center gap-1.5 py-1 text-[11px] text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors font-semibold cursor-pointer"
+          title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+        >
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <>
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Thu gọn menu</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen min-h-[100dvh] h-[100dvh] overflow-y-auto bg-slate-100 text-slate-800 flex flex-col font-sans antialiased selection:bg-blue-600 selection:text-white">
+    <div className="fixed inset-0 flex h-screen w-screen overflow-hidden bg-slate-100 text-slate-800 font-sans antialiased selection:bg-blue-600 selection:text-white">
       {/* Toast notifications */}
       <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
@@ -2013,76 +2423,120 @@ export const StaffKdsPage: React.FC = () => {
           </div>
         ))}
       </div>
-      {/* Staff Touch Header */}
-      <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white border-b border-slate-200 shadow-2xs flex items-center justify-between shrink-0 sticky top-0 z-30">
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          <Link
-            to="/staff"
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white border border-slate-200/90 shadow-xs p-1 flex items-center justify-center group hover:border-[#0062FF]/60 hover:shadow-[0_0_16px_rgba(0,98,255,0.25)] transition-all shrink-0"
-            title="VORA Staff KDS"
-          >
-            <img
-              src="/brand/vora-icon.png"
-              alt="VORA Emblem"
-              className="w-full h-full object-contain"
-            />
-          </Link>
-          <div>
+
+      {/* Desktop Fixed App Shell Sidebar */}
+      <aside
+        className={`hidden lg:flex flex-col shrink-0 h-full transition-all duration-200 border-r border-slate-200/80 bg-white z-30 ${
+          isSidebarCollapsed ? "w-20" : "w-[268px]"
+        }`}
+      >
+        {renderKdsSidebarContent(isSidebarCollapsed)}
+      </aside>
+
+      {/* Mobile Slide-Over Drawer */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 bg-white">
+            {renderKdsSidebarContent(false)}
+          </div>
+        </div>
+      )}
+
+      {/* Main Operational Workspace Canvas */}
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+        {/* Staff Touch Header */}
+        <header className="shrink-0 z-20 h-14 sm:h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs flex items-center justify-between px-3 sm:px-6 gap-3">
+          {/* Left: Mobile Trigger & Breadcrumbs */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+              aria-label="Mở menu điều hướng"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0">
+              <span
+                className="font-bold text-slate-800 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/70 max-w-[200px]"
+                title={storeName}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 shrink-0" />
+                <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="truncate">{storeName}</span>
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden sm:inline shrink-0" />
+              <span className="hidden md:inline font-semibold text-slate-600 truncate">
+                KDS Bếp Trung Tâm
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden md:inline shrink-0" />
+              <span className="font-extrabold text-blue-700 bg-gradient-to-r from-blue-50 to-indigo-50/60 px-3 py-1 rounded-lg border border-blue-200/80 shadow-2xs truncate">
+                {viewMode === "slam-map" ? "Bản Đồ SLAM" : "Dạng Thẻ Bàn"}
+              </span>
+            </nav>
+          </div>
+
+          {/* Right Switcher & Quick Stats */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="hidden xl:flex items-center gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {readyRobotsCount} Robot Sẵn Sàng
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
+                {waitingTablesCount} Bàn Chờ Ra Món
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setViewMode(viewMode === "slam-map" ? "grid" : "slam-map")}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 text-xs font-bold text-slate-700 hover:text-blue-700 transition-all shadow-2xs cursor-pointer"
+              title="Chuyển nhanh chế độ hiển thị sơ đồ bàn"
+            >
+              {viewMode === "slam-map" ? (
+                <>
+                  <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="hidden md:inline">Thẻ Bàn</span>
+                </>
+              ) : (
+                <>
+                  <MapIcon className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="hidden md:inline">Bản Đồ SLAM</span>
+                </>
+              )}
+            </button>
+
             <div className="flex items-center gap-2">
-              <span className="text-sm sm:text-base font-black text-[#0A192F] tracking-tight font-heading">
-                VORA KDS
-              </span>
-              <span className="text-[9px] sm:text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
-                STAFF WEB
-              </span>
+              <Link
+                to="/technical"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-xs font-bold text-[#0062FF] transition-all shadow-2xs"
+                title="Chuyển sang Quản Trị Kỹ Thuật AMR"
+              >
+                <Cpu className="w-3.5 h-3.5 text-[#0062FF]" />
+                <span className="hidden sm:inline">Kỹ Thuật</span>
+              </Link>
+              <Link
+                to="/login"
+                onClick={handleKdsLogout}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
+                title="Đăng xuất khỏi hệ thống"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                <span className="hidden sm:inline">Đăng Xuất</span>
+              </Link>
             </div>
-            <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-              <Store className="w-3 h-3 text-emerald-600 shrink-0" />
-              <span className="truncate max-w-[140px] sm:max-w-none">
-                {storeName} • Bếp Trung Tâm
-              </span>
-            </div>
           </div>
-        </div>
-        {/* Right Switcher & Quick Stats */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden md:flex items-center gap-3 text-xs">
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {robots.filter((r) => r.status === "idle").length} Robot Sẵn Sàng
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
-              {tables.filter((t) => t.status === "waiting").length} Bàn Chờ Ra
-              Món
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/technical"
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-xs font-bold text-[#0062FF] transition-all shadow-2xs"
-              title="Chuyển sang Quản Trị Kỹ Thuật AMR"
-            >
-              <Cpu className="w-3.5 h-3.5 text-[#0062FF]" />
-              <span className="hidden sm:inline">Kỹ Thuật</span>
-            </Link>
-            <Link
-              to="/login"
-              onClick={() => {
-                localStorage.removeItem("authToken");
-                localStorage.removeItem("refreshToken");
-                localStorage.removeItem("user");
-              }}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-xs font-bold text-slate-600 hover:text-rose-600 transition-all shadow-2xs"
-              title="Đăng xuất khỏi hệ thống"
-            >
-              <LogOut className="w-3.5 h-3.5 text-rose-500" />
-              <span className="hidden sm:inline">Đăng Xuất</span>
-            </Link>
-          </div>
-        </div>
-      </header>
-      {/* Main Staff Operational Canvas */}
-      <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
+        </header>
+
+        {/* Main Staff Operational Canvas */}
+        <main className="flex-1 overflow-y-auto bg-transparent p-3 sm:p-5 lg:p-6 pb-28 lg:pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1920px] mx-auto w-full">
         {/* TASK-24: Assisted Drop-off Last-Mile Handoff Banner */}
         {assistedDropoffAlert && (
           <div className="lg:col-span-12 bg-amber-900/90 border-2 border-amber-400 text-amber-50 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -3979,7 +4433,9 @@ export const StaffKdsPage: React.FC = () => {
             )}
           </div>
         </div>
-      </main>
+          </div>
+        </main>
+      </div>
       {/* STICKY BOTTOM DISPATCH BAR FOR MOBILE TABLETS & POS (Thumb-friendly Action Zone) */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] flex items-center justify-between gap-3 safe-area-pb">
         <div className="flex items-center gap-2.5 min-w-0">
