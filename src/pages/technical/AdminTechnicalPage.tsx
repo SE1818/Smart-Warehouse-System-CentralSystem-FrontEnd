@@ -34,6 +34,10 @@ import {
   Server,
   Settings,
   LayoutGrid,
+  Radio,
+  Layers,
+  Battery,
+  Sliders,
 } from 'lucide-react';
 import { fixMojibake, getUserInitials } from '@/utils/textUtils';
 import { RobotMonitorPage } from './RobotMonitorPage';
@@ -281,6 +285,44 @@ export const AdminTechnicalPage: React.FC = () => {
       robotUtilizationList.reduce((sum, r) => sum + r.utilization, 0) / robotUtilizationList.length
     );
   }, [robotUtilizationList]);
+
+  const fleetTelemetrySummary = useMemo(() => {
+    const total = amrNodes.length;
+    const movingOrActive = amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length;
+    const idle = amrNodes.filter((n) => n.status === 'idle').length;
+    const swapping = amrNodes.filter((n) => n.status === 'swapping_battery').length;
+    const maintenance = amrNodes.filter((n) => n.status === 'maintenance').length;
+    const alertState = amrNodes.filter((n) => n.status === 'alert').length;
+    const avgBattery = total > 0 ? Math.round(amrNodes.reduce((sum, n) => sum + n.battery, 0) / total) : 0;
+    const highBattery = amrNodes.filter((n) => n.battery >= 50).length;
+    const midBattery = amrNodes.filter((n) => n.battery >= 20 && n.battery < 50).length;
+    const lowBattery = amrNodes.filter((n) => n.battery < 20).length;
+    return {
+      total,
+      movingOrActive,
+      idle,
+      swapping,
+      maintenance,
+      alertState,
+      avgBattery,
+      highBattery,
+      midBattery,
+      lowBattery,
+    };
+  }, [amrNodes]);
+
+  const zoneCoverageList = useMemo(() => {
+    const groups = new Map<string, { zone: string; total: number; withStation: number; busy: number }>();
+    tables.forEach((t) => {
+      const zoneName = (t.zone || '').trim() || 'Khu vực chung';
+      const current = groups.get(zoneName) || { zone: zoneName, total: 0, withStation: 0, busy: 0 };
+      current.total += 1;
+      if (t.stationId || t.stationName) current.withStation += 1;
+      if (t.status === 'waiting' || t.status === 'serving' || t.status === 'occupied') current.busy += 1;
+      groups.set(zoneName, current);
+    });
+    return Array.from(groups.values());
+  }, [tables]);
 
   // New Mission Modal State
   const [showNewMissionModal, setShowNewMissionModal] = useState(false);
@@ -746,7 +788,7 @@ export const AdminTechnicalPage: React.FC = () => {
   const renderTechSidebarContent = (collapsed: boolean) => (
     <div className="flex flex-col h-full bg-white text-slate-700 select-none overflow-hidden">
       {/* Brand Header */}
-      <div className="h-16 px-4 flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/40 shrink-0">
+      <div className="h-14 px-3.5 flex items-center justify-between border-b border-slate-200/80 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/40 shrink-0">
         <Link
           to="/technical"
           onClick={() => setIsMobileMenuOpen(false)}
@@ -783,7 +825,7 @@ export const AdminTechnicalPage: React.FC = () => {
 
       {/* Tenant & Telemetry Context Banner */}
       {!collapsed && (
-        <div className="px-3 py-2.5 mx-3 mt-3 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-2 shrink-0 shadow-2xs">
+        <div className="px-2.5 py-1.5 mx-2.5 mt-2 rounded-xl bg-slate-50/90 border border-slate-200/80 space-y-1.5 shrink-0 shadow-2xs">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-200/90 shadow-2xs">
@@ -826,11 +868,11 @@ export const AdminTechnicalPage: React.FC = () => {
       )}
 
       {/* Navigation Groups */}
-      <div className="flex-1 overflow-y-auto py-3.5 px-3 space-y-4">
+      <div className="flex-1 overflow-y-auto py-2 px-2.5 space-y-2">
         {techNavGroups.map((group) => (
-          <div key={group.groupTitle} className="space-y-1">
+          <div key={group.groupTitle} className="space-y-0.5">
             {!collapsed && (
-              <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
+              <div className="px-2.5 pb-0.5 text-[9px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
                 {group.groupTitle}
               </div>
             )}
@@ -846,14 +888,14 @@ export const AdminTechnicalPage: React.FC = () => {
                       setActiveSubTab(item.id);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${isActive
-                        ? 'bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600'
+                    className={`relative w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${isActive
+                        ? 'bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r-full before:bg-blue-600'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent'
                       } ${collapsed ? 'justify-center px-0' : ''}`}
                     title={collapsed ? item.label : undefined}
                   >
                     <div
-                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${isActive
+                      className={`w-5 h-5 rounded-lg flex items-center justify-center shrink-0 transition-colors ${isActive
                           ? 'bg-blue-600 text-white shadow-2xs'
                           : 'bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700'
                         }`}
@@ -885,7 +927,7 @@ export const AdminTechnicalPage: React.FC = () => {
 
       {/* Telemetry Card & Quick Switch */}
       {!collapsed && (
-        <div className="p-3 mx-3 mb-2.5 rounded-xl bg-slate-50/90 border border-slate-200/90 text-xs text-slate-700 space-y-2 shrink-0 shadow-2xs">
+        <div className="p-2 mx-2.5 mb-2 rounded-xl bg-slate-50/90 border border-slate-200/90 text-xs text-slate-700 space-y-1.5 shrink-0 shadow-2xs">
           <div className="flex items-center justify-between font-bold text-slate-900">
             <span className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-tight">
               <Zap className="w-3.5 h-3.5 text-blue-600 shrink-0" />
@@ -926,7 +968,7 @@ export const AdminTechnicalPage: React.FC = () => {
       )}
 
       {/* User Footer */}
-      <div className="px-3 py-2.5 border-t border-slate-200/80 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0">
+      <div className="px-2.5 py-2 border-t border-slate-200/80 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0">
         <div className={`flex items-center gap-2.5 overflow-hidden ${collapsed ? 'justify-center w-full' : ''}`}>
           <div
             className="w-8 h-8 rounded-xl flex items-center justify-center font-extrabold text-xs shrink-0 shadow-2xs bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200/90 text-blue-700 font-mono"
@@ -959,7 +1001,7 @@ export const AdminTechnicalPage: React.FC = () => {
       </div>
 
       {/* Desktop Collapse / Expand Rail Button */}
-      <div className="hidden lg:block px-3 py-1.5 border-t border-slate-200/80 bg-slate-50/30 shrink-0">
+      <div className="hidden lg:block px-2.5 py-1 border-t border-slate-200/80 bg-slate-50/30 shrink-0">
         <button
           type="button"
           onClick={toggleSidebarCollapse}
@@ -1022,7 +1064,7 @@ export const AdminTechnicalPage: React.FC = () => {
       {/* Main Operational Workspace Canvas */}
       <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="shrink-0 z-20 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs flex items-center justify-between px-4 sm:px-6 gap-3">
+        <header className="shrink-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs flex items-center justify-between px-4 sm:px-6 gap-3">
           {/* Left: Mobile Trigger & Breadcrumb */}
           <div className="flex items-center gap-2.5 min-w-0">
             <button
@@ -1139,15 +1181,15 @@ export const AdminTechnicalPage: React.FC = () => {
         )}
 
         {/* MAIN VIEW CONTENT CONTAINER */}
-        <main className="flex-1 overflow-y-auto bg-transparent p-3 sm:p-5 lg:p-6">
+        <main className="flex-1 overflow-y-auto bg-transparent p-3 sm:p-4">
           <div className="max-w-[1920px] mx-auto w-full">
             {/* ============================================================== */}
             {/* SUBTAB 1: DASHBOARD (Matching Reference Image 1) */}
             {/* ============================================================== */}
             {activeSubTab === 'dashboard' && (
-              <div className="space-y-4 sm:space-y-5">
+              <div className="space-y-3.5">
                 {/* TOP ROW: 2D LiDAR Map & Recent Alerts / Mission Queue */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
                   {/* 2D Real-Time AMR Locations Floorplan Map (8 COLS) */}
                   <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-xs relative">
                     {/* Header Bar */}
@@ -1161,7 +1203,7 @@ export const AdminTechnicalPage: React.FC = () => {
                       </span>
                     </div>
                     {/* SLAM Map Viewer in Technical Mode */}
-                    <div className="relative flex-1 min-h-[340px] sm:min-h-[480px] flex flex-col">
+                    <div className="relative flex-1 min-h-[340px] sm:min-h-[400px] flex flex-col">
                       <SlamFloorMapViewer
                         tables={mapTables}
                         robots={mapRobots}
@@ -1748,8 +1790,54 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* SUBTAB 2: ROBOTS (Detailed Fleet List with Actions) */}
             {/* ============================================================== */}
             {activeSubTab === 'robots' && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="h-[calc(100vh-88px)] min-h-[480px] flex flex-col gap-3">
+                <div className="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Tổng Thiết Bị AMR</span>
+                      <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-0.5">{fleetTelemetrySummary.total}</div>
+                      <span className="text-[11px] text-slate-500">Sẵn sàng: {fleetTelemetrySummary.idle}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Đang Vận Hành</span>
+                      <div className="text-2xl font-black text-cyan-600 font-mono tabular-nums mt-0.5">{fleetTelemetrySummary.movingOrActive}</div>
+                      <span className="text-[11px] text-slate-500">Đổi pin: {fleetTelemetrySummary.swapping}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 border border-cyan-100 flex items-center justify-center shrink-0">
+                      <Activity className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Chế Độ Bảo Trì</span>
+                      <div className="text-2xl font-black text-amber-600 font-mono tabular-nums mt-0.5">{fleetTelemetrySummary.maintenance}</div>
+                      <span className="text-[11px] text-slate-500">Cảnh báo: {fleetTelemetrySummary.alertState}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
+                      <Wrench className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Pin TB Đội Xe</span>
+                      <div className="text-2xl font-black text-emerald-600 font-mono tabular-nums mt-0.5">
+                        {fleetTelemetrySummary.total > 0 ? `${fleetTelemetrySummary.avgBattery}%` : '—'}
+                      </div>
+                      <span className="text-[11px] text-slate-500">Pin yếu &lt;20%: {fleetTelemetrySummary.lowBattery}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                      <BatteryCharging className="w-5 h-5" />
+                    </div>
+                  </div>
+                </div>
+
+              <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+                <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-slate-200">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
                       Danh Sách Thiết Bị AMR Trong Đội Xe ({amrNodes.length})
@@ -1769,7 +1857,7 @@ export const AdminTechnicalPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="flex-1 min-h-0 overflow-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
@@ -1858,7 +1946,9 @@ export const AdminTechnicalPage: React.FC = () => {
                   onPageChange={amrPagination.setPage}
                   onPageSizeChange={amrPagination.setPageSize}
                   itemLabel="thiết bị AMR"
+                  className="shrink-0"
                 />
+              </div>
               </div>
             )}
 
@@ -1866,8 +1956,58 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* SUBTAB 3: MISSIONS (Full Missions Manager) */}
             {/* ============================================================== */}
             {activeSubTab === 'missions' && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="h-[calc(100vh-88px)] min-h-[480px] flex flex-col gap-3">
+                <div className="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Tổng Lệnh Trong Hàng Đợi</span>
+                      <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-0.5">{missions.length}</div>
+                      <span className="text-[11px] text-slate-500">Hôm nay: {missionStats?.totalToday ?? missions.length}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                      <Navigation className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Đang Thực Thi</span>
+                      <div className="text-2xl font-black text-cyan-600 font-mono tabular-nums mt-0.5">
+                        {missions.filter((m) => m.status === 'running').length}
+                      </div>
+                      <span className="text-[11px] text-slate-500">Đang chờ: {missions.filter((m) => m.status === 'queued').length}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 border border-cyan-100 flex items-center justify-center shrink-0">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Ưu Tiên Cao</span>
+                      <div className="text-2xl font-black text-rose-600 font-mono tabular-nums mt-0.5">
+                        {missions.filter((m) => m.priority === 'Cao').length}
+                      </div>
+                      <span className="text-[11px] text-slate-500">Xử lý tuyến ưu tiên</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase font-mono">Hoàn Thành / Hủy</span>
+                      <div className="text-2xl font-black text-emerald-600 font-mono tabular-nums mt-0.5">
+                        {missionStats?.completed ?? 0}
+                      </div>
+                      <span className="text-[11px] text-slate-500">Lỗi: {missionStats?.failed ?? 0} • Hủy: {missionStats?.cancelled ?? 0}</span>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                  </div>
+                </div>
+
+              <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
+                <div className="shrink-0 flex items-center justify-between pb-2.5 border-b border-slate-200">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Quản Lý Toàn Bộ Nhiệm Vụ Điều Phối</h3>
                     <p className="text-xs text-slate-500">Giám sát các hành trình đang chạy và xếp thứ tự ưu tiên hàng đợi.</p>
@@ -1882,7 +2022,7 @@ export const AdminTechnicalPage: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                   {missions.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 text-xs">
                       Hiện tại chưa có nhiệm vụ nào trong hàng đợi điều phối. Bấm &quot;Tạo Nhiệm Vụ Mới&quot; để phát lệnh điều phối.
@@ -1933,7 +2073,9 @@ export const AdminTechnicalPage: React.FC = () => {
                   onPageChange={missionPagination.setPage}
                   onPageSizeChange={missionPagination.setPageSize}
                   itemLabel="nhiệm vụ"
+                  className="shrink-0"
                 />
+              </div>
               </div>
             )}
 
@@ -1942,29 +2084,357 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* ============================================================== */}
             {activeSubTab === 'monitor' && (
               <div className="space-y-4">
-                <RobotMonitorPage />
+                <RobotMonitorPage embedded />
               </div>
             )}
 
             {/* ============================================================== */}
-            {/* SUBTAB 4: ANALYTICS (Detailed Metrics) */}
+            {/* SUBTAB 4: ANALYTICS (Live Operational Telemetry Dashboard) */}
             {/* ============================================================== */}
             {activeSubTab === 'analytics' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase font-mono">Tổng Quãng Đường Di Chuyển</span>
-                  <div className="text-3xl font-black font-mono text-slate-900">142.8 km</div>
-                  <p className="text-xs text-emerald-600 font-semibold">+12% so với tuần trước</p>
+              <div className="lg:h-[calc(100vh-88px)] min-h-[480px] flex flex-col gap-3">
+                {/* Row 1: 4 Real-Data KPI Cards */}
+                <div className="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-start justify-between gap-2.5">
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono block truncate">Tổng Nhiệm Vụ Hôm Nay</span>
+                      <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 tabular-nums">
+                        {missionStats?.totalToday ?? missions.length}
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium tabular-nums truncate">
+                        Hoàn tất: <strong className="text-emerald-600">{missionStats?.completed ?? 0}</strong> • Chạy: <strong className="text-blue-600">{missionStats?.active ?? missions.filter((m) => m.status === 'running').length}</strong>
+                      </p>
+                    </div>
+                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                      <Navigation className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-start justify-between gap-2.5">
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono block truncate">Thời Gian Hoàn Thành TB</span>
+                      <div className="text-xl sm:text-2xl font-black font-mono text-cyan-700 tabular-nums">
+                        {avgCompletionDuration}
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium tabular-nums truncate">
+                        Lỗi: <strong className="text-rose-600">{missionStats?.failed ?? 0}</strong> • Hủy: <strong>{missionStats?.cancelled ?? 0}</strong>
+                      </p>
+                    </div>
+                    <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-600 border border-cyan-100 flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-start justify-between gap-2.5">
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono block truncate">Hiệu Suất Khai Thác TB</span>
+                      <div className="text-xl sm:text-2xl font-black font-mono text-blue-700 tabular-nums">
+                        {amrNodes.length > 0 ? `${avgFleetUtilization}%` : '0%'}
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium tabular-nums truncate">
+                        <strong className="text-blue-700">{fleetTelemetrySummary.movingOrActive}</strong>/{fleetTelemetrySummary.total} AMR hoạt động
+                      </p>
+                    </div>
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex items-start justify-between gap-2.5">
+                    <div className="space-y-0.5 min-w-0">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono block truncate">Pin LiFePO4 Trung Bình</span>
+                      <div className={`text-xl sm:text-2xl font-black font-mono tabular-nums ${fleetTelemetrySummary.avgBattery < 20 && fleetTelemetrySummary.total > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        {fleetTelemetrySummary.total > 0 ? `${fleetTelemetrySummary.avgBattery}%` : '—'}
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium tabular-nums truncate">
+                        Pin &lt;20%: <strong className={fleetTelemetrySummary.lowBattery > 0 ? 'text-rose-600' : 'text-slate-800'}>{fleetTelemetrySummary.lowBattery}</strong> • Cảnh báo: <strong>{alerts.length}</strong>
+                      </p>
+                    </div>
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+                      <Battery className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase font-mono">Tỉ Lệ Tránh Vật Cản Thành Công</span>
-                  <div className="text-3xl font-black font-mono text-blue-700">99.4%</div>
-                  <p className="text-xs text-slate-500">Dựa trên 1,480 lần phát hiện bằng LiDAR</p>
-                </div>
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-2">
-                  <span className="text-xs font-bold text-slate-500 uppercase font-mono">Thời Gian Hoạt Động (Uptime)</span>
-                  <div className="text-3xl font-black font-mono text-emerald-600">99.92%</div>
-                  <p className="text-xs text-slate-500">Chu kỳ sạc BMS LifePO4 đạt chuẩn</p>
+
+                {/* Row 2: Compact 2-Col Bento Grid */}
+                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+                  {/* Left 7 cols: 24h Chart + AMR Utilization Table */}
+                  <div className="lg:col-span-7 flex flex-col gap-3 min-h-0">
+                    <div className="shrink-0 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col gap-2">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div>
+                          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-blue-600" />
+                            <span>Nhịp Độ Hoàn Thành Nhiệm Vụ (24 Giờ)</span>
+                          </h3>
+                          <p className="text-[11px] text-slate-500">Tổng hợp trực tiếp từ API thống kê nhiệm vụ theo ca phục vụ.</p>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-cyan-700 bg-cyan-50 px-2.5 py-0.5 rounded-lg border border-cyan-200">
+                          {avgCompletionDuration}
+                        </span>
+                      </div>
+
+                      <div className="h-28 w-full flex items-center justify-center">
+                        <svg className="w-full h-full" viewBox="0 0 500 140" fill="none">
+                          <defs>
+                            <linearGradient id="analyticsTimeGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#0062FF" stopOpacity="0.28" />
+                              <stop offset="100%" stopColor="#0062FF" stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+                          <line x1="40" y1="25" x2="480" y2="25" stroke="#E2E8F0" strokeDasharray="3,3" />
+                          <line x1="40" y1="65" x2="480" y2="65" stroke="#E2E8F0" strokeDasharray="3,3" />
+                          <line x1="40" y1="105" x2="480" y2="105" stroke="#E2E8F0" strokeDasharray="3,3" />
+                          <text x="10" y="29" fill="#94A3B8" fontSize="9" fontFamily="monospace">
+                            {Math.max(1, missionStats?.completed ?? 1)} đơn
+                          </text>
+                          <text x="10" y="69" fill="#94A3B8" fontSize="9" fontFamily="monospace">
+                            {Math.max(1, Math.round((missionStats?.completed ?? 1) / 2))} đơn
+                          </text>
+                          <text x="10" y="109" fill="#94A3B8" fontSize="9" fontFamily="monospace">0</text>
+                          {curveAreaD && <path d={curveAreaD} fill="url(#analyticsTimeGrad)" />}
+                          {curvePathD && <path d={curvePathD} fill="none" stroke="#0062FF" strokeWidth="2.5" />}
+                          {hourlyPoints.map((pt, i) => (
+                            <g
+                              key={pt.label}
+                              className="cursor-pointer"
+                              onClick={() => showToast(`Khung giờ ${pt.label}: ${pt.count} đơn hoàn tất`, 'info')}
+                            >
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={i % 2 === 0 ? 4.5 : 3.5}
+                                fill="#0062FF"
+                                stroke="#FFFFFF"
+                                strokeWidth={2}
+                              />
+                            </g>
+                          ))}
+                          {hourlyPoints.map((pt) => (
+                            <text key={pt.label} x={pt.x} y="134" fill="#64748B" fontSize="9" textAnchor="middle" fontFamily="monospace">
+                              {pt.label}
+                            </text>
+                          ))}
+                        </svg>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t border-slate-100 text-xs">
+                        <div className="px-2.5 py-1.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-emerald-700 uppercase font-mono">Hoàn thành</span>
+                          <div className="text-sm font-black text-emerald-800 font-mono tabular-nums">{missionStats?.completed ?? 0}</div>
+                        </div>
+                        <div className="px-2.5 py-1.5 rounded-xl bg-blue-50/70 border border-blue-200/70 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-blue-700 uppercase font-mono">Đang chạy</span>
+                          <div className="text-sm font-black text-blue-800 font-mono tabular-nums">{missionStats?.active ?? missions.filter((m) => m.status === 'running').length}</div>
+                        </div>
+                        <div className="px-2.5 py-1.5 rounded-xl bg-amber-50/70 border border-amber-200/70 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-amber-700 uppercase font-mono">Hàng đợi</span>
+                          <div className="text-sm font-black text-amber-800 font-mono tabular-nums">{missions.filter((m) => m.status === 'queued').length}</div>
+                        </div>
+                        <div className="px-2.5 py-1.5 rounded-xl bg-rose-50/70 border border-rose-200/70 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-rose-700 uppercase font-mono">Lỗi / Hủy</span>
+                          <div className="text-sm font-black text-rose-800 font-mono tabular-nums">{(missionStats?.failed ?? 0) + (missionStats?.cancelled ?? 0)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col gap-2">
+                      <div className="shrink-0 flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div>
+                          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                            <Bot className="w-4 h-4 text-blue-600" />
+                            <span>Chi Tiết Hiệu Suất &amp; Tải Nhiệm Vụ Từng AMR</span>
+                          </h3>
+                          <p className="text-[11px] text-slate-500">Hiệu suất vận hành ước tính theo số nhiệm vụ và trạng thái telemetry thực tế.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            loadData();
+                            showToast('Đang làm mới số liệu hiệu suất đội AMR...', 'info');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Làm mới</span>
+                        </button>
+                      </div>
+
+                      {robotUtilizationList.length === 0 ? (
+                        <div className="flex-1 flex items-center justify-center py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                          Chưa có dữ liệu hiệu suất từng robot AMR từ API.
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-h-0 overflow-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="sticky top-0 bg-white z-10">
+                              <tr className="border-b border-slate-200 text-slate-400 font-mono uppercase text-[10px]">
+                                <th className="py-1.5 px-2">Robot AMR</th>
+                                <th className="py-1.5 px-2">Trạng thái</th>
+                                <th className="py-1.5 px-2">Pin</th>
+                                <th className="py-1.5 px-2">Hiệu suất</th>
+                                <th className="py-1.5 px-2">Nhiệm vụ / Tốc độ</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {robotUtilizationList.map((r) => (
+                                <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                                  <td className="py-1.5 px-2 font-mono font-bold text-blue-700 whitespace-nowrap">
+                                    {r.id} <span className="text-slate-500 font-sans font-medium">({r.name})</span>
+                                  </td>
+                                  <td className="py-1.5 px-2 whitespace-nowrap">
+                                    <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
+                                      r.status === 'moving' || r.status === 'active'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : r.status === 'swapping_battery'
+                                        ? 'bg-indigo-100 text-indigo-800'
+                                        : r.status === 'maintenance'
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-slate-100 text-slate-700'
+                                    }`}>
+                                      {r.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 px-2 font-mono font-bold tabular-nums whitespace-nowrap">
+                                    <span className={r.battery < 20 ? 'text-rose-600' : 'text-emerald-600'}>{r.battery}%</span>
+                                  </td>
+                                  <td className="py-1.5 px-2 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-16 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                        <div className="h-full rounded-full bg-blue-600" style={{ width: `${r.utilization}%` }} />
+                                      </div>
+                                      <span className="font-mono font-bold text-slate-700 tabular-nums">{r.utilization}%</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-1.5 px-2 text-slate-600 max-w-[180px] truncate" title={r.mission}>
+                                    {r.mission} <span className="font-mono text-[10px] text-slate-400">• {r.speed}</span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right 5 cols: Fleet Status & Battery + Zone Station Coverage */}
+                  <div className="lg:col-span-5 flex flex-col gap-3 min-h-0">
+                    <div className="shrink-0 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div>
+                          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-emerald-600" />
+                            <span>Phân Bổ Trạng Thái &amp; Pin Đội Xe</span>
+                          </h3>
+                          <p className="text-[11px] text-slate-500">Tình trạng vận hành và dung lượng pin LiFePO4 hiện thời.</p>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 tabular-nums shrink-0">
+                          {fleetTelemetrySummary.total} Robot
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 text-[11px]">
+                        {[
+                          { label: 'Đang chạy / Giao món', count: fleetTelemetrySummary.movingOrActive, bar: 'bg-blue-600', text: 'text-blue-700' },
+                          { label: 'Sẵn sàng tại bếp (Idle)', count: fleetTelemetrySummary.idle, bar: 'bg-emerald-500', text: 'text-emerald-700' },
+                          { label: 'Đang thay pin (ST_BATTERY_RACK)', count: fleetTelemetrySummary.swapping, bar: 'bg-indigo-500', text: 'text-indigo-700' },
+                          { label: 'Bảo trì kỹ thuật (Mở phanh)', count: fleetTelemetrySummary.maintenance, bar: 'bg-amber-500', text: 'text-amber-700' },
+                          { label: 'Cảnh báo / Lỗi', count: fleetTelemetrySummary.alertState, bar: 'bg-rose-500', text: 'text-rose-700' },
+                        ].map((row) => {
+                          const pct = fleetTelemetrySummary.total > 0 ? Math.round((row.count / fleetTelemetrySummary.total) * 100) : 0;
+                          return (
+                            <div key={row.label} className="space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-slate-700 truncate">{row.label}</span>
+                                <span className={`font-mono font-bold tabular-nums shrink-0 ${row.text}`}>
+                                  {row.count} ({pct}%)
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div className={`h-full rounded-full ${row.bar} transition-all duration-300`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                          Phân Tầng Mức Pin LiFePO4
+                        </span>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="p-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-center">
+                            <div className="text-sm font-black text-emerald-700 font-mono tabular-nums">{fleetTelemetrySummary.highBattery}</div>
+                            <div className="text-[10px] text-emerald-700 font-semibold">&ge; 50% Pin</div>
+                          </div>
+                          <div className="p-1.5 rounded-xl bg-amber-50 border border-amber-200 text-center">
+                            <div className="text-sm font-black text-amber-700 font-mono tabular-nums">{fleetTelemetrySummary.midBattery}</div>
+                            <div className="text-[10px] text-amber-700 font-semibold">20% – 49%</div>
+                          </div>
+                          <div className="p-1.5 rounded-xl bg-rose-50 border border-rose-200 text-center">
+                            <div className="text-sm font-black text-rose-700 font-mono tabular-nums">{fleetTelemetrySummary.lowBattery}</div>
+                            <div className="text-[10px] text-rose-700 font-semibold">&lt; 20% Cần Đổi</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm flex flex-col gap-2">
+                      <div className="shrink-0 flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div>
+                          <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-purple-600" />
+                            <span>Độ Phủ Trạm Drop-off Theo Khu Vực</span>
+                          </h3>
+                          <p className="text-[11px] text-slate-500">Thống kê bàn ăn đã gán trạm dừng robot (F-09) theo khu vực.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveSubTab('map-stations')}
+                          className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          Quản Lý Trạm
+                        </button>
+                      </div>
+
+                      {zoneCoverageList.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 space-y-2">
+                          <p>Chưa có dữ liệu bàn ăn để thống kê độ phủ trạm.</p>
+                          <button
+                            type="button"
+                            onClick={() => setActiveSubTab('map-stations')}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-bold text-xs cursor-pointer"
+                          >
+                            Mở Bản Đồ &amp; Trạm (SLAM)
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+                          {zoneCoverageList.map((z) => {
+                            const stationPct = z.total > 0 ? Math.round((z.withStation / z.total) * 100) : 0;
+                            return (
+                              <div key={z.zone} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-bold text-slate-800 truncate">{z.zone}</span>
+                                  <span className="font-mono text-[11px] font-bold text-purple-700 tabular-nums shrink-0">
+                                    {z.withStation}/{z.total} Đã gán trạm ({stationPct}%)
+                                  </span>
+                                </div>
+                                <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                  <div className="h-full rounded-full bg-purple-600 transition-all duration-300" style={{ width: `${stationPct}%` }} />
+                                </div>
+                                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                  <span>Tổng số bàn: <strong className="text-slate-700">{z.total}</strong></span>
+                                  <span>Đang phục vụ / có khách: <strong className="text-blue-600">{z.busy}</strong></span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1985,32 +2455,306 @@ export const AdminTechnicalPage: React.FC = () => {
             )}
 
             {/* ============================================================== */}
-            {/* SUBTAB 5: SETTINGS (SLAM & ROS 2 Parameters) */}
+            {/* SUBTAB 5: SETTINGS (SLAM & ROS 2 Parameters + Live Diagnostics) */}
             {/* ============================================================== */}
             {activeSubTab === 'settings' && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs max-w-2xl space-y-5">
-                <h3 className="text-base font-extrabold text-slate-900">Cấu Hình Vận Hành LiDAR & SLAM ROS 2</h3>
-                <div className="space-y-4 text-xs">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <div>
-                      <span className="font-bold text-slate-800 block">Tần Số Quét LiDAR (LiDAR Scan Rate)</span>
-                      <span className="text-slate-500">Tần số thu nhận đám mây điểm 360 độ</span>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
+                {/* Left Column (7 cols): SLAM / ROS 2 Parameters + Operational Controls */}
+                <div className="lg:col-span-7 space-y-3.5">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                      <div>
+                        <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+                          <Sliders className="w-4 h-4 text-blue-600" />
+                          <span>Cấu Hình Vận Hành LiDAR &amp; SLAM ROS 2</span>
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Bộ tham số tiêu chuẩn cho điều hướng Nav2, ngưỡng an toàn lối hẹp và cơ chế bàn giao.
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">
+                        ROS 2 Humble / Nav2
+                      </span>
                     </div>
-                    <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-1 rounded border border-slate-200">20 Hz (Chuẩn)</span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col justify-between gap-1.5">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Tần Số Quét LiDAR (Scan Rate)</span>
+                          <span className="text-[11px] text-slate-500">Tần số thu nhận đám mây điểm 360 độ</span>
+                        </div>
+                        <span className="self-start font-mono font-bold text-blue-700 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                          20 Hz (Chuẩn)
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col justify-between gap-1.5">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Khoảng Cách An Toàn Phanh Dừng</span>
+                          <span className="text-[11px] text-slate-500">Vùng đệm laser giảm tốc &amp; dừng tự động</span>
+                        </div>
+                        <span className="self-start font-mono font-bold text-blue-700 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                          0.45 m
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col justify-between gap-1.5">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Ngưỡng Lối Đi Hẹp (Drop-off Station)</span>
+                          <span className="text-[11px] text-slate-500">Bàn có lối đi hẹp hơn ngưỡng sẽ gán trạm F-09</span>
+                        </div>
+                        <span className="self-start font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                          &lt; 0.80 m (F-09)
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col justify-between gap-1.5">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Chốt An Toàn Khi Đã Tới Bàn Cũ</span>
+                          <span className="text-[11px] text-slate-500">Khóa động cơ khi nhận lệnh chuyển bàn ở trạng thái arrived</span>
+                        </div>
+                        <span className="self-start font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                          ETM-14: Đang Bật
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col justify-between gap-1.5">
+                        <div>
+                          <span className="font-bold text-slate-800 block flex items-center gap-1.5">
+                            <Layers className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            <span>Cấu Hình Khay Giao Món Phần Cứng</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500">Số tầng khay tiêu chuẩn trên thân robot</span>
+                        </div>
+                        <span className="self-start font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-200">
+                          2 Tầng (Khay 1 &amp; Khay 2)
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col justify-between gap-1.5">
+                        <div>
+                          <span className="font-bold text-slate-800 block flex items-center gap-1.5">
+                            <KeyRound className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Xác Thực Mở Phanh Bảo Trì (Dynamic PIN)</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500">Mã PIN ngẫu nhiên không hardcode cho kỹ thuật viên</span>
+                        </div>
+                        <span className="self-start font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                          6 chữ số • TTL 10 phút
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <div>
-                      <span className="font-bold text-slate-800 block">Khoảng Cách An Toàn Phanh Dừng</span>
-                      <span className="text-slate-500">Vùng đệm laser giảm tốc tự động</span>
+
+                  {/* Operational Controls Card */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="pb-2 border-b border-slate-100">
+                      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-500" />
+                        <span>Điều Khiển Chế Độ Vận Hành &amp; Thao Tác Nhanh</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Can thiệp trực tiếp trạng thái mô phỏng, dừng khẩn cấp E-Stop hoặc chuyển nhanh sang quản lý bản đồ / đồng bộ Edge.
+                      </p>
                     </div>
-                    <span className="font-mono font-bold text-blue-700 bg-white px-2.5 py-1 rounded border border-slate-200">0.45 m</span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSimulationRunning((prev) => !prev);
+                          showToast(
+                            isSimulationRunning ? 'Đã tạm dừng mô phỏng chuyển động robot.' : 'Đã tiếp tục mô phỏng robot.',
+                            'info'
+                          );
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                          isSimulationRunning
+                            ? 'bg-blue-50/70 border-blue-200 hover:bg-blue-100/70 text-blue-900'
+                            : 'bg-amber-50 border-amber-300 hover:bg-amber-100 text-amber-900'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold">Mô Phỏng Chuyển Động AMR</div>
+                          <div className="text-[11px] opacity-80">
+                            {isSimulationRunning ? 'Đang chạy — bấm để tạm dừng' : 'Đang tạm dừng — bấm để bật lại'}
+                          </div>
+                        </div>
+                        {isSimulationRunning ? <Pause className="w-4 h-4 shrink-0" /> : <Play className="w-4 h-4 shrink-0" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmergencyStop((prev) => !prev);
+                          showToast(
+                            emergencyStop
+                              ? 'Khôi phục vận hành đội xe bình thường!'
+                              : 'CẢNH BÁO: ĐÃ KÍCH HOẠT DỪNG KHẨN CẤP TOÀN BỘ AMR!',
+                            emergencyStop ? 'success' : 'warning'
+                          );
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                          emergencyStop
+                            ? 'bg-emerald-600 border-emerald-500 hover:bg-emerald-700 text-white'
+                            : 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold">
+                            {emergencyStop ? 'Khôi Phục Từ Trạng Thái E-Stop' : 'Kích Hoạt Dừng Khẩn Cấp (E-Stop)'}
+                          </div>
+                          <div className="text-[11px] opacity-85">
+                            {emergencyStop ? 'Toàn đội xe đang khóa phanh dừng' : 'Phanh dừng ngay lập tức toàn bộ AMR'}
+                          </div>
+                        </div>
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubTab('map-stations')}
+                        className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition-all cursor-pointer flex items-center justify-between gap-2.5"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-800">Nạp Bản Đồ PGM &amp; Waypoints</div>
+                          <div className="text-[11px] text-slate-500">Quản lý trạm pickup, dropoff &amp; trạm thay pin</div>
+                        </div>
+                        <MapPin className="w-4 h-4 text-purple-600 shrink-0" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubTab('sqlite-sync')}
+                        className="p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition-all cursor-pointer flex items-center justify-between gap-2.5"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-800">Kiểm Tra SQLite &amp; Đồng Bộ VPS</div>
+                          <div className="text-[11px] text-slate-500">Đối chiếu dữ liệu cục bộ Edge Engine</div>
+                        </div>
+                        <Database className="w-4 h-4 text-cyan-600 shrink-0" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                    <div>
-                      <span className="font-bold text-slate-800 block">Giao Thức Đồng Bộ MQTT Broker</span>
-                      <span className="text-slate-500">Cổng kết nối nội bộ Edge Node LAN</span>
+                </div>
+
+                {/* Right Column (5 cols): Live Infrastructure Diagnostics + Quick Maintenance Access */}
+                <div className="lg:col-span-5 space-y-3.5">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <Radio className="w-4 h-4 text-emerald-600" />
+                        <span>Hạ Tầng Kết Nối &amp; Telemetry</span>
+                      </h3>
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                          signalRStatus === 'connected'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : signalRStatus === 'connecting'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {signalRStatus === 'connected'
+                          ? 'SignalR Live'
+                          : signalRStatus === 'connecting'
+                          ? 'Đang kết nối'
+                          : 'Ngoại tuyến'}
+                      </span>
                     </div>
-                    <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">192.168.1.120:1883</span>
+
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Giao Thức Đồng Bộ MQTT Broker</span>
+                          <span className="text-[11px] text-slate-500">Cổng kết nối nội bộ Edge Node LAN</span>
+                        </div>
+                        <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          192.168.1.120:1883
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <div>
+                          <span className="font-bold text-slate-800 block">Tenant / Chi Nhánh Đang Giám Sát</span>
+                          <span className="text-[11px] text-slate-500">Cách ly dữ liệu đa thuê bao (ETM-02)</span>
+                        </div>
+                        <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 truncate max-w-[160px]">
+                          {currentUser?.tenantName || (tenantSlug ? tenantSlug.toUpperCase() : 'VORA Fleet')}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Robot AMR</span>
+                        <div className="text-lg font-black font-mono text-slate-900 tabular-nums">{amrNodes.length}</div>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Bàn Phục Vụ</span>
+                        <div className="text-lg font-black font-mono text-slate-900 tabular-nums">{tables.length}</div>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Hàng Đợi Lệnh</span>
+                        <div className="text-lg font-black font-mono text-blue-700 tabular-nums">{missions.length}</div>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Cảnh Báo Mở</span>
+                        <div className="text-lg font-black font-mono text-amber-700 tabular-nums">{alerts.length}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Maintenance Mode Access */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <Wrench className="w-4 h-4 text-amber-600" />
+                        <span>Truy Cập Nhanh Bảo Trì (Mở Phanh)</span>
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setActiveSubTab('robots')}
+                        className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                      >
+                        Xem tất cả ({amrNodes.length})
+                      </button>
+                    </div>
+
+                    {amrNodes.length === 0 ? (
+                      <div className="py-5 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        Chưa có AMR nào để kích hoạt chế độ bảo trì.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                        {amrNodes.slice(0, 6).map((robot) => (
+                          <div
+                            key={robot.id}
+                            className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-mono font-bold text-slate-900 truncate">
+                                {robot.id} <span className="text-slate-500 font-sans font-normal">({robot.name})</span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono">
+                                Pin: {robot.battery}% • {robot.status === 'maintenance' ? 'ĐANG BẢO TRÌ' : robot.status.toUpperCase()}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMaintenanceModal(robot)}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 cursor-pointer transition-colors ${
+                                robot.status === 'maintenance'
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200'
+                              }`}
+                            >
+                              {robot.status === 'maintenance' ? 'Quản Lý' : 'Bảo Trì'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2021,7 +2765,7 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* ============================================================== */}
             {activeSubTab === 'edge-setup' && (
               <div className="space-y-4">
-                <StoreEdgeSetupPage />
+                <StoreEdgeSetupPage embedded tenantSubdomain={tenantSlug || undefined} />
               </div>
             )}
 
@@ -2030,7 +2774,16 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* ============================================================== */}
             {activeSubTab === 'sqlite-sync' && (
               <div className="space-y-4">
-                <LocalSqliteSyncCard />
+                <LocalSqliteSyncCard
+                  liveSummary={{
+                    robotsCount: amrNodes.length,
+                    tablesCount: tables.length,
+                    missionsCount: missions.length,
+                    alertsCount: alerts.length,
+                    signalRStatus,
+                    tenantLabel: currentUser?.tenantName || tenantSlug || 'VORA Fleet',
+                  }}
+                />
               </div>
             )}
           </div>

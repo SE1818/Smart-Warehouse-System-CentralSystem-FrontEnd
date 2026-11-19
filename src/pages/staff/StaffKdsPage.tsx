@@ -2058,6 +2058,7 @@ export const StaffKdsPage: React.FC = () => {
 
   const readyRobotsCount = robots.filter((r) => r.status === "idle").length;
   const waitingTablesCount = tables.filter((t) => t.status === "waiting").length;
+  const assignedStationCount = tables.filter((t) => Boolean(t.stationId || t.stationName)).length;
 
   const renderKdsSidebarContent = (collapsed: boolean) => (
     <div className="flex flex-col h-full bg-white text-slate-700 select-none overflow-hidden">
@@ -2137,80 +2138,7 @@ export const StaffKdsPage: React.FC = () => {
 
       {/* Navigation Groups */}
       <div className="flex-1 overflow-y-auto py-3.5 px-3 space-y-4">
-        {/* Group 1: View Mode */}
-        <div className="space-y-1">
-          {!collapsed && (
-            <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
-              CHẾ ĐỘ HIỂN THỊ SƠ ĐỒ
-            </div>
-          )}
-          <div className="space-y-1">
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode("slam-map");
-                setIsMobileMenuOpen(false);
-              }}
-              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
-                viewMode === "slam-map"
-                  ? "bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent"
-              } ${collapsed ? "justify-center px-0" : ""}`}
-              title={collapsed ? "Bản Đồ SLAM (ROS 2)" : undefined}
-            >
-              <div
-                className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                  viewMode === "slam-map"
-                    ? "bg-blue-600 text-white shadow-2xs"
-                    : "bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700"
-                }`}
-              >
-                <MapIcon className="w-3.5 h-3.5 shrink-0" />
-              </div>
-              {!collapsed && <span className="truncate">Bản Đồ SLAM (ROS 2)</span>}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setViewMode("grid");
-                setIsMobileMenuOpen(false);
-              }}
-              className={`relative w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 group cursor-pointer ${
-                viewMode === "grid"
-                  ? "bg-gradient-to-r from-blue-50 via-blue-50/80 to-indigo-50/40 text-blue-700 font-bold border border-blue-200/80 shadow-2xs before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-600"
-                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 border border-transparent"
-              } ${collapsed ? "justify-center px-0" : ""}`}
-              title={collapsed ? "Dạng Thẻ Bàn (Grid)" : undefined}
-            >
-              <div
-                className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                  viewMode === "grid"
-                    ? "bg-blue-600 text-white shadow-2xs"
-                    : "bg-slate-100/80 text-slate-500 group-hover:bg-slate-200/70 group-hover:text-slate-700"
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
-              </div>
-              {!collapsed && (
-                <div className="flex-1 flex items-center justify-between overflow-hidden gap-1.5">
-                  <span className="truncate">Dạng Thẻ Bàn (Grid)</span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono tabular-nums ${
-                      viewMode === "grid"
-                        ? "bg-blue-100 text-blue-700 border-blue-200"
-                        : "bg-slate-100 text-slate-600 border-slate-200"
-                    }`}
-                  >
-                    {tables.length} Bàn
-                  </span>
-                </div>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Group 2: Quick Table & Station Operations */}
+        {/* Group 1: Quick Table & Station Operations */}
         <div className="space-y-1">
           {!collapsed && (
             <div className="px-2.5 pb-1 text-[10px] font-extrabold tracking-widest uppercase text-slate-400 font-mono">
@@ -2449,9 +2377,9 @@ export const StaffKdsPage: React.FC = () => {
       {/* Main Operational Workspace Canvas */}
       <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
         {/* Staff Touch Header */}
-        <header className="shrink-0 z-20 h-14 sm:h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs flex items-center justify-between px-3 sm:px-6 gap-3">
-          {/* Left: Mobile Trigger & Breadcrumbs */}
-          <div className="flex items-center gap-2.5 min-w-0">
+        <header className="shrink-0 z-20 h-14 sm:h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm flex items-center justify-between px-3 sm:px-5 gap-2 sm:gap-3">
+          {/* Left: Mobile Trigger & Compact Breadcrumb */}
+          <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
@@ -2463,35 +2391,29 @@ export const StaffKdsPage: React.FC = () => {
 
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 sm:gap-2 text-xs min-w-0">
               <span
-                className="font-bold text-slate-800 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/70 max-w-[200px]"
+                className="font-bold text-slate-800 hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/80 max-w-[200px] sm:max-w-[240px]"
                 title={storeName}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 shrink-0" />
                 <Store className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="truncate">{storeName}</span>
               </span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden sm:inline shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden md:inline shrink-0" />
               <span className="hidden md:inline font-semibold text-slate-600 truncate">
                 KDS Bếp Trung Tâm
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400 hidden md:inline shrink-0" />
-              <span className="font-extrabold text-blue-700 bg-gradient-to-r from-blue-50 to-indigo-50/60 px-3 py-1 rounded-lg border border-blue-200/80 shadow-2xs truncate">
-                {viewMode === "slam-map" ? "Bản Đồ SLAM" : "Dạng Thẻ Bàn"}
               </span>
             </nav>
           </div>
 
           {/* Right Quick Stats */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <div className="hidden md:flex items-center gap-2 text-xs">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {readyRobotsCount} Robot Sẵn Sàng
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200">
-                {waitingTablesCount} Bàn Chờ Ra Món
-              </span>
-            </div>
+          <div className="hidden md:flex items-center gap-2 shrink-0 text-xs">
+            <span className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5 whitespace-nowrap">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="tabular-nums">{readyRobotsCount} Robot Sẵn Sàng</span>
+            </span>
+            <span className="px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 whitespace-nowrap tabular-nums">
+              {waitingTablesCount} Bàn Chờ Ra Món
+            </span>
           </div>
         </header>
 
@@ -2535,18 +2457,76 @@ export const StaffKdsPage: React.FC = () => {
           {/* Interactive Table Section */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs flex-1 flex flex-col">
             {/* Table Area Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono flex items-center gap-2">
-                  <span>SƠ ĐỒ BÀN ĂN & AMR THỜI GIAN THỰC</span>
-                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3 pb-3 border-b border-slate-100">
+              <div className="flex flex-col gap-1.5 min-w-0">
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono truncate">
+                  SƠ ĐỒ BÀN ĂN &amp; AMR THỜI GIAN THỰC
+                </h2>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs tabular-nums">
                     {tables.length} Bàn
                   </span>
-                </h2>
+                  <span
+                    className={`text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full border tabular-nums inline-flex items-center gap-1.5 ${
+                      tables.length > 0 && assignedStationCount === tables.length
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-slate-50 text-slate-600 border-slate-200"
+                    }`}
+                  >
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span>
+                      {assignedStationCount}/{tables.length} Đã gán trạm
+                    </span>
+                  </span>
+                </div>
               </div>
-              <span className="text-[11px] font-mono font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                {viewMode === "slam-map" ? "Chế độ: Bản Đồ SLAM (ROS 2)" : "Chế độ: Dạng Thẻ Bàn"}
-              </span>
+
+              {/* Touch-Friendly View Mode Switcher (SLAM Map <-> Table Grid) */}
+              <div
+                role="group"
+                aria-label="Chế độ hiển thị sơ đồ bàn"
+                className="inline-flex items-center p-1 rounded-xl bg-slate-100/95 border border-slate-200/90 shadow-inner gap-1 shrink-0"
+              >
+                <button
+                  type="button"
+                  onClick={() => setViewMode("slam-map")}
+                  aria-pressed={viewMode === "slam-map"}
+                  title="Chế độ Bản Đồ SLAM (ROS 2)"
+                  className={`min-h-[34px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                    viewMode === "slam-map"
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-600/25"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+                  }`}
+                >
+                  <MapIcon className="w-3.5 h-3.5 shrink-0" />
+                  <span>Bản Đồ SLAM</span>
+                  <span className="hidden 2xl:inline text-[10px] font-mono opacity-85">(ROS 2)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  aria-pressed={viewMode === "grid"}
+                  title="Chế độ Dạng Thẻ Bàn (Grid)"
+                  className={`min-h-[34px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-600/25"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-white/80"
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                  <span>Dạng Thẻ Bàn</span>
+                  <span
+                    className={`text-[10px] font-mono font-extrabold px-1.5 py-0.5 rounded-md tabular-nums ${
+                      viewMode === "grid"
+                        ? "bg-white/20 text-white border border-white/25"
+                        : "bg-white text-slate-700 border border-slate-200"
+                    }`}
+                  >
+                    {tables.length}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Tray Target Selector: Cho phép nhân viên chọn rõ ràng đang gán bàn cho Khay 1 hay Khay 2 */}
@@ -2594,7 +2574,7 @@ export const StaffKdsPage: React.FC = () => {
                 robots={robots}
                 stations={stations}
                 mode="simplified"
-                className="flex-1 min-h-[440px]"
+                className="flex-1 min-h-[500px] lg:min-h-[560px]"
               />
             ) : tables.length === 0 ? (
               <div className="p-12 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 space-y-2">
