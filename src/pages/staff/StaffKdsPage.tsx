@@ -68,9 +68,7 @@ interface TableNode {
   worldY?: number;
   stationId?: string | null;
   stationName?: string | null;
-    qrCodeUrl?: string | null;
   isRestricted?: boolean;
-  aisleWidth?: number;
 }
 
 export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
@@ -97,9 +95,7 @@ export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
       assignedRobot: t.assignedRobotCode || null,
       stationId: t.stationId,
       stationName: t.stationName,
-      qrCodeUrl: t.qrCodeUrl,
       isRestricted: t.isRestricted,
-      aisleWidth: t.aisleWidth,
       worldX: t.worldX,
       worldY: t.worldY,
     };

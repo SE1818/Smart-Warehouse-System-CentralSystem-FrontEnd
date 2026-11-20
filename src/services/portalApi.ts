@@ -165,7 +165,7 @@ export interface DiningTableDto {
   assignedRobotCode: string | null;
   stationId?: string | null;
   stationName?: string | null;
-  qrCodeUrl?: string | null;
+  isRestricted?: boolean;
   currentOrders: string[];
   orderTime: string | null;
   worldX?: number;
@@ -588,7 +588,7 @@ export const tableService = {
             assignedRobotCode: t.assignedRobotCode || null,
             stationId: t.stationId || null,
             stationName: t.stationName || null,
-            qrCodeUrl: t.qrCodeUrl || null,
+            isRestricted: t.isRestricted,
             currentOrders: t.currentOrders || [],
             orderTime: t.orderTime || null,
             worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
@@ -618,7 +618,7 @@ export const tableService = {
           assignedRobotCode: t.assignedRobotCode || null,
           stationId: t.stationId || null,
           stationName: t.stationName || null,
-          qrCodeUrl: t.qrCodeUrl || null,
+          isRestricted: t.isRestricted,
           currentOrders: t.currentOrders || [],
           orderTime: t.orderTime || null,
           worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
@@ -647,7 +647,7 @@ export const tableService = {
           assignedRobotCode: t.assignedRobotCode || null,
           stationId: t.stationId || null,
           stationName: t.stationName || null,
-          qrCodeUrl: t.qrCodeUrl || null,
+          isRestricted: t.isRestricted,
           currentOrders: t.currentOrders || [],
           orderTime: t.orderTime || null,
           worldX: typeof t.worldX === 'number' ? t.worldX : t.xCoord,
@@ -680,6 +680,7 @@ export const tableService = {
         tableName: data.tableName || `Bàn ${data.tableNo}`,
         capacity: data.capacity || 4,
         stationId: data.stationId || null,
+        zone: data.zone || undefined,
       });
       return { success: true, data: res.data };
     } catch (err: any) {
@@ -932,26 +933,6 @@ export const zaloSupportService = {
       content,
       createdAt: timeStr,
     };
-  },
-};
-
-export const storeService = {
-  async registerStore(data: {
-    storeName: string;
-    ownerName: string;
-    ownerEmail: string;
-    phoneNumber: string;
-    areaId: string;
-    areaName: string;
-    stationId: string;
-    stationName: string;
-  }): Promise<{ message?: string }> {
-    try {
-      const res = await portalClient.post<{ message?: string }>('/stores/register', data);
-      return res.data;
-    } catch {
-      return { message: 'Đăng ký cửa hàng thành công! Đang chờ Admin xác nhận.' };
-    }
   },
 };
 

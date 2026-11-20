@@ -16,7 +16,6 @@ vi.mock('../pages/auth/LoginPage', () => ({ LoginPage: () => <div data-testid="l
 vi.mock('../pages/auth/RegisterPage', () => ({ RegisterPage: () => <div>Register Page</div> }));
 vi.mock('../pages/auth/ForgotPasswordPage', () => ({ ForgotPasswordPage: () => <div>Forgot Password Page</div> }));
 vi.mock('../pages/auth/ResetPasswordPage', () => ({ ResetPasswordPage: () => <div>Reset Password Page</div> }));
-vi.mock('../pages/auth/StoreRegistrationPage', () => ({ StoreRegistrationPage: () => <div>Store Registration Page</div> }));
 vi.mock('../pages/technical/AdminTechnicalPage', () => ({ AdminTechnicalPage: () => <div data-testid="technical-page">Technical Page</div> }));
 vi.mock('../pages/staff/StaffKdsPage', () => ({ StaffKdsPage: () => <div data-testid="staff-page">Staff Page</div> }));
 vi.mock('../pages/technical/StoreEdgeSetupPage', () => ({ StoreEdgeSetupPage: () => <div data-testid="edge-setup-page">Store Edge Setup Page</div> }));
@@ -88,12 +87,6 @@ describe('App routing and integration', () => {
     window.history.pushState(null, '', '/reset-password?token=abc');
     render(<App />);
     await waitFor(() => expect(screen.getByText('Reset Password Page')).toBeInTheDocument());
-  });
-
-  it('renders StoreRegistrationPage for public access', async () => {
-    window.history.pushState(null, '', '/register-store');
-    render(<App />);
-    await waitFor(() => expect(screen.getByText('Store Registration Page')).toBeInTheDocument());
   });
 
   /* ── Technical Engineer & Staff KDS routes ── */

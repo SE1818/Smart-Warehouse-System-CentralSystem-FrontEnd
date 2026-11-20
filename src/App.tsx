@@ -20,7 +20,6 @@ const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ defau
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
-const StoreRegistrationPage = lazy(() => import('./pages/auth/StoreRegistrationPage').then(m => ({ default: m.StoreRegistrationPage })));
 // Technical Engineer & Staff KDS pages
 const AdminTechnicalPage = lazy(() => import('./pages/technical/AdminTechnicalPage').then(m => ({ default: m.AdminTechnicalPage })));
 const StaffKdsPage = lazy(() => import('./pages/staff/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
@@ -95,7 +94,6 @@ function App() {
 					{/* Auth routes */}
 					<Route path="/login" element={<LoginPage />} />
 					<Route path="/register" element={<RegisterPage />} />
-					<Route path="/register-store" element={<StoreRegistrationPage />} />
 					<Route path="/forgot-password" element={<ForgotPasswordPage />} />
 					<Route path="/reset-password" element={<ResetPasswordPage />} />
 					<Route path="/unauthorized" element={<UnauthorizedPage />} />

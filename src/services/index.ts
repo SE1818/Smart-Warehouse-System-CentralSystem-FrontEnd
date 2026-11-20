@@ -9,7 +9,6 @@ export {
   tableService,
   orderService,
   tenantService,
-  storeService,
 } from './portalApi';
 export { sqliteService } from './sqliteService';
 export { signalRService } from './signalrService';
