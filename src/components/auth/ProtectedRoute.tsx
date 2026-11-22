@@ -30,7 +30,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
-  // 🛡️ Edge Node Tenant Verification
+  // Edge Station Tenant Verification
   useEffect(() => {
     let isMounted = true;
     robotService.getEdgeNodeInfo().then((info) => {
@@ -44,7 +44,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
           setEdgeAccessDenied(
-            `Truy cập bị từ chối: Thiết bị Edge Box này thuộc quán '${info.restaurantName || edgeSub}'. Tài khoản của bạn thuộc quán '${userSub || 'khác'}'.`
+            `Truy cập bị từ chối: Thiết bị tại quán này thuộc '${info.restaurantName || edgeSub}'. Tài khoản của bạn thuộc quán '${userSub || 'khác'}'.`
           );
         }
       }

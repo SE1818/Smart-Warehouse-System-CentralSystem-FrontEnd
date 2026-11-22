@@ -1,19 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
-
-const queryClient = new QueryClient({
-	defaultOptions: {
-		queries: {
-			staleTime: 30 * 1000,
-			refetchOnWindowFocus: false,
-			retry: 1,
-		},
-	},
-});
+import { queryClient } from './services/queryClient';
 
 // Auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -26,6 +17,7 @@ const StaffKdsPage = lazy(() => import('./pages/staff/StaffKdsPage').then(m => (
 const StoreEdgeSetupPage = lazy(() => import('./pages/technical/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
 const RobotMonitorPage = lazy(() => import('./pages/technical/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { ShieldAlert } from 'lucide-react';
 
 
 
@@ -33,7 +25,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 function UnauthorizedPage() {
 	return (
 		<div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center space-y-4 text-slate-800">
-			<span className="text-6xl">🚫</span>
+			<ShieldAlert className="w-16 h-16 text-rose-500 mx-auto" />
 			<h1 className="text-2xl font-heading font-bold text-slate-900">Không có quyền truy cập</h1>
 			<p className="text-slate-500 max-w-sm">Tài khoản của bạn không được phân quyền để xem trang này.</p>
 			<button

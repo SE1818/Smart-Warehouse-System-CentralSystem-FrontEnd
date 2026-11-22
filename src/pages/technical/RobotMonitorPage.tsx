@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from 'react';
 import { useRobotStore } from '@/stores/robotStore';
-import { Icons } from '@/components/common/Icons';
+import { Bot, RefreshCw, Wifi, Activity, Battery } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -24,8 +24,6 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
     clearLogs 
   } = useRobotStore();
   const [loading, setLoading] = useState(true);
-  const mqttStatus: 'online' | 'offline' = 'online';
-  const rabbitmqStatus: 'online' | 'offline' = 'online';
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,7 +47,7 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'idle': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'moving': return 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse';
+      case 'moving': return 'bg-blue-50 text-blue-700 border-blue-100';
       case 'swapping_battery': return 'bg-amber-50 text-amber-700 border-amber-100';
       case 'error': return 'bg-rose-50 text-rose-700 border-rose-100';
       default: return 'bg-slate-50 text-slate-700 border-slate-200';
@@ -65,6 +63,8 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
     }
   };
 
+  const activeCount = robots.filter((r) => r.status.toLowerCase() !== 'offline').length;
+
   return (
     <div className={embedded ? 'text-slate-800 font-sans' : 'min-h-screen bg-slate-50 text-slate-800 p-6 md:p-10 font-sans'}>
       <div className={embedded ? 'w-full lg:h-[calc(100vh-88px)] min-h-[480px] flex flex-col gap-3' : 'max-w-6xl mx-auto space-y-8'}>
@@ -78,13 +78,12 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
           }
         >
           <div className={embedded ? 'space-y-0.5' : 'space-y-1'}>
-            <h1 className={embedded ? 'text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2' : 'text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3'}>
-              <div className={embedded ? 'p-1.5 bg-brand-50 rounded-xl text-brand-600 shadow-sm border border-brand-100' : 'p-2 bg-brand-50 rounded-xl text-brand-600 shadow-sm border border-brand-100'}>
-                <Icons.Robot className={embedded ? 'w-5 h-5' : 'w-7 h-7'} />
-              </div>
-              <span className="bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">AMR Monitor</span>
+            <h1 className={embedded ? 'text-base sm:text-lg font-extrabold text-slate-900 tracking-tight' : 'text-3xl font-extrabold text-slate-900 tracking-tight'}>
+              Giám Sát Kết Nối Đội Robot AMR
             </h1>
-            <p className={embedded ? 'text-slate-500 text-xs font-medium' : 'text-slate-500 text-xs sm:text-sm font-medium'}>Theo dõi trạng thái kết nối phần cứng của đội robot tự hành AMR và MQTT gateway.</p>
+            <p className={embedded ? 'text-slate-500 text-xs font-medium' : 'text-slate-500 text-xs sm:text-sm font-medium'}>
+              Theo dõi trạng thái kết nối thiết bị và nhật ký điều hướng của đội robot tự hành AMR tại nhà hàng.
+            </p>
           </div>
           {embedded && (
             <div className="flex items-center gap-2 text-xs font-mono shrink-0">
@@ -92,7 +91,7 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
                 {robots.length} AMR
               </span>
               <span className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 font-bold">
-                {logs.length} Logs
+                {logs.length} Bản ghi
               </span>
             </div>
           )}
@@ -100,49 +99,45 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
 
         {/* Network Connection Status Cards */}
         <div className={embedded ? 'shrink-0 grid grid-cols-1 md:grid-cols-3 gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5'}>
-          {/* SignalR Connection */}
+          {/* Connection Status */}
           <div className={embedded ? 'bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3' : 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4'}>
             <div className={`${embedded ? 'p-2' : 'p-3'} rounded-xl ${
               signalRStatus === 'connected' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
             }`}>
-              <Icons.Refresh className={`${embedded ? 'w-5 h-5' : 'w-6 h-6'} ${signalRStatus === 'connecting' ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`${embedded ? 'w-5 h-5' : 'w-6 h-6'} ${signalRStatus === 'connecting' ? 'animate-spin' : ''}`} />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">SignalR Hub</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Kết Nối Trạm Điều Phối</span>
               <span className="text-sm font-extrabold text-slate-900">
-                {signalRStatus === 'connected' ? 'Kết nối trực tuyến' : signalRStatus === 'connecting' ? 'Đang kết nối...' : 'Ngoại tuyến'}
+                {signalRStatus === 'connected' ? 'Đang hoạt động' : signalRStatus === 'connecting' ? 'Đang kết nối lại...' : 'Chưa kết nối'}
               </span>
             </div>
           </div>
 
-          {/* MQTT Broker Connection */}
+          {/* Fleet Online Count */}
           <div className={embedded ? 'bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3' : 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4'}>
             <div className={`${embedded ? 'p-2' : 'p-3'} rounded-xl ${
-              mqttStatus === 'online' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+              activeCount > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
             }`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={embedded ? 'w-5 h-5' : 'w-6 h-6'}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.284 16.284A3 3 0 0 0 12 17a3 3 0 0 0 3.716-.716M5.456 13.456a6.5 6.5 0 0 1 9.088 0M2.628 10.628a10.5 10.5 0 0 1 14.744 0M12 21v.008H12V21Z" />
-              </svg>
+              <Wifi className={embedded ? 'w-5 h-5' : 'w-6 h-6'} />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">MQTT Broker (Robots)</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Thiết Bị Sẵn Sàng</span>
               <span className="text-sm font-extrabold text-slate-900">
-                {mqttStatus === 'online' ? 'Đang hoạt động' : 'Không có phản hồi'}
+                {activeCount} / {robots.length} Robot
               </span>
             </div>
           </div>
 
-          {/* RabbitMQ Connection */}
+          {/* Recorded Telemetry Events */}
           <div className={embedded ? 'bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3' : 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4'}>
-            <div className={`${embedded ? 'p-2' : 'p-3'} rounded-xl ${
-              rabbitmqStatus === 'online' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
-            }`}>
-              <Icons.Dashboard className={embedded ? 'w-5 h-5' : 'w-6 h-6'} />
+            <div className={`${embedded ? 'p-2' : 'p-3'} rounded-xl bg-blue-50 text-blue-600`}>
+              <Activity className={embedded ? 'w-5 h-5' : 'w-6 h-6'} />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">MassTransit Bus</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Nhật Ký Phiên Hiện Tại</span>
               <span className="text-sm font-extrabold text-slate-900">
-                {rabbitmqStatus === 'online' ? 'Đã liên kết' : 'Mất kết nối'}
+                {logs.length} Sự kiện
               </span>
             </div>
           </div>
@@ -153,8 +148,8 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
           {/* Robot List */}
           <div className={embedded ? 'lg:col-span-6 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4 flex flex-col gap-3 min-h-0' : 'bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-5 sm:p-6 space-y-4'}>
             <h2 className={`${embedded ? 'shrink-0 text-sm sm:text-base' : 'text-base sm:text-lg'} font-extrabold text-slate-900 flex items-center gap-2`}>
-              <Icons.Robot className="w-5 h-5 text-brand-600" />
-              <span>Danh sách Thiết bị AMR</span>
+              <Bot className="w-5 h-5 text-brand-600" />
+              <span>Danh Sách Thiết Bị AMR</span>
             </h2>
             
             <div className={embedded ? 'flex-1 min-h-0 overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-3 content-start' : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'}>
@@ -163,7 +158,7 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="text-sm font-black text-slate-800">{r.name}</h3>
-                      <code className="text-[10px] text-slate-400 font-mono">ID: {r.id.substring(0, 8)}</code>
+                      <code className="text-[10px] text-slate-400 font-mono">Mã: {r.id.substring(0, 8)}</code>
                     </div>
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(r.status)}`}>
                       {r.status.toUpperCase()}
@@ -173,20 +168,19 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
                   <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-600 bg-slate-50/50 p-2.5 rounded-xl border border-slate-200/40">
                     <div className="space-y-0.5">
                       <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Vị trí</span>
-                      <span>X: {r.currentX}, Y: {r.currentY}</span>
+                      <span>X: {r.currentX ?? 0}, Y: {r.currentY ?? 0}</span>
                     </div>
                     <div className="space-y-0.5">
                       <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Phần trăm Pin</span>
                       <span className="flex items-center gap-1">
-                        <Icons.Spinner className="w-3.5 h-3.5 text-slate-400" />
-                        {r.batteryLevel?.toFixed(0)}%
+                        <Battery className="w-3.5 h-3.5 text-slate-400" />
+                        {r.batteryLevel !== undefined ? `${r.batteryLevel.toFixed(0)}%` : '—'}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold pt-1 border-t border-slate-100">
-                    <span>IP: {r.ipAddress || '192.168.1.100'}</span>
-                    <span>Ping: 14ms</span>
+                    <span>Địa chỉ mạng: {r.ipAddress || 'Chưa ghi nhận'}</span>
                   </div>
                 </div>
               ))}
@@ -197,25 +191,25 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
             </div>
           </div>
 
-          {/* Real-time Command Log Stream */}
+          {/* Command Log Stream */}
           <div className={embedded ? 'lg:col-span-6 bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col min-h-[260px] lg:min-h-0 flex-1 dark-scrollbar' : 'bg-slate-950 border border-slate-800 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col h-[420px] dark-scrollbar'}>
             <div className={`flex justify-between items-center border-b border-slate-800 ${embedded ? 'pb-3' : 'pb-4'} shrink-0`}>
-              <h2 className="text-sm font-black text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Real-Time Command Stream Console</span>
+              <h2 className="text-sm font-black text-slate-200 tracking-wide flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span>Nhật Ký Điều Hướng Thiết Bị</span>
               </h2>
               <button 
                 onClick={clearLogs}
                 className="text-xs text-slate-400 hover:text-slate-200 transition-all font-bold px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer"
               >
-                Clear Log
+                Xóa Nhật Ký
               </button>
             </div>
 
             <div className={`flex-1 min-h-0 overflow-y-auto dark-scrollbar font-mono text-xs text-slate-300 space-y-1.5 ${embedded ? 'mt-3' : 'mt-4'} pr-2`}>
               {logs.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-slate-500 text-xs">
-                  Chưa có telemetry log nào được ghi nhận trong phiên hiện tại.
+                  Chưa có bản ghi nhật ký nào trong phiên hiện tại.
                 </div>
               ) : (
                 logs.map((log, index) => (

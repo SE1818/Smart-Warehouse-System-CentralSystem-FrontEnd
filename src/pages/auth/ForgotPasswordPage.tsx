@@ -17,10 +17,10 @@ export function ForgotPasswordPage() {
 
     try {
       await authService.forgotPassword({ email });
-      setMessage('If an account with that email exists, you will receive a password reset link shortly.');
+      setMessage('Nếu tài khoản với email này tồn tại, hệ thống sẽ gửi liên kết đặt lại mật khẩu trong giây lát.');
       setEmail('');
     } catch {
-      setError('An error occurred. Please try again.');
+      setError('Đã xảy ra sự cố. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -39,9 +39,6 @@ export function ForgotPasswordPage() {
           <div>
             <div className="flex items-center justify-center gap-2">
               <h1 className="text-2xl font-black text-slate-900 tracking-tight font-heading">VORA</h1>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
-                CENTRAL
-              </span>
             </div>
             <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mt-1">Khôi phục mật khẩu</p>
           </div>
@@ -67,7 +64,7 @@ export function ForgotPasswordPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="ten@smartwarehouse.com"
+              placeholder="ten@vora.vn"
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
               required
             />
@@ -80,18 +77,18 @@ export function ForgotPasswordPage() {
             {loading ? (
               <>
                 <Icons.Spinner className="w-4 h-4 text-white" />
-                <span>Sending...</span>
+                <span>Đang gửi...</span>
               </>
             ) : (
-              <span>Send Reset Link</span>
+              <span>Gửi Liên Kết Đặt Lại</span>
             )}
           </button>
         </form>
 
         <p className="text-center text-xs text-slate-500 font-medium">
-          Remember your password?{' '}
+          Bạn đã nhớ mật khẩu?{' '}
           <Link to="/login" className="text-brand-600 font-bold hover:text-brand-700 transition-colors">
-            Sign in
+            Đăng nhập
           </Link>
         </p>
       </div>

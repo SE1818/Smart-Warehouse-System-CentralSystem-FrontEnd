@@ -65,9 +65,9 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
     const handleSyncEvent = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.type === 'request_received') {
-        setStatusMessage(`SuperAdmin trên VPS đã yêu cầu đồng bộ: ${customEvent.detail.dataType.toUpperCase()}`);
+        setStatusMessage(`Hệ thống trung tâm đã yêu cầu đồng bộ: ${customEvent.detail.dataType.toUpperCase()}`);
       } else if (customEvent.detail?.type === 'completed' || customEvent.detail?.type === 'manual_completed') {
-        setStatusMessage(`Đã hoàn tất gửi ${customEvent.detail.recordCount || 0} bản ghi SQLite lên VPS.`);
+        setStatusMessage(`Đã hoàn tất gửi ${customEvent.detail.recordCount || 0} bản ghi dữ liệu lên máy chủ.`);
         setTimeout(() => setStatusMessage(null), 4000);
       }
       void loadData();
@@ -96,11 +96,11 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    setStatusMessage('Đang trích xuất dữ liệu SQLite và gửi lên máy chủ VPS...');
+    setStatusMessage('Đang trích xuất dữ liệu trạm quán và gửi lên máy chủ trung tâm...');
     try {
       const success = await edgeSyncService.triggerManualSyncToVps('all');
       if (success) {
-        setStatusMessage('Đã đồng bộ toàn bộ dữ liệu SQLite lên máy chủ VPS thành công!');
+        setStatusMessage('Đã đồng bộ toàn bộ dữ liệu trạm quán lên máy chủ trung tâm thành công!');
       } else {
         setStatusMessage('Đồng bộ thất bại, vui lòng kiểm tra kết nối mạng!');
       }
@@ -117,7 +117,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
     try {
       await edgeSyncService.downloadSqliteFile();
     } catch (e) {
-      console.error('Lỗi tải file SQLite:', e);
+      console.error('Lỗi tải bản sao dữ liệu:', e);
     }
   };
 
@@ -126,13 +126,13 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
     try {
       const granted = await sqliteService.enablePersistentStorage();
       if (granted) {
-        setStatusMessage('Đã cấp quyền Persistent Storage thành công! Trình duyệt sẽ không tự ý dọn dẹp cache SQLite.');
+        setStatusMessage('Đã bật lưu trữ bền vững thành công! Trình duyệt sẽ không tự ý dọn dẹp dữ liệu trạm quán.');
       } else {
-        setStatusMessage('Trình duyệt chưa cấp quyền Persistent Storage (hoặc đang ở chế độ Best-Effort).');
+        setStatusMessage('Trình duyệt đang giữ chế độ lưu trữ tiêu chuẩn.');
       }
       await loadData();
     } catch {
-      setStatusMessage('Lỗi khi kích hoạt Persistent Storage.');
+      setStatusMessage('Lỗi khi kích hoạt lưu trữ bền vững.');
     } finally {
       setIsEnablingPersist(false);
       setTimeout(() => setStatusMessage(null), 4000);
@@ -164,19 +164,16 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base font-bold text-white tracking-wide">
-                  Cơ Sở Dữ Liệu SQLite Cục Bộ (Local Edge Engine)
+                  Bộ Nhớ Dữ Liệu Tại Quán
                 </h3>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono font-semibold">
-                  sql.js WASM + IndexedDB
-                </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Toàn bộ dữ liệu RobotService được nạp và lưu trữ cục bộ tại máy trạm, sẵn sàng nhận lệnh đồng bộ ngầm từ VPS SuperAdmin.
+                Toàn bộ dữ liệu vận hành đội robot được lưu trữ cục bộ tại máy trạm và tự động đồng bộ với máy chủ trung tâm.
               </p>
             </div>
           </div>
 
-          {/* VPS Connection Badge */}
+          {/* Connection Badge */}
           <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border ${
@@ -190,7 +187,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               <Radio
                 className={`w-3.5 h-3.5 ${
                   connectionState === 'connected'
-                    ? 'animate-pulse text-emerald-400'
+                    ? 'text-emerald-400'
                     : connectionState === 'connecting'
                     ? 'animate-spin text-amber-300'
                     : 'text-rose-400'
@@ -198,10 +195,10 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               />
               <span>
                 {connectionState === 'connected'
-                  ? 'Kênh Ngầm VPS: Đã kết nối'
+                  ? 'Kết Nối Máy Chủ: Sẵn sàng'
                   : connectionState === 'connecting'
-                  ? 'Đang kết nối VPS...'
-                  : 'Mất kết nối VPS'}
+                  ? 'Đang kết nối lại...'
+                  : 'Mất kết nối máy chủ'}
               </span>
             </div>
           </div>
@@ -213,14 +210,13 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             {/* Encryption Badge */}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/50 text-emerald-300 border border-emerald-500/30 font-medium">
               <Lock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Web Crypto AES-GCM 256-bit</span>
-              <span className="text-[10px] text-emerald-400/80 font-mono">(Mã hóa chống xem F12)</span>
+              <span>Đã mã hóa bảo mật dữ liệu</span>
             </div>
 
-            {/* Edge Single-Tenant SQLite Schema Badge */}
+            {/* Single-Tenant Schema Badge */}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium bg-emerald-950/40 text-emerald-300 border-emerald-500/30">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>SQLite Edge: Sạch (Không chứa store_id / tenant_id - Tự động bổ sung khi đẩy lên Supabase)</span>
+              <span>Dữ liệu trạm quán đã chuẩn hóa đồng bộ</span>
             </div>
 
             {/* Persistent Storage Badge */}
@@ -237,7 +233,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
               )}
               <span>
-                {stats?.isPersisted ? 'Persistent Storage (Đã khóa chống xóa)' : 'Best-Effort (Chưa cấp quyền lưu vĩnh viễn)'}
+                {stats?.isPersisted ? 'Lưu trữ bền vững (Đã khóa chống xóa)' : 'Lưu trữ tiêu chuẩn (Chưa cấp quyền lưu vĩnh viễn)'}
               </span>
             </div>
 
@@ -259,10 +255,10 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               onClick={handleEnablePersistence}
               disabled={isEnablingPersist}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all cursor-pointer self-start md:self-auto disabled:opacity-50 shrink-0"
-              title="Yêu cầu trình duyệt cấp quyền lưu trữ vĩnh viễn để không tự động xóa IndexedDB"
+              title="Yêu cầu trình duyệt cấp quyền lưu trữ bền vững cho trạm quán"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isEnablingPersist ? 'Đang yêu cầu...' : 'Khóa Chống Tự Xóa Cache'}</span>
+              <span>{isEnablingPersist ? 'Đang yêu cầu...' : 'Bật Lưu Trữ Bền Vững'}</span>
             </button>
           )}
         </div>
@@ -270,7 +266,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
         {/* Real-time Status Message Toast */}
         {statusMessage && (
           <div className="mt-2.5 p-2.5 bg-blue-950/60 border border-blue-500/40 rounded-xl text-xs text-blue-200 flex items-center gap-2 animate-fade-in">
-            <Radio className="w-4 h-4 text-blue-400 animate-pulse flex-shrink-0" />
+            <Radio className="w-4 h-4 text-blue-400 flex-shrink-0" />
             <span className="font-medium">{statusMessage}</span>
           </div>
         )}
@@ -286,24 +282,24 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             <div className="text-lg font-black text-white font-mono tabular-nums">
               {stats ? stats.robotsCount : 0}
             </div>
-            <div className="text-[10px] text-slate-400 truncate">Lưu từ Supabase / BE</div>
+            <div className="text-[10px] text-slate-400 truncate">Đồng bộ từ hệ thống</div>
           </div>
 
-          {/* SLAM Map */}
+          {/* Floor Map */}
           <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-0.5">
             <div className="flex items-center justify-between text-slate-400 text-[11px] font-medium">
-              <span>Bản Đồ SLAM</span>
+              <span>Bản Đồ Mặt Bằng</span>
               <Layers className="w-3.5 h-3.5 text-blue-400" />
             </div>
             <div className="text-lg font-black text-white font-mono tabular-nums">
-              {stats?.hasMap ? '1 Active' : '0'}
+              {stats?.hasMap ? '1 Hoạt động' : '0'}
             </div>
             <div className="text-[10px] text-slate-400 truncate">
-              {stats?.mapName || 'Từ MQTT ROS 2'}
+              {stats?.mapName || 'Đang áp dụng'}
             </div>
           </div>
 
-          {/* MQTT Waypoints */}
+          {/* Waypoints */}
           <div
             className={`p-2.5 rounded-xl border space-y-0.5 ${
               stats?.hasMqttWaypoints
@@ -313,7 +309,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
           >
             <div className="flex items-center justify-between text-[11px] font-medium">
               <span className={stats?.hasMqttWaypoints ? 'text-slate-400' : 'text-amber-400 font-bold'}>
-                MQTT Waypoints
+                Điểm Dừng
               </span>
               <MapPin className={`w-3.5 h-3.5 ${stats?.hasMqttWaypoints ? 'text-emerald-400' : 'text-amber-400'}`} />
             </div>
@@ -321,7 +317,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               {stats ? stats.waypointsCount : 0}
             </div>
             <div className={`text-[10px] truncate ${stats?.hasMqttWaypoints ? 'text-emerald-400' : 'text-amber-400'}`}>
-              {stats?.hasMqttWaypoints ? 'Đã nhận từ MQTT' : 'Chưa nhận MQTT'}
+              {stats?.hasMqttWaypoints ? 'Đã đồng bộ' : 'Chưa có điểm dừng'}
             </div>
           </div>
 
@@ -334,13 +330,13 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             <div className="text-lg font-black text-white font-mono tabular-nums">
               {stats ? stats.tablesCount : 0}
             </div>
-            <div className="text-[10px] text-slate-400 truncate">Từ Waypoints MQTT</div>
+            <div className="text-[10px] text-slate-400 truncate">Trên sơ đồ quán</div>
           </div>
 
           {/* Transfer Logs */}
           <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-0.5">
             <div className="flex items-center justify-between text-slate-400 text-[11px] font-medium">
-              <span>Log Transfer</span>
+              <span>Nhật Ký Chuyến</span>
               <FileText className="w-3.5 h-3.5 text-amber-400" />
             </div>
             <div className="text-lg font-black text-white font-mono tabular-nums">
@@ -349,10 +345,10 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             <div className="text-[10px] text-slate-400 truncate">Nhật ký nhiệm vụ</div>
           </div>
 
-          {/* Database Size */}
+          {/* Storage Size */}
           <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-0.5">
             <div className="flex items-center justify-between text-slate-400 text-[11px] font-medium">
-              <span>Dung Lượng DB</span>
+              <span>Dung Lượng Lưu Trữ</span>
               <Database className="w-3.5 h-3.5 text-emerald-400" />
             </div>
             <div className="text-lg font-black text-white font-mono tabular-nums">
@@ -360,7 +356,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             </div>
             <div className="text-[10px] text-emerald-400 truncate flex items-center gap-1 font-mono">
               <Lock className="w-2.5 h-2.5" />
-              <span>{stats?.isEncrypted ? 'AES-GCM Encrypted' : 'IndexedDB Cache'}</span>
+              <span>{stats?.isEncrypted ? 'Đã mã hóa' : 'Lưu trữ cục bộ'}</span>
             </div>
           </div>
         </div>
@@ -376,18 +372,18 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
             >
               <CloudUpload className={`w-3.5 h-3.5 ${isSyncing ? 'animate-bounce' : ''}`} />
-              <span>{isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay lên VPS'}</span>
+              <span>{isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ lên máy chủ'}</span>
             </button>
 
-            {/* Download SQLite Binary */}
+            {/* Download Backup */}
             <button
               type="button"
               onClick={handleDownloadDb}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all cursor-pointer"
-              title="Tải file SQLite để xem bằng DB Browser for SQLite"
+              title="Tải bản sao dữ liệu trạm quán"
             >
               <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Tải file .sqlite</span>
+              <span>Tải bản sao dữ liệu</span>
             </button>
 
             {/* Refresh Button */}
@@ -395,7 +391,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               type="button"
               onClick={loadData}
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
-              title="Tải lại số liệu từ SQLite"
+              title="Tải lại số liệu tại quán"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -412,7 +408,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
           <div className="text-[11px] text-slate-400 flex items-center gap-1.5 bg-slate-950/40 px-3 py-1.5 rounded-lg border border-slate-800/60">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
             <span>
-              Quy tắc an toàn: Không tự ý sinh Waypoint ảo khi chưa nhận tín hiệu MQTT từ robot.
+              Quy tắc an toàn: Không tự ý sinh điểm dừng ảo khi chưa nhận tín hiệu từ robot.
             </span>
           </div>
         </div>
@@ -425,7 +421,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
           <div className="shrink-0 flex items-center justify-between gap-3 pb-2.5 border-b border-slate-800">
             <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <FileText className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span>Nhật Ký Yêu Cầu Đồng Bộ SQLite ↔ VPS ({audits.length} phiên gần nhất)</span>
+              <span>Nhật Ký Đồng Bộ Dữ Liệu ({audits.length} phiên gần nhất)</span>
             </h4>
             <button
               type="button"
@@ -479,10 +475,10 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               <FileText className="w-7 h-7 text-slate-600" />
               <div className="space-y-0.5 max-w-md">
                 <p className="text-xs font-bold text-slate-300">
-                  Chưa có giao dịch đồng bộ nào được ghi nhận trong bộ nhớ SQLite cục bộ
+                  Chưa có giao dịch đồng bộ nào được ghi nhận trong bộ nhớ tại quán
                 </p>
                 <p className="text-[11px] text-slate-400">
-                  Khi có lệnh đồng bộ thủ công hoặc yêu cầu từ SuperAdmin trên VPS, lịch sử đối soát sẽ hiển thị trực tiếp tại đây.
+                  Khi có lệnh đồng bộ thủ công hoặc yêu cầu từ hệ thống trung tâm, lịch sử đối soát sẽ hiển thị trực tiếp tại đây.
                 </p>
               </div>
               <button
@@ -492,18 +488,18 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
                 className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all cursor-pointer disabled:opacity-50"
               >
                 <CloudUpload className="w-3.5 h-3.5" />
-                <span>{isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ ngay lên VPS'}</span>
+                <span>{isSyncing ? 'Đang đồng bộ...' : 'Đồng bộ lên máy chủ'}</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Right (5 cols): Edge <-> Live API Reconciliation & Storage Health */}
+        {/* Right (5 cols): Local <-> Central Reconciliation & Storage Health */}
         <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-4 text-slate-100 shadow-lg flex flex-col gap-3 min-h-0">
           <div className="shrink-0 flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
             <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Đối Chiếu Dữ Liệu Edge ↔ Live</span>
+              <span>Đối Chiếu Dữ Liệu Trạm Quán & Máy Chủ</span>
             </h4>
             {liveSummary?.tenantLabel && (
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-950 text-cyan-300 border border-slate-800 truncate max-w-[140px]">
@@ -514,7 +510,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
 
           <div className="flex-1 min-h-0 overflow-y-auto dark-scrollbar pr-1 space-y-2 text-xs">
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3">
-              <span className="text-slate-400 font-medium">Robot AMR (Local / Live)</span>
+              <span className="text-slate-400 font-medium">Robot AMR (Tại quán / Máy chủ)</span>
               <span className="font-mono font-bold text-white tabular-nums">
                 {stats ? stats.robotsCount : 0}
                 <span className="text-slate-500 mx-1.5">/</span>
@@ -523,7 +519,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3">
-              <span className="text-slate-400 font-medium">Bàn Phục Vụ (Local / Live)</span>
+              <span className="text-slate-400 font-medium">Bàn Phục Vụ (Tại quán / Máy chủ)</span>
               <span className="font-mono font-bold text-white tabular-nums">
                 {stats ? stats.tablesCount : 0}
                 <span className="text-slate-500 mx-1.5">/</span>
@@ -532,7 +528,7 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3">
-              <span className="text-slate-400 font-medium">Log Transfer / Nhiệm vụ Live</span>
+              <span className="text-slate-400 font-medium">Nhật ký chuyến giao</span>
               <span className="font-mono font-bold text-white tabular-nums">
                 {stats ? stats.transferLogsCount : 0}
                 <span className="text-slate-500 mx-1.5">/</span>
@@ -543,15 +539,15 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3">
               <span className="text-slate-400 font-medium">Bảo mật &amp; Lưu trữ</span>
               <span className="font-mono text-[11px] font-bold text-emerald-400">
-                {stats?.isEncrypted ? 'AES-GCM Encrypted' : 'IndexedDB Cache'} •{' '}
-                {stats?.isPersisted ? 'Persistent' : 'Best-Effort'}
+                {stats?.isEncrypted ? 'Đã mã hóa' : 'Lưu trữ cục bộ'} •{' '}
+                {stats?.isPersisted ? 'Bền vững' : 'Tiêu chuẩn'}
               </span>
             </div>
 
             {Boolean(stats?.storageQuotaBytes && stats.storageQuotaBytes > 0) && (
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-1.5">
                 <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400 font-medium">Hạn mức IndexedDB trình duyệt</span>
+                  <span className="text-slate-400 font-medium">Hạn mức lưu trữ trình duyệt</span>
                   <span className="font-mono text-slate-300 tabular-nums">
                     {formatBytes(stats?.storageUsageBytes || 0)} / {formatBytes(stats?.storageQuotaBytes || 0)} ({storageQuotaPercent}%)
                   </span>
@@ -567,8 +563,8 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
           </div>
 
           <div className="shrink-0 pt-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
-            <span>Cập nhật DB: {stats?.lastUpdated ? new Date(stats.lastUpdated).toLocaleTimeString('vi-VN') : '—'}</span>
-            <span>Sync: {lastSyncTime || 'Chưa phát sinh'}</span>
+            <span>Cập nhật: {stats?.lastUpdated ? new Date(stats.lastUpdated).toLocaleTimeString('vi-VN') : '—'}</span>
+            <span>Đồng bộ: {lastSyncTime || 'Chưa phát sinh'}</span>
           </div>
         </div>
       </div>

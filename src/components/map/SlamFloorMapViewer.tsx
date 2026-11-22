@@ -681,7 +681,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
         ctx.fillStyle = '#64748b';
         ctx.font = '10px monospace';
-        ctx.fillText('Gốc ROS (0,0)', originPx.x + 6, originPx.y - 6);
+        ctx.fillText('Gốc Tọa Độ (0,0)', originPx.x + 6, originPx.y - 6);
       }
     } else {
       ctx.fillStyle = '#f8fafc';
@@ -720,7 +720,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🍳 BẾP', kPx.x, kPx.y + 3);
+      ctx.fillText('QUẦY BẾP', kPx.x, kPx.y + 3);
     }
 
     // 2.3 Dining Tables
@@ -1039,11 +1039,8 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono">
-                  SƠ ĐỒ BÀN ĂN & VỊ TRÍ ROBOT
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold">
-                  Trực quan
+                <span className="text-xs font-bold text-slate-900 tracking-wider">
+                  Sơ Đồ Bàn Ăn & Vị Trí Robot
                 </span>
                 {robots && robots.length > 0 && (() => {
                   const activeRobot = (selectedRobotId ? robots.find(r => r.id === selectedRobotId) : null)
@@ -1051,14 +1048,14 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                     || robots[0];
                   return (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {activeRobot.name || activeRobot.id}: {activeRobot.yaw !== undefined ? `${(activeRobot.yaw).toFixed(2)} rad` : 'Online'}
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      {activeRobot.name || activeRobot.id}: {activeRobot.yaw !== undefined ? `${(activeRobot.yaw).toFixed(2)} rad` : 'Sẵn sàng'}
                     </span>
                   );
                 })()}
               </div>
               <p className="text-[11px] text-slate-500 font-medium">
-                Click vào bàn trên sơ đồ để chọn điểm giao món ăn cho AMR
+                Nhấp vào bàn trên sơ đồ để chọn điểm giao món ăn cho AMR
               </p>
             </div>
           </div>
@@ -1107,8 +1104,8 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <span className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono truncate">
-                  {activeSlamMap?.name || 'BẢN ĐỒ SLAM MẶT BẰNG (ROS 2)'}
+                <span className="text-xs font-bold text-slate-100 tracking-wider truncate">
+                  {activeSlamMap?.name || 'Bản Đồ Mặt Bằng Nhà Hàng'}
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono shrink-0">
                   {effectiveMetadata.resolution}m/px
@@ -1120,27 +1117,23 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                   return (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">
                       <Compass className="w-3 h-3 text-purple-400" />
-                      {activeRobot.name || activeRobot.id}: {activeRobot.yaw !== undefined ? `${(activeRobot.yaw).toFixed(2)} rad` : 'Online'}
+                      {activeRobot.name || activeRobot.id}: {activeRobot.yaw !== undefined ? `${(activeRobot.yaw).toFixed(2)} rad` : 'Sẵn sàng'}
                     </span>
                   );
                 })()}
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">
-                  <Activity className="w-3 h-3 text-emerald-400" />
-                  Realtime Telemetry
-                </span>
                 {resolvedWaypoints.length > 0 ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                    MQTT ({resolvedWaypoints.length})
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                    Điểm Dừng ({resolvedWaypoints.length})
                   </span>
                 ) : (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">
-                    <span>⚠️</span> Không có Waypoint
+                    Chưa có điểm dừng
                   </span>
                 )}
               </div>
               <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium hidden sm:block truncate mt-0.5">
-                Dữ liệu thực tế từ Robot Service & MQTT • Giám sát kỹ thuật SLAM Nav2
+                Giám sát vị trí đội robot và sơ đồ điểm dừng tại nhà hàng
               </p>
             </div>
           </div>
@@ -1151,7 +1144,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
               onClick={fetchActiveMap}
               disabled={isLoadingMap}
               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer shrink-0"
-              title="Đồng bộ lại bản đồ từ Robot Service"
+              title="Đồng bộ lại bản đồ mặt bằng"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMap ? 'animate-spin' : ''}`} />
             </button>
@@ -1164,10 +1157,10 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                   ? 'bg-blue-600/30 text-blue-300 border-blue-500/50'
                   : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
               }`}
-              title="Bật/Tắt Lớp 1: SLAM Costmap gốc (Lidar)"
+              title="Bật/Tắt lớp bản đồ mặt bằng"
             >
               {showRawSlam ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              <span className="hidden md:inline">Lớp 1 (SLAM)</span>
+              <span className="hidden md:inline">Lớp Bản Đồ</span>
             </button>
 
             <button
@@ -1178,7 +1171,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                   ? 'bg-emerald-600/30 text-emerald-300 border-emerald-500/50'
                   : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
               }`}
-              title="Bật/Tắt Lớp 3: Đường chạy Laser của AMR"
+              title="Bật/Tắt đường đi của AMR"
             >
               <Navigation className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Đường Đi</span>
@@ -1192,11 +1185,11 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                   ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50'
                   : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
               }`}
-              title="Bật/Tắt hiển thị Điểm Waypoint Nav2"
+              title="Bật/Tắt hiển thị Điểm dừng"
             >
               <MapPin className="w-3.5 h-3.5" />
               <span className="hidden md:inline">
-                Waypoints ({resolvedWaypoints.length > 0 ? resolvedWaypoints.length : '0'})
+                Điểm Dừng ({resolvedWaypoints.length > 0 ? resolvedWaypoints.length : '0'})
               </span>
             </button>
 
@@ -1208,7 +1201,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                   ? 'bg-amber-600/30 text-amber-300 border-amber-500/50'
                   : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
               }`}
-              title="Bật/Tắt HUD Tọa độ ROS 2"
+              title="Bật/Tắt hiển thị tọa độ"
             >
               <Crosshair className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Tọa Độ</span>
@@ -1255,7 +1248,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           <div className="absolute top-2.5 sm:top-3 left-1/2 -translate-x-1/2 bg-amber-950/90 backdrop-blur-md border border-amber-500/50 text-amber-200 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl sm:rounded-full text-[11px] sm:text-xs flex items-center gap-1.5 sm:gap-2 z-20 shadow-lg pointer-events-none max-w-[92%] text-center">
             <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
             <span className="line-clamp-2 sm:line-clamp-none">
-              Chưa nhận được waypoint nào từ MQTT / ROS 2. Trên bản đồ không hiển thị waypoint nào.
+              Chưa có dữ liệu điểm dừng trên bản đồ mặt bằng.
             </span>
           </div>
         )}
@@ -1309,11 +1302,11 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             )}
             {hoveredTable.assignedRobot && (
               <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                <span>🤖 Robot đảm nhiệm: {hoveredTable.assignedRobot}</span>
+                <span>Robot đảm nhiệm: {hoveredTable.assignedRobot}</span>
               </div>
             )}
             <p className={`text-[10px] italic pt-1 ${mode === 'simplified' ? 'text-slate-500 border-t border-slate-100' : 'text-slate-400 border-t border-slate-800'}`}>
-              👉 Nhấp chuột để chọn bàn này cho khay xuất món KDS
+              Nhấp chuột để chọn bàn này cho khay xuất món KDS
             </p>
           </div>
         )}
@@ -1331,15 +1324,15 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
               </span>
             </div>
             <div className="text-[11px] text-slate-300 font-mono">
-              Tọa độ ROS: X = {hoveredWaypoint.worldX.toFixed(2)}m | Y = {hoveredWaypoint.worldY.toFixed(2)}m
+              Tọa độ: X = {hoveredWaypoint.worldX.toFixed(2)}m | Y = {hoveredWaypoint.worldY.toFixed(2)}m
             </div>
             {typeof hoveredWaypoint.theta === 'number' && (
               <div className="text-[10px] text-amber-300 font-mono">
-                Góc xoay Yaw (θ): {(hoveredWaypoint.theta * (180 / Math.PI)).toFixed(1)}° ({hoveredWaypoint.theta.toFixed(2)} rad)
+                Góc xoay (θ): {(hoveredWaypoint.theta * (180 / Math.PI)).toFixed(1)}° ({hoveredWaypoint.theta.toFixed(2)} rad)
               </div>
             )}
             <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800">
-              📍 Tọa độ điều hướng tự động Nav2
+              Tọa độ điểm dừng điều hướng
             </p>
           </div>
         )}
@@ -1350,12 +1343,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             <span className="flex items-center gap-1 text-blue-400">
               <Crosshair className="w-3 h-3" />
               <span>
-                ROS: ({hoveredCoord.worldX.toFixed(2)}m, {hoveredCoord.worldY.toFixed(2)}m)
+                Tọa độ: ({hoveredCoord.worldX.toFixed(2)}m, {hoveredCoord.worldY.toFixed(2)}m)
               </span>
             </span>
             <span className="text-slate-600">|</span>
             <span>
-              Pixel: ({hoveredCoord.pixelX}, {hoveredCoord.pixelY})
+              Điểm ảnh: ({hoveredCoord.pixelX}, {hoveredCoord.pixelY})
             </span>
             <span className="text-slate-600">|</span>
             <span className="text-emerald-400 font-bold">Zoom: {Math.round(zoom * 100)}%</span>
@@ -1369,7 +1362,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           <div className="flex items-center gap-2.5 sm:gap-3 overflow-x-auto no-scrollbar py-0.5">
             <span className="font-bold text-slate-700 shrink-0">Chú thích sơ đồ:</span>
             <span className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /> Chờ món
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Chờ món
             </span>
             <span className="flex items-center gap-1 shrink-0">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Đang phục vụ
@@ -1385,7 +1378,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             </span>
           </div>
           <span className="text-[10px] text-slate-500 font-mono truncate">
-            Click bàn trên sơ đồ để chọn lệnh • Tự động khớp lệnh KDS
+            Nhấp bàn trên sơ đồ để chọn lệnh • Tự động khớp lệnh KDS
           </span>
         </div>
       ) : (
@@ -1393,7 +1386,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           <div className="flex items-center gap-2.5 sm:gap-4 overflow-x-auto no-scrollbar py-0.5">
             <span className="font-bold text-slate-300 shrink-0">Chú thích sơ đồ:</span>
             <span className="flex items-center gap-1 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /> Bàn chờ món
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Bàn chờ món
             </span>
             <span className="flex items-center gap-1 shrink-0">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Đang phục vụ
@@ -1405,12 +1398,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
               <span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Robot AMR
             </span>
             <span className="flex items-center gap-1 text-cyan-400 shrink-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> Waypoints ({resolvedWaypoints.length})
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> Điểm dừng ({resolvedWaypoints.length})
             </span>
           </div>
 
           <div className="text-[10px] text-slate-400 font-mono truncate">
-            Gốc: ({effectiveMetadata.originX}m, {effectiveMetadata.originY}m) • Trạm: {resolvedStations.length} • Waypoints: {resolvedWaypoints.length}
+            Gốc: ({effectiveMetadata.originX}m, {effectiveMetadata.originY}m) • Trạm: {resolvedStations.length} • Điểm dừng: {resolvedWaypoints.length}
           </div>
         </div>
       )}

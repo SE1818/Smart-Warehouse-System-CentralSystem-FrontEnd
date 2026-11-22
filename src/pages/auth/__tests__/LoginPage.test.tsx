@@ -38,11 +38,11 @@ const renderLoginPage = () => {
   );
 };
 
-const getEmailInput = () => screen.getByPlaceholderText('nhanvien@smartwarehouse.com');
+const getEmailInput = () => screen.getByPlaceholderText('nhanvien@vora.vn');
 const getPasswordInput = () => screen.getByPlaceholderText('••••••••');
 
 const submitForm = async () => {
-  const form = screen.getByPlaceholderText('nhanvien@smartwarehouse.com').closest('form')!;
+  const form = screen.getByPlaceholderText('nhanvien@vora.vn').closest('form')!;
   fireEvent.submit(form);
 };
 
@@ -55,8 +55,7 @@ describe('LoginPage', () => {
   it('should render login form elements', () => {
     renderLoginPage();
     expect(screen.getByText('VORA')).toBeInTheDocument();
-    expect(screen.getByText('CENTRAL OS')).toBeInTheDocument();
-    expect(screen.getByText(/Hệ thống Quản Trị & Vận Hành AMR/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hệ Thống Quản Trị & Vận Hành AMR/i)).toBeInTheDocument();
     expect(getEmailInput()).toBeInTheDocument();
     expect(getPasswordInput()).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Đăng nhập hệ thống/i })).toBeInTheDocument();
@@ -110,12 +109,12 @@ describe('LoginPage', () => {
       refreshToken: 'mock-refresh',
       accessTokenExpiresIn: '3600',
       role: 'technical',
-      email: 'engineer@smartwarehouse.com',
+      email: 'engineer@vora.vn',
     });
 
     renderLoginPage();
 
-    await user.type(getEmailInput(), 'engineer@smartwarehouse.com');
+    await user.type(getEmailInput(), 'engineer@vora.vn');
     await user.type(getPasswordInput(), 'Password123!');
     await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
 
@@ -147,13 +146,13 @@ describe('LoginPage', () => {
     const techBtn = screen.getByRole('button', { name: /Kỹ Sư Kỹ Thuật/i });
     await user.click(techBtn);
 
-    expect(getEmailInput()).toHaveValue('engineer@smartwarehouse.com');
+    expect(getEmailInput()).toHaveValue('engineer@vora.vn');
     expect(getPasswordInput()).toHaveValue('Password123!');
 
     const staffBtn = screen.getByRole('button', { name: /Nhân Viên Vận Hành/i });
     await user.click(staffBtn);
 
-    expect(getEmailInput()).toHaveValue('staff@smartwarehouse.com');
+    expect(getEmailInput()).toHaveValue('staff@vora.vn');
     expect(getPasswordInput()).toHaveValue('Password123!');
   });
 
@@ -212,7 +211,7 @@ describe('LoginPage', () => {
     await user.type(getPasswordInput(), 'Password123!');
     await user.click(screen.getByRole('button', { name: /Đăng nhập hệ thống/i }));
 
-    expect(await screen.findByText(/Truy cập bị từ chối: Thiết bị Edge Box này thuộc nhà hàng 'Nhà Hàng Golden BBQ'/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Truy cập bị từ chối: Thiết bị tại quán này thuộc nhà hàng 'Nhà Hàng Golden BBQ'/i)).toBeInTheDocument();
     expect(localStorage.getItem('authToken')).toBeNull();
   });
 

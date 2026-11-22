@@ -151,9 +151,6 @@ return (
   <div>
     <div className="flex items-center justify-center gap-2">
       <h1 className="text-2xl font-black text-slate-900 tracking-tight font-heading">VORA</h1>
-      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-50 text-[#0062FF] border border-blue-200">
-        CENTRAL
-      </span>
     </div>
     <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mt-1">Đăng ký tài khoản vận hành</p>
   </div>
@@ -195,7 +192,7 @@ required
 type="email"
 value={email}
 onChange={(e) => setEmail(e.target.value)}
-placeholder="ten@smartwarehouse.com"
+placeholder="ten@vora.vn"
 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
 required
 />

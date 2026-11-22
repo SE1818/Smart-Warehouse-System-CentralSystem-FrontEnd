@@ -113,6 +113,90 @@ export const isEdgeEndpoint = (url?: string): boolean => {
 };
 
 const pendingRequests = new Map<string, Promise<any>>();
+interface CachedApiResponse {
+  data: any;
+  status: number;
+  statusText: string;
+  headers: any;
+  timestamp: number;
+  ttlMs: number;
+}
+const responseCache = new Map<string, CachedApiResponse>();
+let edgeUnavailableUntil = 0;
+const EDGE_COOLDOWN_MS = 60_000;
+
+const cloneResponseData = <T>(data: T): T => {
+  if (data === undefined || data === null) return data;
+  try {
+    return structuredClone(data);
+  } catch {
+    return JSON.parse(JSON.stringify(data));
+  }
+};
+
+const resolveEndpointTtlMs = (url: string = ''): number => {
+  if (
+    url.includes('/auth/') ||
+    url.includes('/health') ||
+    url.includes('/telemetry-summary') ||
+    url.includes('/payments/')
+  ) {
+    return 0;
+  }
+  if (
+    url.includes('/stations') ||
+    url.includes('/areas') ||
+    url.includes('/map/') ||
+    url.includes('/edge-info') ||
+    url.includes('/edge/info')
+  ) {
+    return 300_000;
+  }
+  if (
+    url.includes('/tables') ||
+    url.includes('/robots') ||
+    url.includes('/tenant/fleet') ||
+    url.includes('/fleet')
+  ) {
+    return 15_000;
+  }
+  if (url.includes('/tasks') || url.includes('/orders/pending')) {
+    return 10_000;
+  }
+  return 30_000;
+};
+
+export function clearApiCache(filterPattern?: string): void {
+  if (!filterPattern) {
+    responseCache.clear();
+    pendingRequests.clear();
+    return;
+  }
+  for (const key of responseCache.keys()) {
+    if (key.includes(filterPattern)) {
+      responseCache.delete(key);
+    }
+  }
+}
+
+const invalidateCacheOnMutation = (url: string = ''): void => {
+  if (!url) return;
+  if (url.includes('/tables')) clearApiCache('/tables');
+  if (url.includes('/robots') || url.includes('/tasks') || url.includes('/fleet')) {
+    clearApiCache('/robots');
+    clearApiCache('/tasks');
+    clearApiCache('/fleet');
+    clearApiCache('/tenant/fleet');
+  }
+  if (url.includes('/orders')) clearApiCache('/orders');
+  if (url.includes('/stations') || url.includes('/areas') || url.includes('/map/')) {
+    clearApiCache('/stations');
+    clearApiCache('/areas');
+    clearApiCache('/map/');
+  }
+  if (url.includes('/auth/')) clearApiCache();
+};
+
 const getAdapter = (config: any): AxiosAdapter => {
   const targetAdapter = (config.adapter === dedupeAndRetryAdapter) ? undefined : config.adapter;
   if (typeof axios.getAdapter === 'function') {
@@ -137,18 +221,47 @@ const sanitizeParams = (obj: any) => {
 };
 
 const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
-  // Deduplicate only GET requests to avoid breaking mutations
+  const url = config.url || '';
   if (config.method?.toLowerCase() !== 'get') {
+    invalidateCacheOnMutation(url);
     const adapter = getAdapter(config);
     return adapter(config);
   }
 
   const adapter = getAdapter(config);
-  const key = `${config.method}:${config.url}:${sanitizeParams(config.params)}`;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+  const tokenSalt = token ? token.slice(-12) : 'anon';
+  const cacheKey = `${config.method}:${url}:${sanitizeParams(config.params)}:${tokenSalt}`;
+  const skipCache = Boolean((config as any).skipCache);
+  const ttlMs = (config as any).ttlMs ?? resolveEndpointTtlMs(url);
 
-  if (pendingRequests.has(key)) {
-    return pendingRequests.get(key)!;
+  if (!skipCache && ttlMs > 0) {
+    const cached = responseCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < cached.ttlMs) {
+      return Promise.resolve({
+        data: cloneResponseData(cached.data),
+        status: cached.status,
+        statusText: cached.statusText,
+        headers: { ...cached.headers },
+        config,
+        request: {},
+      });
+    }
   }
+
+  const inflightKey = `${cacheKey}:${(config as any)._edgeFallbackRetried ? 'cloud' : 'primary'}`;
+  if (pendingRequests.has(inflightKey)) {
+    return pendingRequests.get(inflightKey)!.then((res) => ({
+      ...res,
+      data: cloneResponseData(res.data),
+    }));
+  }
+
+  const isInitialEdgeTry =
+    isEdgeEndpoint(url) &&
+    !(config as any)._edgeFallbackRetried &&
+    config.baseURL !== API_BASE_URL;
+  const maxRetries = isInitialEdgeTry ? 0 : 2;
 
   const executeWithRetry = async (retriesLeft: number): Promise<AxiosResponse<any>> => {
     try {
@@ -165,11 +278,27 @@ const dedupeAndRetryAdapter: AxiosAdapter = (config) => {
     }
   };
 
-  const promise = executeWithRetry(2).finally(() => {
-    pendingRequests.delete(key);
-  });
+  const promise = executeWithRetry(maxRetries)
+    .then((res) => {
+      pendingRequests.delete(inflightKey);
+      if (!skipCache && ttlMs > 0 && res && res.status >= 200 && res.status < 300 && res.data !== undefined) {
+        responseCache.set(cacheKey, {
+          data: cloneResponseData(res.data),
+          status: res.status,
+          statusText: res.statusText || 'OK',
+          headers: res.headers || {},
+          timestamp: Date.now(),
+          ttlMs,
+        });
+      }
+      return res;
+    })
+    .catch((err) => {
+      pendingRequests.delete(inflightKey);
+      throw err;
+    });
 
-  pendingRequests.set(key, promise);
+  pendingRequests.set(inflightKey, promise);
   return promise;
 };
 
@@ -190,6 +319,7 @@ export function clearAuthSession(): void {
   localStorage.removeItem('authToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
+  clearApiCache();
 }
 
 export function redirectToLogin(): void {
@@ -314,13 +444,22 @@ export function refreshAccessToken(refreshToken?: string): Promise<AuthSession> 
 // Attach dynamic base URL (Edge vs Cloud) and JWT token on every request
 apiClient.interceptors.request.use((config) => {
   const url = config.url || '';
+  const method = (config.method || 'get').toLowerCase();
+  if (method !== 'get') {
+    invalidateCacheOnMutation(url);
+  }
 
   // Dual routing: route robot/hardware endpoints to Local Edge, others to Cloud Server
-  // If fallback has already been triggered, retain API_BASE_URL!
+  // If fallback has already been triggered or Edge is in cooldown, retain API_BASE_URL!
   if ((config as any)._edgeFallbackRetried) {
     config.baseURL = API_BASE_URL;
   } else if (isEdgeEndpoint(url)) {
-    config.baseURL = EDGE_BASE_URL;
+    if (Date.now() < edgeUnavailableUntil) {
+      (config as any)._edgeFallbackRetried = true;
+      config.baseURL = API_BASE_URL;
+    } else {
+      config.baseURL = EDGE_BASE_URL;
+    }
   } else {
     config.baseURL = API_BASE_URL;
   }
@@ -349,6 +488,7 @@ apiClient.interceptors.response.use(
 
     // If local Edge Node (port 5000) is offline/unreachable, gracefully fallback to Cloud Gateway once
     if (isEdgeEndpoint(url) && !error?.response && !config?._edgeFallbackRetried) {
+      edgeUnavailableUntil = Date.now() + EDGE_COOLDOWN_MS;
       if (config) {
         config._edgeFallbackRetried = true;
         config.baseURL = API_BASE_URL;

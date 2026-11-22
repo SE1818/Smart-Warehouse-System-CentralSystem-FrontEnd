@@ -26,7 +26,7 @@ const firstPassword = () => screen.getAllByPlaceholderText('••••••�
 const secondPassword = () => screen.getAllByPlaceholderText('••••••••')[1];
 
 const submitForm = async () => {
-  const emailInput = screen.getByPlaceholderText('ten@smartwarehouse.com');
+  const emailInput = screen.getByPlaceholderText('ten@vora.vn');
   const form = emailInput.closest('form')!;
   fireEvent.submit(form);
 };
@@ -43,7 +43,7 @@ describe('RegisterPage', () => {
   it('renders all form fields and submit button', () => {
     renderRegister();
     expect(screen.getByPlaceholderText('Nguyen Van A')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('ten@smartwarehouse.com')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('ten@vora.vn')).toBeInTheDocument();
     expect(firstPassword()).toBeInTheDocument();
     expect(secondPassword()).toBeInTheDocument();
     expect(screen.getByText('Đăng ký')).toBeInTheDocument();
@@ -83,7 +83,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'not-an-email');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'not-an-email');
     await submitForm();
     expect(await screen.findByText('Email không đúng định dạng.')).toBeInTheDocument();
   });
@@ -92,7 +92,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await submitForm();
     expect(await screen.findByText('Mật khẩu không được để trống.')).toBeInTheDocument();
   });
@@ -101,7 +101,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'Ab1!abc');
     await submitForm();
     expect(await screen.findByText('Mật khẩu phải có ít nhất 8 ký tự.')).toBeInTheDocument();
@@ -111,7 +111,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'abcdefg1!');
     await submitForm();
     expect(await screen.findByText('Mật khẩu phải chứa ít nhất một chữ cái viết hoa.')).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'ABCDEFG1!');
     await submitForm();
     expect(await screen.findByText('Mật khẩu phải chứa ít nhất một chữ cái viết thường.')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'Abcdefgh!');
     await submitForm();
     expect(await screen.findByText('Mật khẩu phải chứa ít nhất một chữ số.')).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'Abcdefg12');
     await submitForm();
     expect(await screen.findByText('Mật khẩu phải chứa ít nhất một ký tự đặc biệt.')).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'ValidPass1!');
     await user.type(secondPassword(), 'ValidPass2!');
     await submitForm();
@@ -169,7 +169,7 @@ describe('RegisterPage', () => {
 
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'valid@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'valid@email.com');
     await user.type(firstPassword(), 'ValidPass1!');
     await user.type(secondPassword(), 'ValidPass1!');
     await user.click(screen.getByText('Đăng ký'));
@@ -188,7 +188,7 @@ describe('RegisterPage', () => {
 
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'taken@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'taken@email.com');
     await user.type(firstPassword(), 'ValidPass1!');
     await user.type(secondPassword(), 'ValidPass1!');
     await user.click(screen.getByText('Đăng ký'));
@@ -210,7 +210,7 @@ describe('RegisterPage', () => {
 
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'taken@email.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'taken@email.com');
     await user.type(firstPassword(), 'ValidPass1!');
     await user.type(secondPassword(), 'ValidPass1!');
     await user.click(screen.getByText('Đăng ký'));
@@ -230,7 +230,7 @@ describe('RegisterPage', () => {
 
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'e@e.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'e@e.com');
     await user.type(firstPassword(), 'ValidPass1!');
     await user.type(secondPassword(), 'ValidPass1!');
     await user.click(screen.getByText('Đăng ký'));
@@ -245,15 +245,15 @@ describe('RegisterPage', () => {
 
     renderRegister();
     await user.type(screen.getByPlaceholderText('Nguyen Van A'), 'validuser');
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'e@e.com');
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'e@e.com');
     await user.type(firstPassword(), 'ValidPass1!');
     await user.type(secondPassword(), 'ValidPass1!');
     await user.click(screen.getByText('Đăng ký'));
     expect(await screen.findByText('Error')).toBeInTheDocument();
 
     // Re-type email with invalid format and re-submit
-    await user.clear(screen.getByPlaceholderText('ten@smartwarehouse.com'));
-    await user.type(screen.getByPlaceholderText('ten@smartwarehouse.com'), 'not-email');
+    await user.clear(screen.getByPlaceholderText('ten@vora.vn'));
+    await user.type(screen.getByPlaceholderText('ten@vora.vn'), 'not-email');
     await submitForm();
     expect(screen.queryByText('Error')).not.toBeInTheDocument();
     expect(await screen.findByText('Email không đúng định dạng.')).toBeInTheDocument();

@@ -125,7 +125,7 @@ export function LoginPage() {
           localStorage.removeItem('user');
           localStorage.removeItem('TENANT_SUBDOMAIN');
           setError(
-            `Truy cập bị từ chối: Thiết bị Edge Box này thuộc nhà hàng '${edgeInfo.restaurantName || edgeSub}'. Tài khoản của bạn thuộc quán '${userSub || 'khác'}'. Bạn không có quyền truy cập vào Edge Box của nhà hàng khác!`
+            `Truy cập bị từ chối: Thiết bị tại quán này thuộc nhà hàng '${edgeInfo.restaurantName || edgeSub}'. Tài khoản của bạn thuộc quán '${userSub || 'khác'}'. Bạn không có quyền truy cập vào thiết bị của nhà hàng khác!`
           );
           setLoading(false);
           return;
@@ -177,7 +177,7 @@ export function LoginPage() {
         setEmailNotVerified(true);
         setError(data.message || 'Vui lòng xác thực email trước khi đăng nhập.');
       } else {
-        setError(data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ API Gateway.');
+        setError(data?.message || 'Email hoặc mật khẩu không chính xác hoặc không thể kết nối đến máy chủ hệ thống.');
       }
     } finally {
       setLoading(false);
@@ -212,22 +212,19 @@ export function LoginPage() {
           <div>
             <div className="flex items-center justify-center gap-2">
               <h1 className="text-2xl font-black text-white tracking-tight font-heading">VORA</h1>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-[#00D2FF] border border-blue-400/30">
-                CENTRAL OS
-              </span>
             </div>
             <p className="text-slate-400 text-xs font-medium uppercase tracking-widest mt-1">
-              Hệ thống Quản Trị & Vận Hành AMR
+              Hệ Thống Quản Trị &amp; Vận Hành AMR
             </p>
           </div>
         </div>
 
         {edgeNode?.isEdgeNode && (
           <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/40 rounded-2xl text-amber-200 text-xs flex items-start gap-3 shadow-inner">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse mt-1 shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
             <div className="space-y-0.5">
               <p className="font-semibold text-white tracking-wide flex items-center gap-1.5 flex-wrap">
-                <span>Trạm Edge Box Cục Bộ:</span>
+                <span>Trạm Điều Phối Tại Quán:</span>
                 <span className="text-amber-400 font-bold uppercase">{edgeNode.restaurantName || edgeNode.subdomain}</span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-400/20 text-amber-300 rounded border border-amber-400/30">
                   @{edgeNode.subdomain}
@@ -267,7 +264,7 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="nhanvien@smartwarehouse.com"
+              placeholder="nhanvien@vora.vn"
               className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 text-sm text-white font-medium placeholder-slate-500 transition-all"
               required
             />
@@ -319,29 +316,29 @@ export function LoginPage() {
             <button
               type="button"
               onClick={() => {
-                setEmail('engineer@smartwarehouse.com');
+                setEmail('engineer@vora.vn');
                 setPassword('Password123!');
               }}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-blue-500/50 rounded-xl text-left transition-all cursor-pointer group"
             >
               <div className="text-[11px] font-bold text-blue-400 group-hover:text-blue-300">
-                👷 Kỹ Sư Kỹ Thuật
+                Kỹ Sư Kỹ Thuật
               </div>
-              <div className="text-[10px] text-slate-400 truncate">Role: Technical Engineer</div>
+              <div className="text-[10px] text-slate-400 truncate">Vận hành &amp; Bảo trì kỹ thuật</div>
             </button>
 
             <button
               type="button"
               onClick={() => {
-                setEmail('staff@smartwarehouse.com');
+                setEmail('staff@vora.vn');
                 setPassword('Password123!');
               }}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-left transition-all cursor-pointer group"
             >
               <div className="text-[11px] font-bold text-emerald-400 group-hover:text-emerald-300">
-                🍳 Nhân Viên Vận Hành
+                Nhân Viên Vận Hành
               </div>
-              <div className="text-[10px] text-slate-400 truncate">Role: Staff KDS</div>
+              <div className="text-[10px] text-slate-400 truncate">Quầy bếp &amp; Phục vụ bàn</div>
             </button>
           </div>
         </div>

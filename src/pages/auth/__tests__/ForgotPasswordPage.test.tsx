@@ -34,7 +34,7 @@ const renderForgotPasswordPage = () => {
   );
 };
 
-const getEmailInput = () => screen.getByPlaceholderText('ten@smartwarehouse.com');
+const getEmailInput = () => screen.getByPlaceholderText('ten@vora.vn');
 
 const submitForm = async () => {
   const form = getEmailInput().closest('form')!;
@@ -53,7 +53,7 @@ describe('ForgotPasswordPage', () => {
     expect(screen.getByText('VORA')).toBeInTheDocument();
     expect(screen.getByText('Khôi phục mật khẩu')).toBeInTheDocument();
     expect(getEmailInput()).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Send Reset Link/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Gửi Liên Kết Đặt Lại/i })).toBeInTheDocument();
   });
 
   it('should show error when authService.forgotPassword throws', async () => {
@@ -65,7 +65,7 @@ describe('ForgotPasswordPage', () => {
     await user.type(getEmailInput(), 'test@example.com');
     await submitForm();
 
-    expect(await screen.findByText('An error occurred. Please try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Đã xảy ra sự cố. Vui lòng thử lại.')).toBeInTheDocument();
   });
 
   it('should show success message and clear email on success', async () => {
@@ -79,13 +79,13 @@ describe('ForgotPasswordPage', () => {
 
     expect(
       await screen.findByText(
-        'If an account with that email exists, you will receive a password reset link shortly.'
+        'Nếu tài khoản với email này tồn tại, hệ thống sẽ gửi liên kết đặt lại mật khẩu trong giây lát.'
       )
     ).toBeInTheDocument();
     expect(getEmailInput()).toHaveValue('');
   });
 
-  it('should show loading state with spinner and "Sending..." text', async () => {
+  it('should show loading state with spinner and "Đang gửi..." text', async () => {
     const user = userEvent.setup();
     let resolveFn: (value: { message: string } | PromiseLike<{ message: string }>) => void;
     vi.mocked(authService.forgotPassword).mockImplementation(
@@ -97,17 +97,17 @@ describe('ForgotPasswordPage', () => {
     await user.type(getEmailInput(), 'test@example.com');
     await submitForm();
 
-    expect(screen.getByText('Sending...')).toBeInTheDocument();
+    expect(screen.getByText('Đang gửi...')).toBeInTheDocument();
     expect(screen.getByTestId('spinner-icon')).toBeInTheDocument();
 
     resolveFn!({ message: 'success' });
   });
 
-  it('should have "Remember your password?" link to /login', () => {
+  it('should have "Bạn đã nhớ mật khẩu?" link to /login', () => {
     renderForgotPasswordPage();
 
-    expect(screen.getByText(/Remember your password\?/)).toBeInTheDocument();
-    const signInLink = screen.getByRole('link', { name: /Sign in/i });
+    expect(screen.getByText(/Bạn đã nhớ mật khẩu\?/)).toBeInTheDocument();
+    const signInLink = screen.getByRole('link', { name: /Đăng nhập/i });
     expect(signInLink).toHaveAttribute('href', '/login');
   });
 });

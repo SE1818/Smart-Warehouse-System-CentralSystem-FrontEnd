@@ -664,8 +664,27 @@ export const StaffKdsPage: React.FC = () => {
 
         setSubdomain(sub);
         setStoreName(currentStore);
-        // 1. Fetch real robots for this tenant
-        const robotList = await fleetService.getRobotsByTenant(sub);
+
+        const [
+          robotsSettled,
+          stationsSettled,
+          tablesSettled,
+          ordersSettled,
+          tasksSettled,
+        ] = await Promise.allSettled([
+          fleetService.getRobotsByTenant(sub),
+          robotService.getStations(),
+          tableService.getTables(sub),
+          orderService.getPendingOrders(),
+          apiClient.get<any[]>("/v1/tasks"),
+        ]);
+
+        // 1. Apply real robots for this tenant
+        const robotList =
+          robotsSettled.status === "fulfilled" ? robotsSettled.value : [];
+        if (robotsSettled.status === "rejected") {
+          console.warn("[StaffKdsPage] Lỗi tải robots:", robotsSettled.reason);
+        }
         const mappedRobots: RobotFleetItem[] = robotList.map((r) => ({
           id: r.id,
           code: r.code || r.name || `AMR-${r.id.slice(0, 4)}`,
@@ -684,18 +703,25 @@ export const StaffKdsPage: React.FC = () => {
           setManualSelectedRobot(mappedRobots[0].code);
         }
 
-        // Fetch physical stations from ROS SLAM map
-        try {
-          const stList = await robotService.getStations();
+        // Apply physical stations from ROS SLAM map
+        if (stationsSettled.status === "fulfilled") {
+          const stList = stationsSettled.value;
           if (stList && stList.length > 0) {
             setStations(stList);
           }
-        } catch (e) {
-          console.warn("[StaffKdsPage] Lỗi tải stations:", e);
+        } else {
+          console.warn(
+            "[StaffKdsPage] Lỗi tải stations:",
+            stationsSettled.reason,
+          );
         }
 
-        // 2. Fetch real tables for this store
-        const tableList = await tableService.getTables(sub);
+        // 2. Apply real tables for this store
+        const tableList =
+          tablesSettled.status === "fulfilled" ? tablesSettled.value : [];
+        if (tablesSettled.status === "rejected") {
+          console.warn("[StaffKdsPage] Lỗi tải tables:", tablesSettled.reason);
+        }
         const fullTables = mapBackendTables(tableList);
         setTables(fullTables);
         if (fullTables.length > 0) {
@@ -706,8 +732,15 @@ export const StaffKdsPage: React.FC = () => {
           );
         }
 
-        // 3. Fetch real pending orders for KDS
-        const pOrders = await orderService.getPendingOrders();
+        // 3. Apply real pending orders for KDS
+        const pOrders =
+          ordersSettled.status === "fulfilled" ? ordersSettled.value : [];
+        if (ordersSettled.status === "rejected") {
+          console.warn(
+            "[StaffKdsPage] Lỗi tải pending orders:",
+            ordersSettled.reason,
+          );
+        }
         setPendingOrders(pOrders);
         if (pOrders.length > 0) {
           const first = pOrders[0];
@@ -751,9 +784,12 @@ export const StaffKdsPage: React.FC = () => {
           }
         } catch {}
 
-        // Fetch real tasks from backend SQLite to guarantee 100% data persistence on reload
+        // Apply real tasks from backend SQLite to guarantee 100% data persistence on reload
         try {
-          const tasksRes = await apiClient.get<any[]>("/v1/tasks");
+          if (tasksSettled.status !== "fulfilled") {
+            throw tasksSettled.reason;
+          }
+          const tasksRes = tasksSettled.value;
           if (tasksRes.data && Array.isArray(tasksRes.data)) {
             const sortedRaw = [...tasksRes.data].sort(
               (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
@@ -1026,7 +1062,7 @@ export const StaffKdsPage: React.FC = () => {
 
     if (matched && !matched.stationId && !matched.stationName) {
       showToast(
-        `Bàn "${tableName}" chưa được gán trạm robot trong SQLite. Vui lòng bấm [Gán/Đổi Trạm] để liên kết trước khi robot xuất phát!`,
+        `Bàn "${tableName}" chưa được gán trạm robot. Vui lòng bấm [Gán/Đổi Trạm] để liên kết trước khi robot xuất phát!`,
         "info",
       );
     }
@@ -1475,13 +1511,13 @@ export const StaffKdsPage: React.FC = () => {
 
       if (legs.length === 1) {
         showToast(
-          `Đã ghi SQLite & xuất lệnh ${seqCode}: ${effectiveRobot.code} đang di chuyển tới ${legs[0].tableNo}!`,
+          `Đã xuất lệnh ${seqCode}: ${effectiveRobot.code} đang di chuyển tới ${legs[0].tableNo}!`,
           "success",
         );
       } else {
-        const destSummary = legs.map((l, i) => `${i + 1}. ${l.tableNo} (K${l.cargoLevel})`).join(" ➔ ");
+        const destSummary = legs.map((l, i) => `${i + 1}. ${l.tableNo} (K${l.cargoLevel})`).join(" -> ");
         showToast(
-          `Đã ghi SQLite & xuất chuỗi ${legs.length} chặng ${seqCode}: ${effectiveRobot.code} đang di chuyển: ${destSummary}!`,
+          `Đã xuất chuỗi ${legs.length} chặng ${seqCode}: ${effectiveRobot.code} đang di chuyển: ${destSummary}!`,
           "success",
         );
       }
@@ -1726,9 +1762,7 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       showToast(
-        isSignalRConnected
-          ? `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`
-          : `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công (qua HTTP REST, SignalR đang kết nối lại)!`,
+        `Đã đổi bàn Khay ${rerouteLegIndex + 1} sang ${rerouteNewTable} thành công!`,
         "success",
       );
       setIsRerouteModalOpen(false);
@@ -2116,7 +2150,7 @@ export const StaffKdsPage: React.FC = () => {
                   {storeName}
                 </span>
                 <span className="text-[11px] text-slate-500 block truncate font-mono">
-                  Bếp Trung Tâm • {isSignalRConnected ? "Realtime Live" : "Đang kết nối"}
+                  Bếp Trung Tâm • {isSignalRConnected ? "Đang hoạt động" : "Đang kết nối lại..."}
                 </span>
               </div>
             </div>
@@ -2124,9 +2158,9 @@ export const StaffKdsPage: React.FC = () => {
               className={`w-2 h-2 rounded-full shrink-0 ${
                 isSignalRConnected
                   ? "bg-emerald-500 ring-4 ring-emerald-500/15"
-                  : "bg-amber-400 animate-pulse"
+                  : "bg-amber-400"
               }`}
-              title={isSignalRConnected ? "SignalR Realtime Đã Kết Nối" : "Đang kết nối SignalR"}
+              title={isSignalRConnected ? "Đã kết nối trạm điều phối" : "Đang kết nối lại..."}
             />
           </div>
         </div>
@@ -2162,12 +2196,12 @@ export const StaffKdsPage: React.FC = () => {
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-600 hover:text-purple-700 hover:bg-purple-50/70 border border-transparent hover:border-purple-200/70 transition-all group cursor-pointer ${
                 collapsed ? "justify-center px-0" : ""
               }`}
-              title="Gán Trạm Robot (SLAM)"
+              title="Gán Trạm Dừng Robot"
             >
               <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                 <MapPin className="w-3.5 h-3.5 shrink-0" />
               </div>
-              {!collapsed && <span className="truncate">Gán Trạm Robot (SLAM)</span>}
+              {!collapsed && <span className="truncate">Gán Trạm Dừng Robot</span>}
             </button>
 
             <button
@@ -2239,8 +2273,8 @@ export const StaffKdsPage: React.FC = () => {
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
                   isSignalRConnected
-                    ? "bg-emerald-500 shadow-[0_0_6px_#10B981] animate-pulse"
-                    : "bg-amber-400 animate-pulse"
+                    ? "bg-emerald-500"
+                    : "bg-amber-400"
                 }`}
               />
               <span>Trạng Thái Bếp &amp; AMR</span>
@@ -2404,7 +2438,7 @@ export const StaffKdsPage: React.FC = () => {
           {/* Right Quick Stats */}
           <div className="hidden md:flex items-center gap-2 shrink-0 text-xs">
             <span className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1.5 whitespace-nowrap">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
               <span className="tabular-nums">{readyRobotsCount} Robot Sẵn Sàng</span>
             </span>
             <span className="px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 whitespace-nowrap tabular-nums">
@@ -2420,7 +2454,9 @@ export const StaffKdsPage: React.FC = () => {
         {assistedDropoffAlert && (
           <div className="lg:col-span-12 bg-amber-900/90 border-2 border-amber-400 text-amber-50 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex items-center gap-3">
-              <span className="text-3xl animate-bounce">🔔</span>
+              <div className="w-10 h-10 rounded-xl bg-amber-500/30 border border-amber-300/40 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-200" />
+              </div>
               <div>
                 <h4 className="font-bold text-amber-200 text-base">
                   AMR {assistedDropoffAlert.robotName || "Robot"} đã tới {assistedDropoffAlert.stagingStationName} (Trạm Đệm Tiếp Ứng)
@@ -2436,7 +2472,8 @@ export const StaffKdsPage: React.FC = () => {
                 onClick={() => handleConfirmAssistedHandover(assistedDropoffAlert)}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white text-xs font-bold rounded-xl shadow transition-all cursor-pointer flex items-center gap-1.5"
               >
-                <span>✓</span> Đã Giao Tận Bàn (AMR Về Bếp)
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Đã Giao Tận Bàn (AMR Về Bếp)</span>
               </button>
               <button
                 type="button"
@@ -2455,8 +2492,8 @@ export const StaffKdsPage: React.FC = () => {
             {/* Table Area Header */}
             <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3 pb-3 border-b border-slate-100">
               <div className="flex flex-col gap-1.5 min-w-0">
-                <h2 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider font-mono truncate">
-                  SƠ ĐỒ BÀN ĂN &amp; AMR THỜI GIAN THỰC
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 tracking-wide truncate">
+                  Sơ Đồ Bàn Ăn &amp; Vị Trí Robot
                 </h2>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 shadow-2xs tabular-nums">
@@ -2477,7 +2514,7 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Touch-Friendly View Mode Switcher (SLAM Map <-> Table Grid) */}
+              {/* Touch-Friendly View Mode Switcher */}
               <div
                 role="group"
                 aria-label="Chế độ hiển thị sơ đồ bàn"
@@ -2487,7 +2524,7 @@ export const StaffKdsPage: React.FC = () => {
                   type="button"
                   onClick={() => setViewMode("slam-map")}
                   aria-pressed={viewMode === "slam-map"}
-                  title="Chế độ Bản Đồ SLAM (ROS 2)"
+                  title="Chế độ Bản Đồ Mặt Bằng"
                   className={`min-h-[34px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
                     viewMode === "slam-map"
                       ? "bg-blue-600 text-white shadow-sm shadow-blue-600/25"
@@ -2495,15 +2532,14 @@ export const StaffKdsPage: React.FC = () => {
                   }`}
                 >
                   <MapIcon className="w-3.5 h-3.5 shrink-0" />
-                  <span>Bản Đồ SLAM</span>
-                  <span className="hidden 2xl:inline text-[10px] font-mono opacity-85">(ROS 2)</span>
+                  <span>Bản Đồ Mặt Bằng</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
                   aria-pressed={viewMode === "grid"}
-                  title="Chế độ Dạng Thẻ Bàn (Grid)"
+                  title="Chế độ Dạng Thẻ Bàn"
                   className={`min-h-[34px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all duration-150 cursor-pointer ${
                     viewMode === "grid"
                       ? "bg-blue-600 text-white shadow-sm shadow-blue-600/25"
@@ -2525,10 +2561,10 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Tray Target Selector: Cho phép nhân viên chọn rõ ràng đang gán bàn cho Khay 1 hay Khay 2 */}
+            {/* Tray Target Selector */}
             <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl mb-3 shadow-2xs">
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-slate-600 font-bold shrink-0">🎯 Gán bàn cho:</span>
+                <span className="text-slate-600 font-bold shrink-0">Gán bàn cho:</span>
                 <button
                   type="button"
                   onClick={() => setActiveTrayTarget("tray1")}
@@ -2557,11 +2593,11 @@ export const StaffKdsPage: React.FC = () => {
                 )}
               </div>
               <span className="text-[11px] text-slate-500 italic hidden sm:inline">
-                (Click bàn trên bản đồ/thẻ để thêm/bỏ bàn vào khay đang chọn)
+                (Nhấp bàn trên bản đồ/thẻ để thêm/bỏ bàn vào khay đang chọn)
               </span>
             </div>
 
-            {/* View Mode 1: SLAM Map Viewer (Staff Simplified Mode) */}
+            {/* View Mode 1: Floor Map Viewer (Staff Simplified Mode) */}
             {viewMode === "slam-map" ? (
               <SlamFloorMapViewer
                 tables={tables}
@@ -2579,9 +2615,7 @@ export const StaffKdsPage: React.FC = () => {
                   Chưa có danh mục bàn ăn nào
                 </h4>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Danh sách bàn ăn được trích xuất từ Waypoint nhận qua MQTT
-                  (ROS 2 Nav2). Do chưa nhận được waypoint từ MQTT, hệ thống
-                  tuân thủ quy tắc không tự ý xếp bàn giả.
+                  Danh sách bàn ăn được đồng bộ từ sơ đồ điểm dừng tại nhà hàng. Hiện chưa có dữ liệu điểm dừng bàn ăn được cấu hình.
                 </p>
               </div>
             ) : (
@@ -2589,7 +2623,7 @@ export const StaffKdsPage: React.FC = () => {
                 {/* Status Legend */}
                 <div className="flex items-center gap-3 text-[11px] text-slate-600 mb-3">
                   <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />{" "}
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />{" "}
                     Chờ món
                   </span>
                   <span className="flex items-center gap-1">
@@ -2659,7 +2693,7 @@ export const StaffKdsPage: React.FC = () => {
                                   className="text-[9px] text-amber-800 font-bold bg-amber-100 border border-amber-200 px-1 py-0.5 rounded shrink-0"
                                   title="Hành lang hẹp <0.8m"
                                 >
-                                  ⚠️ Hẹp
+                                  Lối hẹp
                                 </span>
                               )}
                             </div>
@@ -2671,7 +2705,7 @@ export const StaffKdsPage: React.FC = () => {
                                 </span>
                               ) : (
                                 <span className="text-[9px] font-mono font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded border border-amber-200">
-                                  ⚠️ Chưa gán trạm
+                                  Chưa gán trạm
                                 </span>
                               )}
                             </div>
@@ -2681,9 +2715,9 @@ export const StaffKdsPage: React.FC = () => {
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                                 isServing
-                                  ? "bg-blue-600 text-white animate-pulse shadow-xs"
+                                  ? "bg-blue-600 text-white shadow-xs"
                                   : isWaiting
-                                    ? "bg-amber-500 text-white animate-pulse"
+                                    ? "bg-amber-500 text-white"
                                     : isOccupied
                                       ? "bg-emerald-600 text-white"
                                       : "bg-slate-200 text-slate-600"
@@ -2714,7 +2748,7 @@ export const StaffKdsPage: React.FC = () => {
                               </span>
                             ) : isOccupied ? (
                               <span className="text-emerald-700 font-medium">
-                                👤 {table.guestsCount || 4} Khách đang ngồi
+                                {table.guestsCount || 4} Khách đang ngồi
                               </span>
                             ) : (
                               <span className="text-slate-400">Chưa có khách</span>
@@ -2733,7 +2767,7 @@ export const StaffKdsPage: React.FC = () => {
                                 className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors shadow-2xs"
                                 title="Khách trả bàn / Dọn bàn thành trống"
                               >
-                                ✓ Trả Bàn
+                                Trả Bàn
                               </button>
                             ) : isEmpty ? (
                               <button
@@ -2742,7 +2776,7 @@ export const StaffKdsPage: React.FC = () => {
                                 className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 transition-colors shadow-2xs"
                                 title="Nhận khách ngồi vào bàn này"
                               >
-                                👤 Nhận Khách
+                                Nhận Khách
                               </button>
                             ) : null}
                           </div>
@@ -2926,7 +2960,7 @@ export const StaffKdsPage: React.FC = () => {
                       }`}
                       title="Thêm/bỏ bàn này vào Khay 1 (Tầng Dưới)"
                     >
-                      {isTray1Active && tray1Tables.includes(currentSelectedTable.name) ? "✓ Khay 1" : "+ Khay 1"}
+                      {isTray1Active && tray1Tables.includes(currentSelectedTable.name) ? "Đã chọn Khay 1" : "+ Khay 1"}
                     </button>
                     <button
                       type="button"
@@ -2954,7 +2988,7 @@ export const StaffKdsPage: React.FC = () => {
                       }`}
                       title="Thêm/bỏ bàn này vào Khay 2 (Tầng Trên)"
                     >
-                      {isTray2Active && tray2Tables.includes(currentSelectedTable.name) ? "✓ Khay 2" : "+ Khay 2"}
+                      {isTray2Active && tray2Tables.includes(currentSelectedTable.name) ? "Đã chọn Khay 2" : "+ Khay 2"}
                     </button>
                   </>
                 )}
@@ -2969,12 +3003,12 @@ export const StaffKdsPage: React.FC = () => {
             <div className="p-3.5 bg-gradient-to-r from-amber-50/90 via-amber-50/60 to-orange-50/80 rounded-2xl border border-amber-200 space-y-2.5 shadow-2xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                 <span className="flex items-center gap-2 font-black text-amber-950">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
                   <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>ĐƠN MÓN CHỜ RA BẾP ({pendingOrders.length})</span>
+                  <span>Đơn Món Chờ Ra Bếp ({pendingOrders.length})</span>
                 </span>
                 <span className="text-[10px] font-medium text-amber-800">
-                  Click đơn để tự động nạp khay giao món
+                  Nhấp đơn để tự động nạp khay giao món
                 </span>
               </div>
               <div className="flex gap-2.5 overflow-x-auto pb-1 pt-0.5">
@@ -3023,12 +3057,9 @@ export const StaffKdsPage: React.FC = () => {
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
                 <span>Chưa có đơn món chờ ra từ POS/QR (Bếp sẵn sàng)</span>
               </span>
-              <span className="text-[10px] text-slate-500 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">
-                Tự động đồng bộ Realtime
-              </span>
             </div>
           )}
-          {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR (ASSISTED DROP-OFF & DUAL CONFIRMATION) */}
+          {/* ACTIVE MULTI-TABLE 2-TRAY MISSION MONITOR */}
           {activeSequence && (
             <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-2xl border-2 border-blue-500 space-y-4 animate-in fade-in zoom-in-95 duration-200 relative overflow-hidden">
               {/* Ambient High-Tech Glow */}
@@ -3042,8 +3073,8 @@ export const StaffKdsPage: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-xs font-black tracking-tight flex items-center gap-2">
-                      <span className="uppercase text-cyan-200 font-mono">
-                        LỆNH ĐIỀU PHỐI ĐANG THỰC HIỆN
+                      <span className="text-cyan-200">
+                        Lệnh Điều Phối Đang Thực Hiện
                       </span>
                       <span className="font-mono text-[10px] font-bold bg-blue-500/30 text-cyan-300 px-2 py-0.5 rounded border border-blue-400/30">
                         {activeSequence.sequenceId}
@@ -3073,14 +3104,14 @@ export const StaffKdsPage: React.FC = () => {
                       activeSequence.status === "completed"
                         ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/40"
                         : missionPhase === "arrived"
-                          ? "bg-amber-500/20 text-amber-300 border-amber-400/40 animate-pulse"
-                          : "bg-blue-500/25 text-cyan-200 border-cyan-400/40 animate-pulse"
+                          ? "bg-amber-500/20 text-amber-300 border-amber-400/40"
+                          : "bg-blue-500/25 text-cyan-200 border-cyan-400/40"
                     }`}
                   >
                     {activeSequence.status === "completed"
                       ? missionPhase === "returning"
                         ? "Đang quay về Bếp..."
-                        : "Hoàn tất toàn chuỗi ✓"
+                        : "Hoàn tất toàn chuỗi"
                       : missionPhase === "arrived"
                         ? `Chờ lấy món: Chặng ${activeSequence.currentLegIndex + 1}/${activeSequence.legs.length}`
                         : `Đang giao: Chặng ${activeSequence.currentLegIndex + 1}/${activeSequence.legs.length}`}
@@ -3103,7 +3134,7 @@ export const StaffKdsPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-[9px] text-emerald-400 font-mono mt-1 font-bold">
-                      Đã xuất phát ✓
+                      Đã xuất phát
                     </div>
                   </div>
 
@@ -3139,13 +3170,13 @@ export const StaffKdsPage: React.FC = () => {
                                 ? "text-emerald-400 font-bold"
                                 : isCurrent
                                   ? missionPhase === "arrived"
-                                    ? "text-amber-300 font-extrabold animate-pulse"
-                                    : "text-cyan-300 font-extrabold animate-pulse"
+                                    ? "text-amber-300 font-extrabold"
+                                    : "text-cyan-300 font-extrabold"
                                   : "text-slate-400"
                             }`}
                           >
                             {isCompleted
-                              ? "Đã lấy món ✓"
+                              ? "Đã lấy món"
                               : isCurrent
                                 ? missionPhase === "arrived"
                                   ? "Đang chờ lấy món!"
@@ -3179,23 +3210,23 @@ export const StaffKdsPage: React.FC = () => {
                       {activeSequence.status === "completed"
                         ? missionPhase === "returning"
                           ? "Đang về trạm bếp..."
-                          : "Đã về bãi (idle) ✓"
+                          : "Đã về trạm bếp"
                         : "Tự động quay về"}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* SINGLE CONFIRMATION & REALTIME SQLITE TRANSFER LIFECYCLE TERMINAL */}
+              {/* SINGLE CONFIRMATION & TRANSFER LIFECYCLE TERMINAL */}
               {activeSequence.status === "in_progress" ? (
                 <div className="p-4 rounded-xl bg-gradient-to-b from-blue-950/70 to-slate-900/95 border border-cyan-500/40 space-y-3.5 relative z-10 shadow-xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-white/10">
-                    <span className="flex items-center gap-2 text-xs font-black text-cyan-300 uppercase tracking-wide">
-                      <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+                    <span className="flex items-center gap-2 text-xs font-black text-cyan-300 tracking-wide">
+                      <Radio className="w-4 h-4 text-cyan-400" />
                       <span>
                         {missionPhase === "arrived"
-                          ? "XÁC NHẬN ĐÃ LẤY MÓN TẠI BÀN"
-                          : "TIẾN TRÌNH ĐIỀU PHỐI & DI CHUYỂN TỰ ĐỘNG"}
+                          ? "Xác Nhận Đã Lấy Món Tại Bàn"
+                          : "Tiến Trình Điều Phối & Di Chuyển Tự Động"}
                       </span>
                     </span>
                     <span
@@ -3366,7 +3397,7 @@ export const StaffKdsPage: React.FC = () => {
                       {isConfirmingTable ? (
                         <>
                           <RotateCcw className="w-4 h-4 animate-spin text-white" />
-                          <span>Đang ghi nhận hoàn tất vào SQLite...</span>
+                          <span>Đang ghi nhận hoàn tất...</span>
                         </>
                       ) : missionPhase === "moving" ? (
                         <>
@@ -3396,15 +3427,15 @@ export const StaffKdsPage: React.FC = () => {
                       onClick={handleTogglePauseTask}
                       className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         isTaskPaused
-                          ? "bg-amber-500/20 text-amber-300 border-amber-400/50 hover:bg-amber-500/30 animate-pulse"
+                          ? "bg-amber-500/20 text-amber-300 border-amber-400/50 hover:bg-amber-500/30"
                           : "bg-slate-800/90 text-slate-300 border-white/10 hover:bg-slate-700"
                       }`}
                     >
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                       <span>
                         {isTaskPaused
-                          ? "▶ Tiếp Tục Di Chuyển"
-                          : "⏸ Tạm Dừng Tránh Vật Cản"}
+                          ? "Tiếp Tục Di Chuyển"
+                          : "Tạm Dừng Tránh Vật Cản"}
                       </span>
                     </button>
 
@@ -3426,7 +3457,7 @@ export const StaffKdsPage: React.FC = () => {
                     <span className="font-bold">
                       {missionPhase === "returning"
                         ? "Đã xác nhận trả món! Robot đang thực thi nhiệm vụ quay về Bếp tự động..."
-                        : "Toàn bộ lượt giao đã phục vụ thành công! Xe đã quay về trạm bếp an toàn (idle)."}
+                        : "Toàn bộ lượt giao đã phục vụ thành công! Xe đã quay về trạm bếp an toàn."}
                     </span>
                   </div>
                   <button
@@ -3450,14 +3481,8 @@ export const StaffKdsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-blue-600" />
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight font-heading">
-                  ĐIỀU PHỐI GIAO MÓN (DISPATCH CONSOLE)
+                  Điều Phối Giao Món Theo Khay
                 </h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold flex items-center gap-1 shadow-2xs">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>Hệ Thống Sẵn Sàng</span>
-                </span>
               </div>
             </div>
 
@@ -3477,7 +3502,7 @@ export const StaffKdsPage: React.FC = () => {
                       1
                     </span>
                     <span className="text-xs font-black text-slate-900">
-                      KHAY 1 (TẦNG DƯỚI)
+                      Khay 1 (Tầng Dưới)
                     </span>
                     {isTray1Active && (
                       <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
@@ -3496,7 +3521,7 @@ export const StaffKdsPage: React.FC = () => {
                             : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
                         }`}
                       >
-                        {activeTrayTarget === "tray1" ? "🎯 Đang nhận bàn" : "Gán từ bản đồ"}
+                        {activeTrayTarget === "tray1" ? "Đang nhận bàn" : "Gán từ bản đồ"}
                       </button>
                     )}
                     {/* Confirmation toggle button */}
@@ -3516,7 +3541,7 @@ export const StaffKdsPage: React.FC = () => {
                       {isTray1Active ? (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                          <span>✓ Đang Dùng Khay 1</span>
+                          <span>Đang Dùng Khay 1</span>
                         </>
                       ) : (
                         <>
@@ -3582,7 +3607,7 @@ export const StaffKdsPage: React.FC = () => {
                           .filter((t) => Boolean(t.stationId || t.stationName))
                           .map((t) => (
                             <option key={t.id} value={t.name}>
-                              {tray1Tables.includes(t.name) ? "✓ " : ""}
+                              {tray1Tables.includes(t.name) ? "[Đã chọn] " : ""}
                               {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
                             </option>
                           ))}
@@ -3652,7 +3677,7 @@ export const StaffKdsPage: React.FC = () => {
                       2
                     </span>
                     <span className="text-xs font-black text-slate-900">
-                      KHAY 2 (TẦNG TRÊN)
+                      Khay 2 (Tầng Trên)
                     </span>
                     {isTray2Active && (
                       <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">
@@ -3671,7 +3696,7 @@ export const StaffKdsPage: React.FC = () => {
                             : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
                         }`}
                       >
-                        {activeTrayTarget === "tray2" ? "🎯 Đang nhận bàn" : "Gán từ bản đồ"}
+                        {activeTrayTarget === "tray2" ? "Đang nhận bàn" : "Gán từ bản đồ"}
                       </button>
                     )}
                     {/* Confirmation toggle button */}
@@ -3691,7 +3716,7 @@ export const StaffKdsPage: React.FC = () => {
                     {isTray2Active ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                        <span>✓ Đang Dùng Khay 2</span>
+                        <span>Đang Dùng Khay 2</span>
                       </>
                     ) : (
                       <>
@@ -3757,7 +3782,7 @@ export const StaffKdsPage: React.FC = () => {
                           .filter((t) => Boolean(t.stationId || t.stationName))
                           .map((t) => (
                             <option key={t.id} value={t.name}>
-                              {tray2Tables.includes(t.name) ? "✓ " : ""}
+                              {tray2Tables.includes(t.name) ? "[Đã chọn] " : ""}
                               {t.name} {t.zone ? `[${t.zone}]` : ""} • Trạm: {t.stationName || t.stationId}
                             </option>
                           ))}
@@ -3871,7 +3896,7 @@ export const StaffKdsPage: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-blue-600" />
                 <span className="text-xs sm:text-sm font-extrabold text-slate-900">
-                  ĐIỀU PHỐI ROBOT GIAO MÓN
+                  Điều Phối Robot Giao Món
                 </span>
               </div>
               {/* Toggle Auto vs Manual */}
@@ -3907,7 +3932,7 @@ export const StaffKdsPage: React.FC = () => {
                 <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 text-xs space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded">
-                      Thuật Toán Tối Ưu Đã Chọn
+                      Robot Đề Xuất Tự Động
                     </span>
                     <span className="flex items-center gap-1 text-emerald-700 font-mono font-bold">
                       <BatteryCharging className="w-3.5 h-3.5 text-emerald-600" />
@@ -3917,24 +3942,23 @@ export const StaffKdsPage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-extrabold text-slate-900 text-sm block">
-                        🤖 {effectiveRobot.code} ({effectiveRobot.name})
+                        {effectiveRobot.code} ({effectiveRobot.name})
                       </span>
                       <span className="text-[11px] text-slate-600">
                         Vị trí hiện tại:{" "}
                         <strong>{effectiveRobot.currentZone}</strong>
                       </span>
                     </div>
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10B981] animate-pulse" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                   </div>
                   <div className="text-[10px] text-slate-500 pt-1 border-t border-blue-200/60 flex items-center justify-between">
                     <span>
-                      Trạng thái: <strong>Rảnh (Idle)</strong> • Gần quầy ra món
+                      Trạng thái: <strong>Sẵn sàng</strong> • Gần quầy ra món
                       nhất
                     </span>
                     <span className="text-blue-700 font-bold">Ưu tiên #1</span>
                   </div>
                   <div className="p-2 bg-blue-100/80 rounded-lg border border-blue-200 text-[11px] text-blue-900 font-medium flex items-center gap-1.5">
-                    <span>💡</span>
                     <span>Đầu bếp đặt đĩa lên khay của robot <strong className="font-extrabold">{effectiveRobot.code}</strong> trước khi bấm phát lệnh.</span>
                   </div>
                 </div>
@@ -4079,7 +4103,7 @@ export const StaffKdsPage: React.FC = () => {
                 </span>
                 <div>
                   <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 font-heading">
-                    HÀNG ĐỢI NHIỆM VỤ ROBOT
+                    Hàng Đợi Nhiệm Vụ Robot
                   </h3>
                   <p className="text-[10px] text-slate-500 font-sans">
                     Nhiệm vụ chuẩn bị và đang thực hiện giao món
@@ -4162,16 +4186,13 @@ export const StaffKdsPage: React.FC = () => {
                             #{formatShortTaskCode(task.taskId)}
                           </span>
                           <span className="text-[11px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            🤖 {task.robotCode}
+                            {task.robotCode}
                           </span>
                         </div>
-                        {/* Status Badge with Live Pulse */}
+                        {/* Status Badge */}
                         <div className="flex items-center gap-1.5">
                           {isCurrent && (
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                            </span>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-blue-600" />
                           )}
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
@@ -4179,9 +4200,9 @@ export const StaffKdsPage: React.FC = () => {
                                 ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                 : isCurrent
                                   ? task.workflowStep === 2
-                                    ? "bg-blue-100 text-blue-800 border-blue-300 animate-pulse"
+                                    ? "bg-blue-100 text-blue-800 border-blue-300"
                                     : task.workflowStep === 3
-                                      ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                                      ? "bg-amber-100 text-amber-800 border-amber-300"
                                       : "bg-indigo-100 text-indigo-800 border-indigo-300"
                                   : "bg-slate-100 text-slate-600 border-slate-200"
                             }`}
@@ -4228,9 +4249,9 @@ export const StaffKdsPage: React.FC = () => {
 
                       {/* Assisted Drop-off Arrival Badge */}
                       {task.workflowStep === 3 && (
-                        <div className="p-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between gap-2 shadow-2xs animate-pulse">
+                        <div className="p-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between gap-2 shadow-2xs">
                           <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-base">🔔</span>
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             <span className="truncate">
                               Robot đã tới {task.stationName || "Trạm Giao"} — Nhân viên bàn giao món cho Bàn {task.tableNo}
                             </span>
@@ -4241,7 +4262,7 @@ export const StaffKdsPage: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Bottom Action Bar: Đổi Bàn, Đổi Trạm (Xem Chi Tiết chuyển về Tenant Dashboard) */}
+                      {/* Bottom Action Bar */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                         <button
                           type="button"
@@ -4257,7 +4278,7 @@ export const StaffKdsPage: React.FC = () => {
                           type="button"
                           onClick={() => handleOpenTaskAssignStation(task.tableNo)}
                           className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-800 border border-purple-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                          title="Gán hoặc đổi trạm dừng SLAM cho bàn này"
+                          title="Gán hoặc đổi trạm dừng cho bàn này"
                         >
                           <MapPin className="w-3.5 h-3.5 text-purple-600" />
                           <span>Đổi Trạm Giao</span>
@@ -4398,7 +4419,7 @@ export const StaffKdsPage: React.FC = () => {
             {/* Content Info Box */}
             <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 text-xs text-rose-950 space-y-2">
               <div className="font-bold flex items-center gap-1.5 text-rose-900">
-                <span>⚠️ Bạn có chắc chắn muốn dừng xe và hủy lượt giao này?</span>
+                <span>Bạn có chắc chắn muốn dừng xe và hủy lượt giao này?</span>
               </div>
               <p className="text-slate-600 leading-relaxed">
                 Hành động này sẽ gửi lệnh khẩn cấp dừng robot{" "}
@@ -4479,7 +4500,7 @@ export const StaffKdsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* SignalR & Robot Live Status Indicator Bar */}
+            {/* Robot Status Indicator Bar */}
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-slate-700">
@@ -4490,31 +4511,26 @@ export const StaffKdsPage: React.FC = () => {
                     !activeSequence
                       ? "bg-slate-100 text-slate-700 border-slate-300"
                       : isRobotInTransit
-                        ? "bg-blue-100 text-blue-800 border-blue-300 animate-pulse"
+                        ? "bg-blue-100 text-blue-800 border-blue-300"
                         : liveRobotStatus === "arrived"
                           ? "bg-amber-100 text-amber-800 border-amber-300"
                           : "bg-emerald-100 text-emerald-800 border-emerald-300"
                   }`}
                 >
                   {!activeSequence
-                    ? "● Sẵn Sàng (Tại Bếp)"
+                    ? "Sẵn Sàng (Tại Bếp)"
                     : isRobotInTransit
-                      ? "● Đang di chuyển (Giao món)"
+                      ? "Đang di chuyển (Giao món)"
                       : liveRobotStatus === "arrived"
-                        ? "● Đã đến bàn (Chờ lấy món)"
-                        : `● ${formatTransferStatusLabel(liveRobotStatus)}`}
+                        ? "Đã đến bàn (Chờ lấy món)"
+                        : formatTransferStatusLabel(liveRobotStatus)}
                 </span>
               </div>
               <div>
-                {isSignalRConnected ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    SignalR Realtime
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    Mất kết nối
+                {!isSignalRConnected && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Đang kết nối lại...
                   </span>
                 )}
               </div>
@@ -4534,9 +4550,9 @@ export const StaffKdsPage: React.FC = () => {
                       : currentWorkflowStep === 1
                         ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                         : currentWorkflowStep === 2
-                          ? "bg-blue-100 text-blue-800 border-blue-300 animate-pulse"
+                          ? "bg-blue-100 text-blue-800 border-blue-300"
                           : currentWorkflowStep === 3
-                            ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse"
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
                             : "bg-indigo-100 text-indigo-800 border-indigo-300"
                   }`}
                 >
@@ -4571,7 +4587,7 @@ export const StaffKdsPage: React.FC = () => {
                       ? "Soạn khay"
                       : currentWorkflowStep === 1
                         ? "Đang nạp món"
-                        : "Đã xong ✓"}
+                        : "Đã xong"}
                   </div>
                 </div>
 
@@ -4579,19 +4595,19 @@ export const StaffKdsPage: React.FC = () => {
                 <div
                   className={`p-2 rounded-xl border text-center transition-all ${
                     activeSequence && currentWorkflowStep === 2
-                      ? "bg-blue-50 border-blue-500 text-blue-950 ring-2 ring-blue-500/40 font-bold shadow-md shadow-blue-500/10 animate-pulse"
+                      ? "bg-blue-50 border-blue-500 text-blue-950 ring-2 ring-blue-500/40 font-bold shadow-md shadow-blue-500/10"
                       : activeSequence && currentWorkflowStep > 2
                         ? "bg-emerald-50/70 border-emerald-200 text-emerald-800"
                         : "bg-white border-slate-200 text-slate-400 opacity-60"
                   }`}
                 >
                   <div className="text-[9px] uppercase font-mono font-bold">2. Đến Bàn</div>
-                  <div className="text-[10px] font-extrabold mt-0.5 truncate">In-Transit</div>
+                  <div className="text-[10px] font-extrabold mt-0.5 truncate">Đang Giao</div>
                   <div className="text-[8.5px] font-mono mt-0.5 font-bold">
                     {activeSequence && currentWorkflowStep === 2
                       ? "Đang chạy tới bàn"
                       : activeSequence && currentWorkflowStep > 2
-                        ? "Đã tới bàn ✓"
+                        ? "Đã tới bàn"
                         : "Chưa tới"}
                   </div>
                 </div>
@@ -4600,7 +4616,7 @@ export const StaffKdsPage: React.FC = () => {
                 <div
                   className={`p-2 rounded-xl border text-center transition-all ${
                     activeSequence && currentWorkflowStep === 3
-                      ? "bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/40 font-bold shadow-md shadow-amber-500/10 animate-pulse"
+                      ? "bg-amber-50 border-amber-500 text-amber-950 ring-2 ring-amber-500/40 font-bold shadow-md shadow-amber-500/10"
                       : activeSequence && currentWorkflowStep > 3
                         ? "bg-emerald-50/70 border-emerald-200 text-emerald-800"
                         : "bg-white border-slate-200 text-slate-400 opacity-60"
@@ -4612,7 +4628,7 @@ export const StaffKdsPage: React.FC = () => {
                     {activeSequence && currentWorkflowStep === 3
                       ? "Khách nhận món"
                       : activeSequence && currentWorkflowStep > 3
-                        ? "Đã trả xong ✓"
+                        ? "Đã trả xong"
                         : "Chờ đến"}
                   </div>
                 </div>
@@ -4653,8 +4669,8 @@ export const StaffKdsPage: React.FC = () => {
                     </>
                   ) : currentWorkflowStep === 2 ? (
                     <>
-                      <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0 animate-pulse" />
-                      <span>Tình huống: Khách đổi chỗ khi Robot đang trên đường đi (In-Transit)</span>
+                      <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>Tình huống: Khách đổi chỗ khi Robot đang trên đường đi</span>
                     </>
                   ) : currentWorkflowStep === 3 ? (
                     <>
@@ -4674,10 +4690,10 @@ export const StaffKdsPage: React.FC = () => {
                     : currentWorkflowStep === 1
                       ? `Món ăn đang ở quầy bếp. Đổi bàn lúc này sẽ cập nhật ngay bàn đích xuất phát cho Khay ${rerouteLegIndex + 1}, robot sẽ xuất bến đi thẳng tới bàn mới.`
                       : currentWorkflowStep === 2
-                        ? `Robot đang chạy tới ${activeSequence.legs[rerouteLegIndex]?.tableNo || "Bàn cũ"}. Hệ thống sẽ gửi lệnh Reroute lập tức để AMR bẻ lái chuyển hướng trong thời gian thực sang bàn mới mà không cần quay về bếp.`
+                        ? `Robot đang chạy tới ${activeSequence.legs[rerouteLegIndex]?.tableNo || "Bàn cũ"}. Hệ thống sẽ gửi lệnh chuyển hướng lập tức để AMR đổi lộ trình trong thời gian thực sang bàn mới mà không cần quay về bếp.`
                         : currentWorkflowStep === 3
                           ? `Robot đã dừng tại ${activeSequence.legs[rerouteLegIndex]?.tableNo || "Bàn cũ"}. Bạn có thể chọn bàn mới để robot di chuyển tiếp, hoặc nhân viên tại sảnh hỗ trợ chuyển món từ khay tới bàn của khách.`
-                          : "Robot đã hoàn tất trả món và đang trở về trạm sạc bếp. Chọn bàn mới nếu cần điều hướng robot phục vụ tiếp."}
+                          : "Robot đã hoàn tất trả món và đang trở về trạm bếp. Chọn bàn mới nếu cần điều hướng robot phục vụ tiếp."}
                 </p>
               </div>
             </div>
@@ -4723,7 +4739,7 @@ export const StaffKdsPage: React.FC = () => {
                             <span className={isSelected ? "text-blue-700" : "text-slate-500"}>
                               Khay {leg.cargoLevel} (Tầng {leg.cargoLevel})
                             </span>
-                            {isLegDone && <span className="text-emerald-600">Đã xong ✓</span>}
+                            {isLegDone && <span className="text-emerald-600">Đã xong</span>}
                           </div>
                           <div className="text-xs font-black text-slate-900 mt-0.5">
                             Bàn: {leg.tableNo}
@@ -4736,7 +4752,7 @@ export const StaffKdsPage: React.FC = () => {
               ) : !activeSequence ? (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    Chọn Khay Cần Đổi Bàn (Dispatch Console):
+                    Chọn Khay Cần Đổi Bàn:
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -4929,7 +4945,7 @@ export const StaffKdsPage: React.FC = () => {
                   <span>Thêm Bàn Ăn Mới</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tạo thủ công bàn ăn và liên kết trạm tọa độ Robot SLAM.
+                  Tạo thủ công bàn ăn và liên kết trạm dừng Robot AMR.
                 </p>
               </div>
               <button
@@ -4944,7 +4960,7 @@ export const StaffKdsPage: React.FC = () => {
             <form onSubmit={handleCreateTable} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mã / Số Bàn (TableNo) <span className="text-rose-500">*</span>
+                  Mã / Số Bàn <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -4958,7 +4974,7 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tên Hiển Thị (TableName)
+                  Tên Hiển Thị
                 </label>
                 <input
                   type="text"
@@ -4987,7 +5003,7 @@ export const StaffKdsPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Khu Vực (Zone)
+                    Khu Vực
                   </label>
                   <input
                     type="text"
@@ -5001,7 +5017,7 @@ export const StaffKdsPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Gán Trạm Robot SLAM (Tùy chọn)
+                  Gán Trạm Dừng Robot (Tùy chọn)
                 </label>
                 <select
                   value={newTableStationId}
@@ -5011,12 +5027,12 @@ export const StaffKdsPage: React.FC = () => {
                   <option value="">-- Chưa gán trạm --</option>
                   {stations.map((s) => (
                     <option key={s.id} value={s.id}>
-                      📍 {s.name} ({s.stationType || "Bàn"})
+                      {s.name} ({s.stationType || "Bàn"})
                     </option>
                   ))}
                 </select>
                 <span className="text-[10px] text-slate-500 mt-1 block">
-                  * Nếu bàn nằm ở vị trí robot không tới được, có thể gán trạm gần nhất tại đây hoặc dùng tính năng &quot;Gán Trạm Robot&quot;.
+                  * Nếu bàn nằm ở vị trí robot không tới được, có thể gán trạm gần nhất tại đây hoặc dùng tính năng &quot;Gán Trạm Dừng Robot&quot;.
                 </span>
               </div>
 
@@ -5052,7 +5068,7 @@ export const StaffKdsPage: React.FC = () => {
                   <span>Nhập Bàn Ăn Hàng Loạt (Excel / CSV)</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Khởi tạo nhanh danh sách bàn ăn và liên kết trạm SLAM từ file
+                  Khởi tạo nhanh danh sách bàn ăn và liên kết trạm dừng từ tệp
                   mẫu.
                 </p>
               </div>
@@ -5192,7 +5208,7 @@ export const StaffKdsPage: React.FC = () => {
           </div>
         </div>
       )}
-      {/* MODAL: GÁN TRẠM ROBOT (WAYPOINT) */}
+      {/* MODAL: GÁN TRẠM DỪNG ROBOT */}
       {isAssignStationModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-5 space-y-4 text-slate-800">
@@ -5200,10 +5216,10 @@ export const StaffKdsPage: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-purple-600" />
-                  <span>Gán Trạm Robot (SLAM Waypoint)</span>
+                  <span>Gán Trạm Dừng Robot</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ SLAM.
+                  Liên kết bàn ăn với tọa độ điểm dừng của Robot AMR trên bản đồ mặt bằng.
                 </p>
               </div>
               <button
@@ -5240,7 +5256,7 @@ export const StaffKdsPage: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chọn Trạm Vật Lý (Đồng Bộ từ SLAM Nav2 qua MQTT)
+                  Chọn Trạm Vật Lý Trên Sơ Đồ Quán
                 </label>
                 <select
                   value={assignStationTargetStationId}
@@ -5252,7 +5268,7 @@ export const StaffKdsPage: React.FC = () => {
                   <option value="">-- Hủy gán trạm (Không gán xe) --</option>
                   {stations.map((s) => (
                     <option key={s.id} value={s.id}>
-                      📍 {s.name} (X: {s.xCoord}, Y: {s.yCoord}) •{" "}
+                      {s.name} (X: {s.xCoord}, Y: {s.yCoord}) •{" "}
                       {s.stationType || "Bàn ăn"}
                     </option>
                   ))}
@@ -5399,7 +5415,7 @@ export const StaffKdsPage: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-[10px] text-slate-400 block font-semibold">Robot AMR:</span>
-                <span className="font-extrabold text-slate-900 text-sm">🤖 {selectedTaskDetail.robotCode}</span>
+                <span className="font-extrabold text-slate-900 text-sm">{selectedTaskDetail.robotCode}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
                 <span className="text-[10px] text-slate-400 block font-semibold">Bàn Đích Đến:</span>
@@ -5422,14 +5438,11 @@ export const StaffKdsPage: React.FC = () => {
               <div className="flex items-center justify-between pb-2 border-b border-blue-100">
                 <span className="font-bold text-blue-950 text-xs flex items-center gap-1.5 font-heading">
                   <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span>QUY TRÌNH PHỤC VỤ TỰ ĐỘNG</span>
+                  <span>Quy Trình Phục Vụ Tự Động</span>
                 </span>
                 <span className="text-[10px] font-mono font-bold bg-white text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200 flex items-center gap-1.5 shadow-2xs">
                   {selectedTaskDetail.isLive && (
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                    </span>
+                    <span className="inline-flex rounded-full h-2 w-2 bg-blue-600" />
                   )}
                   <span>
                     {selectedTaskDetail.workflowStep === 1
@@ -5459,16 +5472,10 @@ export const StaffKdsPage: React.FC = () => {
                             : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute inset-0 bg-blue-500/5 animate-pulse pointer-events-none" />
-                      )}
                       <div>
                         <div className="flex items-center justify-center gap-1 mb-1">
                           {isActive ? (
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                            </span>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-blue-600" />
                           ) : isDone ? (
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                           ) : (
@@ -5485,7 +5492,7 @@ export const StaffKdsPage: React.FC = () => {
                         <div className="font-black text-xs text-slate-900">1. Xuất Bếp</div>
                       </div>
                       <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500">
-                        {isDone ? "Đã nạp món ✓" : "Nạp khay tại quầy"}
+                        {isDone ? "Đã nạp món" : "Nạp khay tại quầy"}
                       </div>
                     </div>
                   );
@@ -5505,16 +5512,10 @@ export const StaffKdsPage: React.FC = () => {
                             : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute inset-0 bg-blue-500/10 animate-pulse pointer-events-none" />
-                      )}
                       <div>
                         <div className="flex items-center justify-center gap-1 mb-1">
                           {isActive ? (
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                            </span>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-blue-600" />
                           ) : isDone ? (
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                           ) : (
@@ -5534,8 +5535,8 @@ export const StaffKdsPage: React.FC = () => {
                         {isActive
                           ? `Đang tới ${selectedTaskDetail.tableNo}...`
                           : isDone
-                            ? `Đã đến ${selectedTaskDetail.tableNo} ✓`
-                            : "Di chuyển theo SLAM"}
+                            ? `Đã đến ${selectedTaskDetail.tableNo}`
+                            : "Di chuyển tự động"}
                       </div>
                     </div>
                   );
@@ -5555,16 +5556,10 @@ export const StaffKdsPage: React.FC = () => {
                             : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute inset-0 bg-amber-500/10 animate-pulse pointer-events-none" />
-                      )}
                       <div>
                         <div className="flex items-center justify-center gap-1 mb-1">
                           {isActive ? (
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-600"></span>
-                            </span>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-amber-600" />
                           ) : isDone ? (
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                           ) : (
@@ -5581,7 +5576,7 @@ export const StaffKdsPage: React.FC = () => {
                         <div className="font-black text-xs text-slate-900">3. Trả Món</div>
                       </div>
                       <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500 truncate">
-                        {isActive ? "Chờ khách nhận món" : isDone ? "Khách đã lấy món ✓" : "Nhận món tại bàn"}
+                        {isActive ? "Chờ khách nhận món" : isDone ? "Khách đã lấy món" : "Nhận món tại bàn"}
                       </div>
                     </div>
                   );
@@ -5601,16 +5596,10 @@ export const StaffKdsPage: React.FC = () => {
                             : "bg-white/80 border-slate-200 text-slate-500 opacity-75"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute inset-0 bg-teal-500/10 animate-pulse pointer-events-none" />
-                      )}
                       <div>
                         <div className="flex items-center justify-center gap-1 mb-1">
                           {isActive ? (
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-500 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-600"></span>
-                            </span>
+                            <span className="inline-flex rounded-full h-2 w-2 bg-teal-600" />
                           ) : isDone ? (
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                           ) : (
@@ -5627,7 +5616,7 @@ export const StaffKdsPage: React.FC = () => {
                         <div className="font-black text-xs text-slate-900">4. Về Bếp</div>
                       </div>
                       <div className="mt-1.5 pt-1 border-t border-slate-200/50 text-[9.5px] font-sans text-slate-500 truncate">
-                        {isDone ? "Đã về bến an toàn ✓" : "Quay về quầy bếp"}
+                        {isDone ? "Đã về bến an toàn" : "Quay về quầy bếp"}
                       </div>
                     </div>
                   );
@@ -5635,13 +5624,13 @@ export const StaffKdsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* LIVE SQLITE TRANSFER AUDIT RECORDS (7 TABLES) */}
+            {/* LIVE TRANSFER AUDIT RECORDS */}
             {modalTaskAudit && (
               <div className="p-3.5 rounded-2xl bg-slate-900 text-slate-100 border border-slate-700 space-y-2.5 text-[11px] font-mono">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-700">
-                  <span className="font-bold text-cyan-300 uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="font-bold text-cyan-300 tracking-wide flex items-center gap-1.5">
                     <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Tiến Trình &amp; Nhật Ký Hệ Thống SQLite</span>
+                    <span>Tiến Trình &amp; Nhật Ký Chuyến Giao</span>
                   </span>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-400/30 font-bold">
                     Yêu cầu giao: {formatTransferStatusLabel(modalTaskAudit.request.status)}

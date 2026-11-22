@@ -195,16 +195,16 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
         setMapPreviewUrl(url);
       }
 
-      showStatus(`Đã chọn ảnh bản đồ ROS: ${file.name} (${Math.round(file.size / 1024)} KB)`, 'info');
+      showStatus(`Đã chọn ảnh bản đồ: ${file.name} (${Math.round(file.size / 1024)} KB)`, 'info');
     }
   };
 
-  // Handle Waypoints File Change (JSON)
+  // Handle Waypoints File Change
   const handleWaypointsFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.name.endsWith('.json')) {
-        showStatus('File waypoints phải là định dạng JSON (.json).', 'error');
+        showStatus('Tệp danh sách điểm trạm không đúng định dạng.', 'error');
         return;
       }
       setSelectedWaypointsFile(file);
@@ -233,9 +233,9 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
             }));
           }
           setParsedWaypointsFromFile(parsed);
-          showStatus(`Đã đọc ${parsed.length} trạm / waypoints từ file ${file.name}`, 'success');
+          showStatus(`Đã đọc ${parsed.length} điểm trạm từ tệp ${file.name}`, 'success');
         } catch {
-          showStatus('File JSON không đúng cấu trúc danh sách waypoint.', 'error');
+          showStatus('Tệp cấu hình không đúng cấu trúc danh sách điểm trạm.', 'error');
         }
       };
       reader.readAsText(file);
@@ -246,7 +246,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMapFile && parsedWaypointsFromFile.length === 0 && stationList.length === 0) {
-      showStatus('Vui lòng chọn ít nhất file ảnh bản đồ (.png/.jpg) hoặc file trạm (.json) để tải lên.', 'error');
+      showStatus('Vui lòng chọn ít nhất tệp ảnh bản đồ hoặc tệp danh sách trạm để tải lên.', 'error');
       return;
     }
 
@@ -271,7 +271,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
 
       const result = await robotService.uploadMap(formData);
       if (result && result.success) {
-        showStatus('Tải lên sơ đồ & trạm thành công! Đã lưu CSDL SQLite (m_areas / m_stations) và phát lệnh MQTT cho Robot.', 'success');
+        showStatus('Tải lên sơ đồ và điểm trạm thành công! Đã đồng bộ sơ đồ tới đội robot.', 'success');
         if (result.map) {
           setActiveMap(result.map);
           if (result.map.waypoints) {
@@ -312,7 +312,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
 
     setStationList((prev) => [...prev, newWp]);
     setNewStationName('');
-    showStatus(`Đã thêm trạm "${newWp.name}" vào danh sách. Nhớ nhấn "Lưu Thay Đổi Trạm" để đồng bộ.`, 'info');
+    showStatus(`Đã thêm trạm "${newWp.name}" vào danh sách. Nhớ nhấn "Lưu Danh Sách Trạm" để đồng bộ.`, 'info');
   };
 
   // Remove a station from list
@@ -321,12 +321,12 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
     showStatus('Đã xóa trạm khỏi danh sách.', 'info');
   };
 
-  // Save modified station list to backend & SQLite
+  // Save modified station list to backend
   const handleSaveStationList = async () => {
     setIsUploading(true);
     try {
       const updatedMap = await robotService.updateWaypoints(stationList);
-      showStatus(`Đã lưu ${stationList.length} trạm vào CSDL SQLite (m_stations) và phát lệnh MQTT tới Robot!`, 'success');
+      showStatus(`Đã lưu ${stationList.length} trạm và cập nhật tới đội robot!`, 'success');
       if (updatedMap) {
         setActiveMap(updatedMap);
         window.dispatchEvent(new CustomEvent('vora:slam-map-updated', { detail: updatedMap }));
@@ -350,13 +350,10 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
           </div>
           <div>
             <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <span>Quản Lý Bản Đồ SLAM & Trạm Điều Phối</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
-                m_areas & m_stations
-              </span>
+              <span>Quản Lý Bản Đồ Mặt Bằng & Trạm Điều Phối</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Tải lên sơ đồ ảnh LiDAR ROS2, quản lý các điểm Waypoint / Station nhận giao đồ ăn và lưu trữ SQLite cục bộ.
+              Tải lên sơ đồ mặt bằng nhà hàng, quản lý các điểm dừng và trạm bàn giao món ăn tại quán.
             </p>
           </div>
         </div>
@@ -368,7 +365,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
             onClick={loadActiveMap}
             disabled={isLoading}
             className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Làm mới thông tin từ SQLite"
+            title="Làm mới thông tin sơ đồ"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
             <span className="hidden sm:inline">Làm Mới</span>
@@ -377,9 +374,9 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
             >
-              ✕
+              Đóng
             </button>
           )}
         </div>
@@ -417,7 +414,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
           }`}
         >
           <Upload className="w-3.5 h-3.5" />
-          <span>Tải Lên Sơ Đồ & File Trạm (.json)</span>
+          <span>Tải Lên Sơ Đồ & Danh Sách Trạm</span>
         </button>
 
         <button
@@ -457,15 +454,15 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               <span className="text-xs font-bold text-slate-800 truncate block mt-0.5">{activeMap?.name || 'Chưa nạp bản đồ'}</span>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Độ Phân Giải (Resolution)</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Độ Phân Giải</span>
               <span className="text-xs font-bold text-blue-700 font-mono block mt-0.5">{activeMap?.resolution || resolution} m/pixel</span>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Tọa Độ Gốc (Origin)</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Tọa Độ Gốc</span>
               <span className="text-xs font-bold text-slate-700 font-mono block mt-0.5">X: {activeMap?.originX || originX}m, Y: {activeMap?.originY || originY}m</span>
             </div>
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Tổng Số Trạm (SQLite)</span>
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Tổng Số Trạm</span>
               <span className="text-xs font-bold text-emerald-700 font-mono block mt-0.5">{stationList.length} Trạm đã gán</span>
             </div>
           </div>
@@ -476,11 +473,11 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <MapIcon className="w-3.5 h-3.5 text-blue-600" />
-                  <span>1. File Ảnh Bản Đồ LiDAR ROS (.pgm, .png, .jpg)</span>
+                  <span>1. Tệp Ảnh Bản Đồ Mặt Bằng (.pgm, .png, .jpg)</span>
                 </span>
                 {selectedMapFile && (
                   <span className="text-[10px] text-emerald-600 font-mono font-bold">
-                    ✓ Đã chọn {Math.round(selectedMapFile.size / 1024)} KB
+                    Đã chọn {Math.round(selectedMapFile.size / 1024)} KB
                   </span>
                 )}
               </label>
@@ -516,23 +513,23 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                     <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-2">
                       <Upload className="w-5 h-5" />
                     </div>
-                    <p className="text-xs font-bold text-slate-800">Kéo thả ảnh bản đồ hoặc bấm để duyệt file</p>
-                    <p className="text-[11px] text-slate-400">Hỗ trợ file ROS Cartographer / Gmapping: .png, .jpg, .pgm</p>
+                    <p className="text-xs font-bold text-slate-800">Kéo thả ảnh bản đồ hoặc bấm để duyệt tệp</p>
+                    <p className="text-[11px] text-slate-400">Hỗ trợ tệp ảnh bản đồ mặt bằng: .png, .jpg, .pgm</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Right: Waypoints JSON File Picker */}
+            {/* Right: Waypoints File Picker */}
             <div className="space-y-3">
               <label className="text-xs font-extrabold text-slate-900 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <FileCode className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>2. File Điểm Trạm / Waypoints (.json) (Tùy chọn)</span>
+                  <span>2. Tệp Danh Sách Điểm Trạm (Tùy chọn)</span>
                 </span>
                 {parsedWaypointsFromFile.length > 0 && (
                   <span className="text-[10px] text-emerald-600 font-mono font-bold">
-                    ✓ {parsedWaypointsFromFile.length} trạm được tìm thấy
+                    {parsedWaypointsFromFile.length} trạm được tìm thấy
                   </span>
                 )}
               </label>
@@ -560,10 +557,10 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                     </div>
                     <p className="text-xs font-bold text-slate-800">{selectedWaypointsFile.name}</p>
                     <p className="text-[11px] text-indigo-700 font-medium font-mono">
-                      {parsedWaypointsFromFile.length} waypoints được nạp tự động
+                      {parsedWaypointsFromFile.length} điểm dừng được nạp tự động
                     </p>
                     <span className="text-[10px] text-indigo-600 font-semibold hover:underline block pt-1">
-                      Nhấn để chọn file JSON khác
+                      Nhấn để chọn tệp danh sách trạm khác
                     </span>
                   </div>
                 ) : (
@@ -571,19 +568,19 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                     <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-2">
                       <FileCode className="w-5 h-5" />
                     </div>
-                    <p className="text-xs font-bold text-slate-800">Chọn file waypoints (.json) từ robot hoặc Nav2</p>
-                    <p className="text-[11px] text-slate-400">Nếu không có, bạn có thể tự thêm trạm thủ công tại tab "Danh Sách Trạm"</p>
+                    <p className="text-xs font-bold text-slate-800">Chọn tệp cấu hình điểm dừng từ robot</p>
+                    <p className="text-[11px] text-slate-400">Nếu không có, bạn có thể tự thêm trạm thủ công tại mục "Danh Sách Trạm"</p>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* SLAM Metadata Config Fields */}
+          {/* Map Metadata Config Fields */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
             <h4 className="text-xs font-extrabold text-slate-900 flex items-center gap-2">
               <Layers className="w-3.5 h-3.5 text-blue-600" />
-              <span>Cấu Hình Tọa Độ & Thông Số Bản Đồ (SLAM ROS2 Metrology)</span>
+              <span>Cấu Hình Tọa Độ & Thông Số Bản Đồ Mặt Bằng</span>
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
@@ -610,7 +607,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Tọa độ gốc Origin X (m):</label>
+                <label className="font-bold text-slate-700 block mb-1">Tọa độ gốc X (m):</label>
                 <input
                   type="number"
                   step="0.1"
@@ -621,7 +618,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Tọa độ gốc Origin Y (m):</label>
+                <label className="font-bold text-slate-700 block mb-1">Tọa độ gốc Y (m):</label>
                 <input
                   type="number"
                   step="0.1"
@@ -635,9 +632,9 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
 
           {/* Submit Action Button */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
               <Database className="w-4 h-4 text-emerald-600" />
-              <span>Tự động lưu vào SQLite: m_areas (map) + m_stations (waypoints)</span>
+              <span>Tự động lưu sơ đồ mặt bằng và danh sách điểm dừng tại quán</span>
             </div>
 
             <button
@@ -648,12 +645,12 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               {isUploading ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-cyan-200" />
-                  <span>Đang tải lên & nạp CSDL...</span>
+                  <span>Đang tải lên & đồng bộ...</span>
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  <span>Tải Lên & Lưu Vào CSDL SQLite + Bắn MQTT Robot</span>
+                  <span>Tải Lên & Đồng Bộ Tới Đội Robot</span>
                 </>
               )}
             </button>
@@ -669,9 +666,9 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-extrabold text-slate-900 flex items-center gap-2">
                 <Plus className="w-3.5 h-3.5 text-blue-600" />
-                <span>Thêm Điểm Trạm / Waypoint Mới Vào Sơ Đồ</span>
+                <span>Thêm Điểm Trạm Mới Vào Sơ Đồ</span>
               </h3>
-              <span className="text-[10px] text-slate-500 font-mono">Tọa độ tính bằng mét (Metric World Coordinates)</span>
+              <span className="text-[10px] text-slate-500 font-mono">Tọa độ tính bằng mét</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
@@ -679,7 +676,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                 <label className="font-bold text-slate-700 block mb-1">Tên Trạm / Điểm Đích:</label>
                 <input
                   type="text"
-                  placeholder="VD: Bếp Trung Tâm, Bàn 05, Dock Sạc A..."
+                  placeholder="VD: Bếp Trung Tâm, Bàn 05, Trạm Thay Pin A..."
                   value={newStationName}
                   onChange={(e) => setNewStationName(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs"
@@ -687,16 +684,16 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
               </div>
 
               <div className="sm:col-span-3">
-                <label className="font-bold text-slate-700 block mb-1">Loại Trạm (Type):</label>
+                <label className="font-bold text-slate-700 block mb-1">Loại Trạm:</label>
                 <select
                   value={newStationType}
                   onChange={(e) => setNewStationType(e.target.value as any)}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs"
                 >
-                  <option value="pickup">pickup (Trạm Lấy Món / Bếp)</option>
-                  <option value="dropoff">dropoff (Trạm Giao Món / Bàn)</option>
-                  <option value="charging">charging (Trạm Sạc Pin Docking)</option>
-                  <option value="waiting">waiting (Điểm Chờ / Nghỉ)</option>
+                  <option value="pickup">Trạm Lấy Món / Bếp</option>
+                  <option value="dropoff">Trạm Giao Món / Bàn</option>
+                  <option value="charging">Trạm Thay Pin</option>
+                  <option value="waiting">Điểm Chờ / Nghỉ</option>
                 </select>
               </div>
 
@@ -754,16 +751,16 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                 ) : (
                   <Database className="w-3.5 h-3.5" />
                 )}
-                <span>Lưu Thay Đổi Xuống SQLite (m_stations)</span>
+                <span>Lưu Danh Sách Trạm</span>
               </button>
             </div>
 
             {stationList.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
                 <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-700">Chưa có trạm nào trong CSDL quán</p>
+                <p className="text-xs font-bold text-slate-700">Chưa có trạm nào trong sơ đồ quán</p>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Hãy thêm trạm mới bằng biểu mẫu bên trên hoặc tải lên file waypoints (.json) tại tab "Tải Lên".
+                  Hãy thêm trạm mới bằng biểu mẫu bên trên hoặc tải lên tệp danh sách điểm dừng tại mục "Tải Lên".
                 </p>
               </div>
             ) : (
@@ -775,7 +772,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                         <th className="py-2.5 px-3">Mã Trạm</th>
                         <th className="py-2.5 px-3">Tên Trạm</th>
                         <th className="py-2.5 px-3">Phân Loại</th>
-                        <th className="py-2.5 px-3">Tọa Độ Metric (X, Y)</th>
+                        <th className="py-2.5 px-3">Tọa Độ (X, Y)</th>
                         <th className="py-2.5 px-3 text-right">Thao Tác</th>
                       </tr>
                     </thead>
@@ -800,10 +797,10 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                                   : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               }`}
                             >
-                              {st.type === 'pickup' && 'Trạm Bếp (Pickup)'}
-                              {st.type === 'charging' && 'Trạm Sạc (Charging)'}
-                              {st.type === 'waiting' && 'Điểm Chờ (Waiting)'}
-                              {st.type === 'dropoff' && 'Trạm Bàn (Dropoff)'}
+                              {st.type === 'pickup' && 'Trạm Bếp'}
+                              {st.type === 'charging' && 'Trạm Thay Pin'}
+                              {st.type === 'waiting' && 'Điểm Chờ'}
+                              {st.type === 'dropoff' && 'Trạm Bàn'}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 font-mono text-slate-700">
@@ -840,7 +837,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                 <span>Xem Trước Trực Quan Tọa Độ Trạm & Bàn Ăn</span>
               </h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Các điểm trạm được đánh dấu trực quan trên bản đồ SLAM cùng vị trí đội xe Robot hiện thời.
+                Các điểm trạm được đánh dấu trực quan trên bản đồ mặt bằng cùng vị trí đội robot hiện thời.
               </p>
             </div>
             <div className="flex items-center gap-2">
