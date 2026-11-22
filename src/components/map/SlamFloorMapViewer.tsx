@@ -10,7 +10,6 @@ import {
   Crosshair,
   RefreshCw,
   MapPin,
-  Activity,
 } from 'lucide-react';
 import {
   rosToCanvasPixel,

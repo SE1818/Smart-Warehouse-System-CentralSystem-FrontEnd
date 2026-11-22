@@ -161,7 +161,6 @@ export const AdminTechnicalPage: React.FC = () => {
   // Real-time SignalR Hub Telemetry Connection
   const {
     robots: storeRobots,
-    status: signalRStatus,
     connect: connectRobotHub,
     disconnect: disconnectRobotHub,
   } = useRobotStore();
@@ -665,9 +664,13 @@ export const AdminTechnicalPage: React.FC = () => {
 
   // Action: Resolve Alert
   const handleResolveAlert = async (id: string, robot: string) => {
-    await alertService.resolveAlert(id);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-    showToast(`Đã xử lý sự cố cho ${robot}. Trạng thái đã bình thường hóa.`, 'success');
+    const ok = await alertService.resolveAlert(id);
+    if (ok) {
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+      showToast(`Đã xử lý sự cố cho ${robot}. Trạng thái đã bình thường hóa.`, 'success');
+    } else {
+      showToast('Không thể cập nhật trạng thái sự cố. Vui lòng thử lại.', 'warning');
+    }
   };
 
   // Action: Send to Battery Swap Rack
@@ -702,45 +705,57 @@ export const AdminTechnicalPage: React.FC = () => {
 
   // Action: Cancel Mission
   const handleCancelMission = async (missionId: string) => {
-    await missionService.cancelMission(missionId);
-    setMissions((prev) => prev.filter((m) => m.id !== missionId));
-    showToast(`Đã hủy lệnh điều phối ${missionId}!`, 'info');
+    const ok = await missionService.cancelMission(missionId);
+    if (ok) {
+      setMissions((prev) => prev.filter((m) => m.id !== missionId));
+      showToast(`Đã hủy lệnh điều phối ${missionId}!`, 'info');
+    } else {
+      showToast('Không thể hủy lệnh điều phối. Vui lòng thử lại.', 'warning');
+    }
   };
 
   // Action: Prioritize Mission
   const handlePrioritizeMission = async (missionId: string) => {
-    await missionService.prioritizeMission(missionId);
-    setMissions((prev) =>
-      prev.map((m) => (m.id === missionId ? { ...m, priority: 'Cao', eta: '30s (Ưu tiên số 1)' } : m))
-    );
-    showToast(`Đã đẩy ${missionId} lên mức ưu tiên cao nhất!`, 'success');
+    const ok = await missionService.prioritizeMission(missionId);
+    if (ok) {
+      setMissions((prev) =>
+        prev.map((m) => (m.id === missionId ? { ...m, priority: 'Cao', eta: '30s (Ưu tiên số 1)' } : m))
+      );
+      showToast(`Đã đẩy ${missionId} lên mức ưu tiên cao nhất!`, 'success');
+    } else {
+      showToast('Không thể cập nhật mức ưu tiên. Vui lòng thử lại.', 'warning');
+    }
   };
 
   // Action: Create New Mission
   const handleCreateMission = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMissionTitle) return;
-    const created = await missionService.createMission({
-      title: newMissionTitle,
-      destination: newMissionDest,
-      robotId: newMissionRobot || (amrNodes[0]?.id || 'AMR-01'),
-      priority: 'Cao',
-    });
-    setMissions((prev) => [
-      {
-        id: created.id,
-        title: created.title,
-        assignedTo: created.assignedTo,
-        priority: created.priority,
-        destination: created.destination,
-        status: created.status,
-        eta: created.eta,
-      },
-      ...prev,
-    ]);
-    setShowNewMissionModal(false);
-    setNewMissionTitle('');
-    showToast(`Đã tạo và phát lệnh nhiệm vụ ${created.id} cho ${created.assignedTo}!`, 'success');
+    try {
+      const created = await missionService.createMission({
+        title: newMissionTitle,
+        destination: newMissionDest,
+        robotId: newMissionRobot || (amrNodes[0]?.id || 'AMR-01'),
+        priority: 'Cao',
+      });
+      setMissions((prev) => [
+        {
+          id: created.id,
+          title: created.title,
+          assignedTo: created.assignedTo,
+          priority: created.priority,
+          destination: created.destination,
+          status: created.status,
+          eta: created.eta,
+        },
+        ...prev,
+      ]);
+      setShowNewMissionModal(false);
+      setNewMissionTitle('');
+      showToast(`Đã tạo và phát lệnh nhiệm vụ ${created.id} cho ${created.assignedTo}!`, 'success');
+    } catch {
+      showToast('Không thể tạo nhiệm vụ điều phối. Vui lòng kiểm tra kết nối máy chủ.', 'warning');
+    }
   };
 
   const cleanTechName = fixMojibake(
@@ -836,23 +851,10 @@ export const AdminTechnicalPage: React.FC = () => {
                   {currentUser?.tenantName || (tenantSlug ? tenantSlug.toUpperCase() : 'VORA Fleet')}
                 </span>
                 <span className="text-[11px] text-slate-500 block truncate font-mono">
-                  {signalRStatus === 'connected'
-                    ? 'Đang hoạt động'
-                    : signalRStatus === 'connecting'
-                      ? 'Đang kết nối lại...'
-                      : 'Chế độ độc lập'}
+                  Quản Trị Kỹ Thuật
                 </span>
               </div>
             </div>
-            <span
-              className={`w-2 h-2 rounded-full shrink-0 ${signalRStatus === 'connected'
-                  ? 'bg-emerald-500 ring-4 ring-emerald-500/15'
-                  : signalRStatus === 'connecting'
-                    ? 'bg-amber-400'
-                    : 'bg-slate-400'
-                }`}
-              title="Trạng thái kết nối trạm điều phối"
-            />
           </div>
 
           {emergencyStop && (
@@ -2634,21 +2636,6 @@ export const AdminTechnicalPage: React.FC = () => {
                         <Radio className="w-4 h-4 text-emerald-600" />
                         <span>Trạng Thái Kết Nối &amp; Thiết Bị</span>
                       </h3>
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                          signalRStatus === 'connected'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : signalRStatus === 'connecting'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}
-                      >
-                        {signalRStatus === 'connected'
-                          ? 'Đang hoạt động'
-                          : signalRStatus === 'connecting'
-                          ? 'Đang kết nối lại...'
-                          : 'Chế độ độc lập'}
-                      </span>
                     </div>
 
                     <div className="space-y-2 text-xs">
@@ -2768,7 +2755,6 @@ export const AdminTechnicalPage: React.FC = () => {
                     tablesCount: tables.length,
                     missionsCount: missions.length,
                     alertsCount: alerts.length,
-                    signalRStatus,
                     tenantLabel: currentUser?.tenantName || tenantSlug || 'VORA Fleet',
                   }}
                 />
@@ -2983,7 +2969,7 @@ export const AdminTechnicalPage: React.FC = () => {
                 </div>
               ) : (
                 <p className="text-[11px] text-slate-400 italic">
-                  Chưa có mã PIN phiên làm việc. Nhấn &quot;Tạo Mã PIN&quot; để sinh mã 6 chữ số ngẫu nhiên (hết hạn sau 10 phút, không hardcode).
+                  Chưa có mã PIN phiên làm việc. Nhấn &quot;Tạo Mã PIN&quot; để sinh mã 6 chữ số ngẫu nhiên (hết hạn sau 10 phút).
                 </p>
               )}
             </div>

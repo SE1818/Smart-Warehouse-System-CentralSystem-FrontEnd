@@ -18,14 +18,13 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { sqliteService, type SqliteDbStats, type SqliteAuditEntry } from '@/services/sqliteService';
-import { edgeSyncService, type SyncConnectionState } from '@/services/edgeSyncService';
+import { edgeSyncService } from '@/services/edgeSyncService';
 
 interface LocalSqliteSyncLiveSummary {
   robotsCount: number;
   tablesCount: number;
   missionsCount: number;
   alertsCount: number;
-  signalRStatus: string;
   tenantLabel?: string;
 }
 
@@ -40,7 +39,6 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
 }) => {
   const [stats, setStats] = useState<SqliteDbStats | null>(null);
   const [audits, setAudits] = useState<SqliteAuditEntry[]>([]);
-  const [connectionState, setConnectionState] = useState<SyncConnectionState>('disconnected');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -52,7 +50,6 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
       const currentAudits = await sqliteService.getSyncAudits(10);
       setStats(currentStats);
       setAudits(currentAudits);
-      setConnectionState(edgeSyncService.getConnectionState());
       setLastSyncTime(edgeSyncService.getLastSyncedAt());
     } catch (err) {
       console.warn('[LocalSqliteSyncCard] Lỗi nạp thông tin SQLite:', err);
@@ -73,22 +70,13 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
       void loadData();
     };
 
-    const handleStateEvent = (e: Event) => {
-      const customEvent = e as CustomEvent<{ state: SyncConnectionState }>;
-      if (customEvent.detail?.state) {
-        setConnectionState(customEvent.detail.state);
-      }
-    };
-
     window.addEventListener('vora:edge-sync-event', handleSyncEvent);
-    window.addEventListener('vora:edge-sync-state', handleStateEvent);
     window.addEventListener('vora:slam-map-updated', loadData);
 
     const interval = setInterval(loadData, 5000);
 
     return () => {
       window.removeEventListener('vora:edge-sync-event', handleSyncEvent);
-      window.removeEventListener('vora:edge-sync-state', handleStateEvent);
       window.removeEventListener('vora:slam-map-updated', loadData);
       clearInterval(interval);
     };
@@ -170,36 +158,6 @@ export const LocalSqliteSyncCard: React.FC<LocalSqliteSyncCardProps> = ({
               <p className="text-xs text-slate-400 mt-0.5">
                 Toàn bộ dữ liệu vận hành đội robot được lưu trữ cục bộ tại máy trạm và tự động đồng bộ với máy chủ trung tâm.
               </p>
-            </div>
-          </div>
-
-          {/* Connection Badge */}
-          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                connectionState === 'connected'
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : connectionState === 'connecting'
-                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                  : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
-              }`}
-            >
-              <Radio
-                className={`w-3.5 h-3.5 ${
-                  connectionState === 'connected'
-                    ? 'text-emerald-400'
-                    : connectionState === 'connecting'
-                    ? 'animate-spin text-amber-300'
-                    : 'text-rose-400'
-                }`}
-              />
-              <span>
-                {connectionState === 'connected'
-                  ? 'Kết Nối Máy Chủ: Sẵn sàng'
-                  : connectionState === 'connecting'
-                  ? 'Đang kết nối lại...'
-                  : 'Mất kết nối máy chủ'}
-              </span>
             </div>
           </div>
         </div>

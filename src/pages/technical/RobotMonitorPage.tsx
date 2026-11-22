@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef } from 'react';
 import { useRobotStore } from '@/stores/robotStore';
-import { Bot, RefreshCw, Wifi, Activity, Battery } from 'lucide-react';
+import { Bot, Wifi, Activity, Battery } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -16,7 +16,6 @@ interface RobotMonitorPageProps {
 export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {}) {
   const { 
     robots, 
-    status: signalRStatus, 
     logs, 
     connect: connectRobotHub, 
     disconnect: disconnectRobotHub, 
@@ -97,23 +96,8 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
           )}
         </div>
 
-        {/* Network Connection Status Cards */}
-        <div className={embedded ? 'shrink-0 grid grid-cols-1 md:grid-cols-3 gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5'}>
-          {/* Connection Status */}
-          <div className={embedded ? 'bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3' : 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4'}>
-            <div className={`${embedded ? 'p-2' : 'p-3'} rounded-xl ${
-              signalRStatus === 'connected' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
-            }`}>
-              <RefreshCw className={`${embedded ? 'w-5 h-5' : 'w-6 h-6'} ${signalRStatus === 'connecting' ? 'animate-spin' : ''}`} />
-            </div>
-            <div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Kết Nối Trạm Điều Phối</span>
-              <span className="text-sm font-extrabold text-slate-900">
-                {signalRStatus === 'connected' ? 'Đang hoạt động' : signalRStatus === 'connecting' ? 'Đang kết nối lại...' : 'Chưa kết nối'}
-              </span>
-            </div>
-          </div>
-
+        {/* Fleet & Session Summary Cards */}
+        <div className={embedded ? 'shrink-0 grid grid-cols-1 md:grid-cols-2 gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5'}>
           {/* Fleet Online Count */}
           <div className={embedded ? 'bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3' : 'bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4'}>
             <div className={`${embedded ? 'p-2' : 'p-3'} rounded-xl ${

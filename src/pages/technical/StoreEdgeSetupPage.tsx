@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useRobotStore } from '@/stores/robotStore';
-import { Bot, RefreshCw, AlertTriangle, Database, Settings, CheckCircle2, Clock, Battery, Wrench } from 'lucide-react';
+import { Bot, RefreshCw, AlertTriangle, Database, Settings, CheckCircle2 } from 'lucide-react';
 import { robotMonitorService } from '@/services/robotMonitorService';
 import { toast } from 'react-toastify';
 
@@ -22,26 +22,12 @@ export function StoreEdgeSetupPage({ embedded = false, tenantSubdomain }: StoreE
   const {
     robots,
     logs,
-    status: signalRStatus,
     fetchRobots,
     connect: connectRobotHub,
     disconnect: disconnectRobotHub,
     addLog,
     clearLogs,
   } = useRobotStore();
-
-  // Simulated Internal Errors (Khép kín nội bộ VORA)
-  const [simulatedErrors, setSimulatedErrors] = useState<
-    Array<{
-      id: string;
-      robot: string;
-      table: string;
-      type: 'OBSTACLE_BLOCKED' | 'TIMEOUT_UNCLAIMED' | 'BATTERY_LOW' | 'EMERGENCY_ESTOP';
-      message: string;
-      actionRecommended: string;
-      time: string;
-    }>
-  >([]);
 
   // Log filter
   const [severityFilter, setSeverityFilter] = useState<'ALL' | 'INFO' | 'WARNING' | 'ERROR'>('ALL');
@@ -61,50 +47,18 @@ export function StoreEdgeSetupPage({ embedded = false, tenantSubdomain }: StoreE
     consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // Internal Error Simulation (VORA Closed-loop Error Center)
-  const triggerInternalError = (type: 'OBSTACLE_BLOCKED' | 'TIMEOUT_UNCLAIMED' | 'BATTERY_LOW') => {
-    const robot = robots[0]?.name || 'AMR-V01';
-    const table = 'Bàn A-04';
-    const now = new Date().toLocaleTimeString('vi-VN');
-
-    let msg = '';
-    let action = '';
-
-    if (type === 'OBSTACLE_BLOCKED') {
-      msg = `${robot} bị vật cản (ghế em bé / khách đứng) lối đi Bàn ${table} quá 15s.`;
-      action = 'Phát chuông cảnh báo trên KDS & Tablet Robot. Nhân viên chạy bàn hỗ trợ bưng khay.';
-    } else if (type === 'TIMEOUT_UNCLAIMED') {
-      msg = `Đã đến ${table} nhưng khách chưa lấy khay sau 90s.`;
-      action = 'Robot phát giọng nói mời lấy đồ. Nếu quá 120s tự quay về trạm tiếp tế.';
-    } else {
-      msg = `${robot} mức pin sụt giảm dưới 15% khi đang thực hiện lộ trình giao hàng.`;
-      action = 'Hệ thống tự động chuyển đơn cho Robot dự phòng, đưa robot về Trạm Thay Pin ngay.';
-    }
-
-    const newErr = {
-      id: `ERR-${Math.floor(1000 + Math.random() * 9000)}`,
-      robot,
-      table,
-      type,
-      message: msg,
-      actionRecommended: action,
-      time: now,
-    };
-
-    setSimulatedErrors((prev) => [newErr, ...prev]);
-    addLog(`[VORA NỘI BỘ] ${msg} -> Xử lý: ${action}`, 'warning');
-    toast.warn(msg);
-  };
-
   const handleEmergencyStop = async (robotId: string, robotName: string) => {
     try {
       await robotMonitorService.emergencyStop(robotId);
       addLog(`[E-STOP THỦ CÔNG] Đã kích hoạt dừng khẩn cấp cho ${robotName}!`, 'error');
       toast.error(`Đã phanh dừng khẩn cấp ${robotName}`);
     } catch {
-      addLog(`[E-STOP] Đã gửi lệnh phanh dừng ${robotName}`, 'error');
+      addLog(`[E-STOP THẤT BẠI] Không thể gửi lệnh dừng khẩn cấp cho ${robotName}`, 'error');
+      toast.error(`Không thể gửi lệnh dừng khẩn cấp cho ${robotName}. Vui lòng thử lại.`);
     }
   };
+
+  const incidentLogs = logs.filter((l) => l.type === 'error' || l.type === 'warning');
 
   const filteredLogs = logs.filter((l) => {
     const matchesSev = severityFilter === 'ALL' ? true : l.type.toUpperCase() === severityFilter;
@@ -147,16 +101,6 @@ export function StoreEdgeSetupPage({ embedded = false, tenantSubdomain }: StoreE
               <div>
                 <span className="text-slate-400 text-[10px] block font-sans font-semibold">Lưu Trữ Tại Quán:</span>
                 <strong className="text-emerald-700 font-bold">Bộ Nhớ Nội Bộ</strong>
-              </div>
-            </div>
-
-            <div className={`${embedded ? 'px-2.5 py-1.5 rounded-xl' : 'p-3 rounded-2xl'} bg-slate-50 border border-slate-200 flex items-center gap-2 flex-1 sm:flex-initial`}>
-              <RefreshCw className={`w-4 h-4 text-brand-600 shrink-0 ${signalRStatus === 'connecting' ? 'animate-spin' : ''}`} />
-              <div>
-                <span className="text-slate-400 text-[10px] block font-sans font-semibold">Kết Nối Robot:</span>
-                <strong className="text-slate-900 font-bold">
-                  {signalRStatus === 'connected' ? 'Đang hoạt động' : 'Chế độ độc lập'}
-                </strong>
               </div>
             </div>
 
@@ -427,104 +371,47 @@ export function StoreEdgeSetupPage({ embedded = false, tenantSubdomain }: StoreE
               </div>
             </div>
 
-            {/* Error Simulator Controls */}
+            {/* Incident Log Feed */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Kiểm Thử Tình Huống Sự Cố AMR Tại Quán:
+                  Bảng Cảnh Báo Sự Cố Vận Hành ({incidentLogs.length})
                 </h4>
-                <span className="text-[10px] text-slate-400 font-mono">Dành cho Kỹ thuật viên kiểm tra xử lý</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => triggerInternalError('OBSTACLE_BLOCKED')}
-                  className="p-3.5 rounded-2xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold text-left transition-all cursor-pointer space-y-1"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>1. Kẹt Vật Cản Quá 15s</span>
-                  </div>
-                  <p className="text-[10px] text-amber-600 font-normal">
-                    Cảm biến nhận diện vướng ghế/người. Báo chuông đỏ trên KDS cho nhân viên bưng khay.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => triggerInternalError('TIMEOUT_UNCLAIMED')}
-                  className="p-3.5 rounded-2xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold text-left transition-all cursor-pointer space-y-1"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>2. Khách Chưa Lấy Khay</span>
-                  </div>
-                  <p className="text-[10px] text-blue-600 font-normal">
-                    Robot đợi quá 90s tại bàn. Phát giọng nói và chuông nhắc nhở thực khách.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => triggerInternalError('BATTERY_LOW')}
-                  className="p-3.5 rounded-2xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold text-left transition-all cursor-pointer space-y-1"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Battery className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>3. Sụt Áp Pin Dưới 15%</span>
-                  </div>
-                  <p className="text-[10px] text-rose-600 font-normal">
-                    Tự động hoán đổi đơn sang robot khác và di chuyển về Trạm Thay Pin số 1.
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {/* Simulated Error Feed */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Bảng Cảnh Báo Lỗi Nội Bộ VORA ({simulatedErrors.length})
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => setSimulatedErrors([])}
-                  className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer font-bold"
-                >
-                  Xóa Danh Sách
-                </button>
-              </div>
-
-              {simulatedErrors.length === 0 ? (
+              {incidentLogs.length === 0 ? (
                 <div className="text-center py-10 text-slate-400 text-xs">
-                  Chưa có sự cố nội bộ nào được kích hoạt.
+                  Chưa ghi nhận sự cố nào từ đội robot.
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {simulatedErrors.map((err) => (
+                  {incidentLogs.map((entry, idx) => (
                     <div
-                      key={err.id}
+                      key={`${entry.timestamp}-${idx}`}
                       className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-amber-100 text-amber-800 border border-amber-300">
-                            {err.type}
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            entry.type === 'error' ? 'text-rose-600' : 'text-amber-600'
+                          }`}
+                        />
+                        <div className="space-y-1">
+                          <span
+                            className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] border inline-block ${
+                              entry.type === 'error'
+                                ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                : 'bg-amber-100 text-amber-800 border-amber-300'
+                            }`}
+                          >
+                            {entry.type === 'error' ? 'LỖI' : 'CẢNH BÁO'}
                           </span>
-                          <strong className="text-slate-900">{err.message}</strong>
+                          <p className="text-slate-900 font-semibold">{entry.message}</p>
                         </div>
-                        <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
-                          <Wrench className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                          <span>Hành động khuyến nghị: <span className="text-brand-700 font-semibold">{err.actionRecommended}</span></span>
-                        </p>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className="text-[10px] font-mono text-slate-400 block">{err.time}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold inline-block mt-1">
-                          Đã ghi nhận
-                        </span>
+                        <span className="text-[10px] font-mono text-slate-400 block">{entry.timestamp}</span>
                       </div>
                     </div>
                   ))}

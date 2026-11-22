@@ -1497,7 +1497,7 @@ export const StaffKdsPage: React.FC = () => {
       });
 
       // 6. Cập nhật lượt xuất phát gần nhất
-      const destSummary = legs.map((l) => l.tableNo).join(" ➔ ");
+      const destSummary = legs.map((l) => l.tableNo).join(" -> ");
       setLastDispatchedMission({
         missionId: seqCode,
         table: destSummary,
@@ -2150,18 +2150,10 @@ export const StaffKdsPage: React.FC = () => {
                   {storeName}
                 </span>
                 <span className="text-[11px] text-slate-500 block truncate font-mono">
-                  Bếp Trung Tâm • {isSignalRConnected ? "Đang hoạt động" : "Đang kết nối lại..."}
+                  Bếp Trung Tâm
                 </span>
               </div>
             </div>
-            <span
-              className={`w-2 h-2 rounded-full shrink-0 ${
-                isSignalRConnected
-                  ? "bg-emerald-500 ring-4 ring-emerald-500/15"
-                  : "bg-amber-400"
-              }`}
-              title={isSignalRConnected ? "Đã kết nối trạm điều phối" : "Đang kết nối lại..."}
-            />
           </div>
         </div>
       )}
@@ -2270,13 +2262,6 @@ export const StaffKdsPage: React.FC = () => {
         <div className="p-3 mx-3 mb-2.5 rounded-xl bg-slate-50/90 border border-slate-200/90 text-xs text-slate-700 space-y-2 shrink-0 shadow-2xs">
           <div className="flex items-center justify-between font-bold text-slate-900">
             <span className="flex items-center gap-2 text-[11px] font-extrabold tracking-tight">
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${
-                  isSignalRConnected
-                    ? "bg-emerald-500"
-                    : "bg-amber-400"
-                }`}
-              />
               <span>Trạng Thái Bếp &amp; AMR</span>
             </span>
           </div>
@@ -4330,7 +4315,7 @@ export const StaffKdsPage: React.FC = () => {
           <div className="truncate">
             <div className="text-xs font-extrabold text-slate-900 truncate">
               {isTray1Active && isTray2Active
-                ? `${tray1Table || "K1"} ➔ ${tray2Table || "K2"}`
+                ? `${tray1Table || "K1"} -> ${tray2Table || "K2"}`
                 : isTray1Active
                   ? `Khay 1: ${tray1Table || "Chưa chọn bàn"}`
                   : isTray2Active
@@ -4525,14 +4510,6 @@ export const StaffKdsPage: React.FC = () => {
                         ? "Đã đến bàn (Chờ lấy món)"
                         : formatTransferStatusLabel(liveRobotStatus)}
                 </span>
-              </div>
-              <div>
-                {!isSignalRConnected && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    Đang kết nối lại...
-                  </span>
-                )}
               </div>
             </div>
 
@@ -5646,7 +5623,7 @@ export const StaffKdsPage: React.FC = () => {
                     <div className="space-y-0.5 max-h-24 overflow-y-auto text-[10px] text-slate-300">
                       {modalTaskAudit.statusHistory.map((st) => (
                         <div key={st.id} className="truncate">
-                          • {formatTransferStatusLabel(st.previousStatus)} ➔ <strong className="text-white">{formatTransferStatusLabel(st.newStatus)}</strong>
+                          • {formatTransferStatusLabel(st.previousStatus)} -&gt; <strong className="text-white">{formatTransferStatusLabel(st.newStatus)}</strong>
                         </div>
                       ))}
                     </div>
@@ -5669,7 +5646,7 @@ export const StaffKdsPage: React.FC = () => {
                       )}
                       {modalCmdStatuses.length > 0 && (
                         <div className="text-slate-400 truncate">
-                          Trạng thái: {modalCmdStatuses.map((cs) => formatCommandStatusLabel(cs.newStatus)).join(" ➔ ")}
+                          Trạng thái: {modalCmdStatuses.map((cs) => formatCommandStatusLabel(cs.newStatus)).join(" -> ")}
                         </div>
                       )}
                       {modalCmdLog && (

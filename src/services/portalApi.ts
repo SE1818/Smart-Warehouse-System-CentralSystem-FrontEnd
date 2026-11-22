@@ -453,31 +453,19 @@ export const missionService = {
   },
 
   createMission: async (data: { title: string; destination: string; robotId: string; priority?: string }): Promise<MissionItem> => {
-    try {
-      const res = await portalClient.post('/tasks', data);
-      if (res.data) {
-        return {
-          id: `MQ-${res.data.id || Math.floor(1000 + Math.random() * 9000)}`,
-          title: data.title,
-          assignedTo: data.robotId,
-          priority: (data.priority as any) || 'Cao',
-          destination: data.destination,
-          status: 'running',
-          eta: '1m 30s',
-        };
-      }
-    } catch {
-      // Empty
+    const res = await portalClient.post('/tasks', data);
+    if (res.data) {
+      return {
+        id: typeof res.data.id === 'string' && res.data.id.startsWith('MQ-') ? res.data.id : `MQ-${res.data.id ?? ''}`,
+        title: data.title,
+        assignedTo: data.robotId,
+        priority: (data.priority as MissionItem['priority']) || 'Cao',
+        destination: data.destination,
+        status: 'running',
+        eta: res.data.eta || '1-2 phút',
+      };
     }
-    return {
-      id: `MQ-${Math.floor(1000 + Math.random() * 9000)}`,
-      title: data.title,
-      assignedTo: data.robotId,
-      priority: (data.priority as any) || 'Cao',
-      destination: data.destination,
-      status: 'running',
-      eta: '1m 30s',
-    };
+    throw new Error('Không thể tạo nhiệm vụ điều phối qua máy chủ.');
   },
 
   cancelMission: async (id: string): Promise<boolean> => {
@@ -485,7 +473,7 @@ export const missionService = {
       await portalClient.post(`/tasks/${id}/cancel`);
       return true;
     } catch {
-      return true;
+      return false;
     }
   },
 
@@ -494,7 +482,7 @@ export const missionService = {
       await portalClient.post(`/tasks/${id}/priority`, { priority: 'High' });
       return true;
     } catch {
-      return true;
+      return false;
     }
   },
 };
@@ -523,7 +511,7 @@ export const alertService = {
       await portalClient.post(`/notifications/${id}/read`);
       return true;
     } catch {
-      return true;
+      return false;
     }
   },
 };
@@ -835,7 +823,7 @@ export const orderService = {
         window.location.hostname?.startsWith('192.168.') ||
         window.location.hostname?.startsWith('10.'))
     ) {
-      return { success: true, message: 'Edge SQLite persisted directly via RobotService' };
+      return { success: true, message: 'Đã ghi nhận lệnh điều phối tại trạm quán.' };
     }
     try {
       const res = await portalClient.post(`/tenant/${subdomain}/database/dispatch`, {
@@ -847,7 +835,7 @@ export const orderService = {
     } catch (err: any) {
       return {
         success: false,
-        message: err?.response?.data?.message || 'Không thể ghi nhận lệnh điều phối vào SQLite',
+        message: err?.response?.data?.message || 'Không thể ghi nhận lệnh điều phối tại trạm quán.',
       };
     }
   },
