@@ -108,6 +108,7 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
   const [selectedRobotId, setSelectedRobotId] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [recordLimit, setRecordLimit] = useState<number>(30);
   const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [detailModal, setDetailModal] = useState<DetailModalState | null>(null);
@@ -121,31 +122,44 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
   });
 
   const loadEdgeLogs = useCallback(async () => {
+    if (activeCategory === 'liveStream') {
+      setLoading(false);
+      return;
+    }
+
+    const categoryMap: Record<Exclude<LogTabKey, 'liveStream'>, 'Transfer' | 'Command' | 'TableTransfer' | 'StatusHistory' | 'DeviceResponse'> = {
+      transfer: 'Transfer',
+      command: 'Command',
+      tableTransfer: 'TableTransfer',
+      statusHistory: 'StatusHistory',
+      deviceResponse: 'DeviceResponse',
+    };
+
     setLoading(true);
     setFetchError(null);
     try {
       const result = await edgeRobotLogsService.getEdgeRobotLogs({
-        category: 'All',
+        category: categoryMap[activeCategory],
         robotId: selectedRobotId !== 'all' ? selectedRobotId : undefined,
-        limit: 150,
+        limit: recordLimit,
       });
-      setPayload(result.data);
+      setPayload((prev) => ({
+        ...prev,
+        ...(activeCategory === 'transfer' ? { transferLogs: result.data.transferLogs } : {}),
+        ...(activeCategory === 'command' ? { commandLogs: result.data.commandLogs } : {}),
+        ...(activeCategory === 'tableTransfer' ? { tableTransferLogs: result.data.tableTransferLogs } : {}),
+        ...(activeCategory === 'statusHistory' ? { statusHistoryLogs: result.data.statusHistoryLogs } : {}),
+        ...(activeCategory === 'deviceResponse' ? { deviceResponseLogs: result.data.deviceResponseLogs } : {}),
+      }));
       if (result.error) {
         setFetchError(result.error);
       }
     } catch {
-      setPayload({
-        transferLogs: [],
-        commandLogs: [],
-        tableTransferLogs: [],
-        statusHistoryLogs: [],
-        deviceResponseLogs: [],
-      });
       setFetchError('Không thể tải nhật ký robot tại trạm lúc này. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
-  }, [selectedRobotId]);
+  }, [activeCategory, selectedRobotId, recordLimit]);
 
   useEffect(() => {
     void loadEdgeLogs();
@@ -438,6 +452,22 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
             ))}
           </select>
         </div>
+
+        {/* Bandwidth-friendly record limit selector */}
+        {activeCategory !== 'liveStream' && (
+          <select
+            value={recordLimit}
+            onChange={(e) => setRecordLimit(Number(e.target.value))}
+            className="bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-mono font-medium py-1.5 px-2.5 focus:outline-none focus:border-blue-500"
+            title="Giới hạn số bản ghi tải mỗi lần"
+          >
+            {[20, 30, 50, 100].map((opt) => (
+              <option key={opt} value={opt}>
+                {opt} bản ghi mới nhất
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Error Banner */}
