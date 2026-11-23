@@ -60,7 +60,7 @@ describe('ProtectedRoute', () => {
     localStorage.setItem('user', JSON.stringify(user));
 
     renderWithRouter(
-      <ProtectedRoute allowedRoles={['admin']}>
+      <ProtectedRoute allowedRoles={['Admin']}>
         <div>Admin Area</div>
       </ProtectedRoute>
     );
@@ -69,12 +69,12 @@ describe('ProtectedRoute', () => {
   });
 
   it('should allow access for matching role', () => {
-    const user = { id: '1', role: 'admin', name: 'Admin', email: 'admin@test.com' };
+    const user = { id: '1', role: 'Admin', name: 'Admin', email: 'admin@test.com' };
     localStorage.setItem('authToken', 'valid-token');
     localStorage.setItem('user', JSON.stringify(user));
 
     renderWithRouter(
-      <ProtectedRoute allowedRoles={['admin']}>
+      <ProtectedRoute allowedRoles={['Admin']}>
         <div data-testid="admin-content">Admin Panel</div>
       </ProtectedRoute>
     );

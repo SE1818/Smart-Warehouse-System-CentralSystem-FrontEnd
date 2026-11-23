@@ -23,8 +23,8 @@ describe('Table Transfer Workflow Validation Logic', () => {
     robotStatus: string;
   }) => {
     const { isSignalRConnected, hasActiveSequence, sequenceStatus, robotStatus } = params;
-    const normalized = robotStatus.toLowerCase().replace(/[\s-]/g, '_');
-    const isInTransit = normalized === 'in_transit' || normalized === 'moving';
+    const normalized = robotStatus.toLowerCase().replace(/[-_\s]/g, '');
+    const isInTransit = normalized === 'intransit' || normalized === 'moving';
 
     return (
       isSignalRConnected &&
@@ -34,12 +34,12 @@ describe('Table Transfer Workflow Validation Logic', () => {
     );
   };
 
-  it('allows table transfer when robot is actively in_transit with SignalR connected', () => {
+  it('allows table transfer when robot is actively InTransit with SignalR connected', () => {
     const result = canPerformTableTransfer({
       isSignalRConnected: true,
       hasActiveSequence: true,
       sequenceStatus: 'in_progress',
-      robotStatus: 'in_transit',
+      robotStatus: 'InTransit',
     });
     expect(result).toBe(true);
   });
@@ -59,7 +59,7 @@ describe('Table Transfer Workflow Validation Logic', () => {
       isSignalRConnected: false,
       hasActiveSequence: true,
       sequenceStatus: 'in_progress',
-      robotStatus: 'in_transit',
+      robotStatus: 'InTransit',
     });
     expect(result).toBe(false);
   });
@@ -69,7 +69,7 @@ describe('Table Transfer Workflow Validation Logic', () => {
       isSignalRConnected: true,
       hasActiveSequence: true,
       sequenceStatus: 'in_progress',
-      robotStatus: 'arrived',
+      robotStatus: 'Arrived',
     });
     expect(result).toBe(false);
   });
@@ -79,7 +79,7 @@ describe('Table Transfer Workflow Validation Logic', () => {
       isSignalRConnected: true,
       hasActiveSequence: true,
       sequenceStatus: 'in_progress',
-      robotStatus: 'idle',
+      robotStatus: 'Idle',
     });
     expect(result).toBe(false);
   });
@@ -89,7 +89,7 @@ describe('Table Transfer Workflow Validation Logic', () => {
       isSignalRConnected: true,
       hasActiveSequence: true,
       sequenceStatus: 'in_progress',
-      robotStatus: 'returning',
+      robotStatus: 'Returning',
     });
     expect(result).toBe(false);
   });

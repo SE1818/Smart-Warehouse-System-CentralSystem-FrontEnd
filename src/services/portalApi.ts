@@ -108,7 +108,7 @@ export interface FleetAMR {
   code: string;
   name: string;
   model: string;
-  status: 'delivering' | 'idle' | 'swapping_battery' | 'returning' | 'maintenance';
+  status: 'Delivering' | 'Idle' | 'SwappingBattery' | 'Returning' | 'Maintenance';
   battery: number;
   rssi: string;
   pingMs: number;
@@ -264,15 +264,17 @@ export const tenantService = {
 };
 
 function mapRobotDtoToFleetAMR(dto: any, tenantSlug?: string, tenantName?: string): FleetAMR {
-  const statusStr = (dto.status || 'idle').toLowerCase();
-  const normalizedStatus: 'delivering' | 'idle' | 'swapping_battery' | 'returning' = 
-    statusStr.includes('mov') || statusStr.includes('deliv') || statusStr === 'active'
-      ? 'delivering'
-      : statusStr.includes('swap') || statusStr.includes('low_battery')
-      ? 'swapping_battery'
+  const statusStr = (dto.status || 'Idle').toLowerCase().replace(/[-_\s]/g, '');
+  const normalizedStatus: 'Delivering' | 'Idle' | 'SwappingBattery' | 'Returning' | 'Maintenance' =
+    statusStr.includes('maint')
+      ? 'Maintenance'
+      : statusStr.includes('mov') || statusStr.includes('deliv') || statusStr === 'active'
+      ? 'Delivering'
+      : statusStr.includes('swap') || statusStr.includes('lowbattery')
+      ? 'SwappingBattery'
       : statusStr.includes('return')
-      ? 'returning'
-      : 'idle';
+      ? 'Returning'
+      : 'Idle';
 
   const tId = (dto.assignedTenantId || dto.tenantId || dto.ownerTenantId || '').toString().toLowerCase();
   const resolvedSlug = dto.tenantSlug || tenantSlug || '';
@@ -294,10 +296,10 @@ function mapRobotDtoToFleetAMR(dto: any, tenantSlug?: string, tenantName?: strin
     lastHeartbeat: dto.lastHeartbeat || 'Vừa xong',
     firmware: dto.firmware || 'v2.4.2',
     currentLocation: dto.currentLocation || (dto.x ? `Tọa độ (${dto.x}, ${dto.y})` : 'Trạm Chờ Bếp'),
-    targetTable: dto.targetTable || (normalizedStatus === 'swapping_battery' ? 'Trạm Thay Pin (ST_BATTERY_RACK)' : 'Sẵn sàng'),
+    targetTable: dto.targetTable || (normalizedStatus === 'SwappingBattery' ? 'Trạm Thay Pin (ST_BATTERY_RACK)' : 'Sẵn sàng'),
     trays: Array.isArray(dto.trays) ? dto.trays : [],
     totalTripsToday: dto.totalTripsToday || 0,
-    speed: dto.speed || (normalizedStatus === 'delivering' ? '1.2 m/s' : '0.0 m/s'),
+    speed: dto.speed || (normalizedStatus === 'Delivering' ? '1.2 m/s' : '0.0 m/s'),
     payloadKg: dto.payloadKg || 0,
     maxPayloadKg: dto.maxPayloadKg || 40,
     lidarStatus: dto.lidarStatus || 'LiDAR 2D SLAM 20Hz OK',

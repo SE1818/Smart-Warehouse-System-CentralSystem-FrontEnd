@@ -18,7 +18,7 @@ beforeEach(() => { vi.clearAllMocks(); });
 
 describe('robotMonitorService', () => {
   it('getRobots returns list', async () => {
-    get.mockResolvedValue({ data: [{ robotId: 'r1', name: 'Bot', status: 'idle', battery: 90, ip: '10.0.0.1', x: 0, y: 0, lastSeen: '2024-01-01T00:00:00Z' }] });
+    get.mockResolvedValue({ data: [{ robotId: 'r1', name: 'Bot', status: 'Idle', battery: 90, ip: '10.0.0.1', x: 0, y: 0, lastSeen: '2024-01-01T00:00:00Z' }] });
     const res = await robotMonitorService.getRobots();
     expect(res.data[0].robotId).toBe('r1');
   });

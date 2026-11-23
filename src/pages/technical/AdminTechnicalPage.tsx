@@ -68,7 +68,7 @@ interface AMRNode {
   robotGuid?: string;
   code?: string;
   name: string;
-  status: 'active' | 'moving' | 'idle' | 'swapping_battery' | 'alert' | 'maintenance';
+  status: 'Active' | 'Moving' | 'Idle' | 'SwappingBattery' | 'Alert' | 'Maintenance';
   battery: number;
   x: number;
   y: number;
@@ -250,20 +250,20 @@ export const AdminTechnicalPage: React.FC = () => {
       let util = 0;
       if (taskCount > 0) {
         const total = Math.max(1, missionStats?.totalToday || missions.length);
-        util = Math.min(100, Math.round((taskCount / total) * 75 + (node.status === 'moving' || node.status === 'active' ? 20 : 10)));
+        util = Math.min(100, Math.round((taskCount / total) * 75 + (node.status === 'Moving' || node.status === 'Active' ? 20 : 10)));
       } else {
         switch (node.status) {
-          case 'active':
-          case 'moving':
+          case 'Active':
+          case 'Moving':
             util = 85;
             break;
-          case 'swapping_battery':
+          case 'SwappingBattery':
             util = 40;
             break;
-          case 'idle':
+          case 'Idle':
             util = 15;
             break;
-          case 'alert':
+          case 'Alert':
             util = 0;
             break;
           default:
@@ -287,11 +287,11 @@ export const AdminTechnicalPage: React.FC = () => {
 
   const fleetTelemetrySummary = useMemo(() => {
     const total = amrNodes.length;
-    const movingOrActive = amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length;
-    const idle = amrNodes.filter((n) => n.status === 'idle').length;
-    const swapping = amrNodes.filter((n) => n.status === 'swapping_battery').length;
-    const maintenance = amrNodes.filter((n) => n.status === 'maintenance').length;
-    const alertState = amrNodes.filter((n) => n.status === 'alert').length;
+    const movingOrActive = amrNodes.filter((n) => n.status === 'Active' || n.status === 'Moving').length;
+    const idle = amrNodes.filter((n) => n.status === 'Idle').length;
+    const swapping = amrNodes.filter((n) => n.status === 'SwappingBattery').length;
+    const maintenance = amrNodes.filter((n) => n.status === 'Maintenance').length;
+    const alertState = amrNodes.filter((n) => n.status === 'Alert').length;
     const avgBattery = total > 0 ? Math.round(amrNodes.reduce((sum, n) => sum + n.battery, 0) / total) : 0;
     const highBattery = amrNodes.filter((n) => n.battery >= 50).length;
     const midBattery = amrNodes.filter((n) => n.battery >= 20 && n.battery < 50).length;
@@ -411,14 +411,14 @@ export const AdminTechnicalPage: React.FC = () => {
       return;
     }
 
-    const isEnabling = targetRobotForMaintenance.status !== 'maintenance';
+    const isEnabling = targetRobotForMaintenance.status !== 'Maintenance';
     const robotId = getRealRobotGuid(targetRobotForMaintenance);
 
     try {
       setIsSubmittingMaintenance(true);
       const res = await robotService.setMaintenanceMode(robotId, maintenancePinInput.trim(), isEnabling);
 
-      const newStatus = isEnabling ? 'maintenance' : 'idle';
+      const newStatus = isEnabling ? 'Maintenance' : 'Idle';
       setAmrNodes((prev) =>
         prev.map((n) =>
           n.id === targetRobotForMaintenance.id
@@ -505,15 +505,19 @@ export const AdminTechnicalPage: React.FC = () => {
       const scopedRobotNames = new Set(scopedRobots.map((r) => r.name));
 
       const mappedNodes: AMRNode[] = scopedRobots.map((r, idx) => {
-        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'swapping_battery' | 'alert' | 'maintenance'> = {
-          delivering: 'moving',
-          swapping_battery: 'swapping_battery',
-          low_battery_waiting_swap: 'swapping_battery',
-          returning: 'moving',
-          idle: 'idle',
-          maintenance: 'maintenance',
+        const statusMap: Record<string, 'Active' | 'Moving' | 'Idle' | 'SwappingBattery' | 'Alert' | 'Maintenance'> = {
+          delivering: 'Moving',
+          moving: 'Moving',
+          swappingbattery: 'SwappingBattery',
+          lowbatterywaitingswap: 'SwappingBattery',
+          returning: 'Moving',
+          idle: 'Idle',
+          maintenance: 'Maintenance',
+          fault: 'Alert',
+          emergencystopped: 'Alert',
         };
-        const st = statusMap[r.status] || 'idle';
+        const normStatus = (r.status || '').toLowerCase().replace(/[-_\s]/g, '');
+        const st = statusMap[normStatus] || 'Idle';
         const posX = typeof r.worldX === 'number' ? r.worldX : 0;
         const posY = typeof r.worldY === 'number' ? r.worldY : 0;
 
@@ -522,14 +526,14 @@ export const AdminTechnicalPage: React.FC = () => {
           robotGuid: r.id,
           code: r.code,
           name: r.name || r.code || `AMR-${idx + 1}`,
-          status: r.status === 'maintenance' ? 'maintenance' : st,
+          status: normStatus === 'maintenance' ? 'Maintenance' : st,
           battery: r.battery,
           x: posX,
           y: posY,
-          mission: r.status === 'maintenance'
+          mission: normStatus === 'maintenance'
             ? 'Đang trong Chế độ Bảo trì Kỹ thuật (Phanh mở)'
-            : ((r as any).currentTask || r.targetTable || (st === 'swapping_battery' ? 'Đang thay pin tại ST_BATTERY_RACK' : 'Chờ lệnh điều phối')),
-          speed: r.status === 'maintenance' ? '0.0 m/s' : (r.speed || (st === 'moving' ? '1.0 m/s' : '0.0 m/s')),
+            : ((r as any).currentTask || r.targetTable || (st === 'SwappingBattery' ? 'Đang thay pin tại ST_BATTERY_RACK' : 'Chờ lệnh điều phối')),
+          speed: normStatus === 'maintenance' ? '0.0 m/s' : (r.speed || (st === 'Moving' ? '1.0 m/s' : '0.0 m/s')),
           payload: `${r.payloadKg || 0} kg`,
         };
       });
@@ -595,12 +599,19 @@ export const AdminTechnicalPage: React.FC = () => {
       storeRobots.forEach((sr) => {
         const idx = updated.findIndex((r) => r.id === sr.id || r.code === sr.name || r.name === sr.name);
         if (idx > -1) {
+          const normSrStatus = (sr.status || '').toLowerCase().replace(/[-_\s]/g, '');
           updated[idx] = {
             ...updated[idx],
             worldX: sr.currentX,
             worldY: sr.currentY,
             battery: sr.batteryLevel,
-            status: (sr.status.toLowerCase() === 'moving' ? 'delivering' : (sr.status.toLowerCase() === 'swapping_battery' || sr.status.toLowerCase() === 'low_battery_waiting_swap') ? 'swapping_battery' : 'idle') as any,
+            status: (normSrStatus === 'moving' || normSrStatus === 'delivering'
+              ? 'Delivering'
+              : (normSrStatus === 'swappingbattery' || normSrStatus === 'lowbatterywaitingswap')
+              ? 'SwappingBattery'
+              : normSrStatus === 'maintenance'
+              ? 'Maintenance'
+              : 'Idle') as any,
           };
         }
       });
@@ -611,22 +622,24 @@ export const AdminTechnicalPage: React.FC = () => {
       return prevNodes.map((node) => {
         const match = storeRobots.find((sr) => sr.id === node.id || sr.name === node.name);
         if (!match) return node;
-        const statusMap: Record<string, 'active' | 'moving' | 'idle' | 'swapping_battery' | 'alert' | 'maintenance'> = {
-          moving: 'moving',
-          delivering: 'moving',
-          swapping_battery: 'swapping_battery',
-          low_battery_waiting_swap: 'swapping_battery',
-          idle: 'idle',
-          maintenance: 'maintenance',
+        const statusMap: Record<string, 'Active' | 'Moving' | 'Idle' | 'SwappingBattery' | 'Alert' | 'Maintenance'> = {
+          moving: 'Moving',
+          delivering: 'Moving',
+          swappingbattery: 'SwappingBattery',
+          lowbatterywaitingswap: 'SwappingBattery',
+          idle: 'Idle',
+          maintenance: 'Maintenance',
+          fault: 'Alert',
+          emergencystopped: 'Alert',
         };
-        const st = statusMap[match.status?.toLowerCase()] || node.status;
+        const st = statusMap[(match.status || '').toLowerCase().replace(/[-_\s]/g, '')] || node.status;
         return {
           ...node,
           x: match.currentX,
           y: match.currentY,
           battery: match.batteryLevel ?? node.battery,
           status: st,
-          speed: st === 'moving' ? (node.speed === '0.0 m/s' ? '1.0 m/s' : node.speed) : '0.0 m/s',
+          speed: st === 'Moving' ? (node.speed === '0.0 m/s' ? '1.0 m/s' : node.speed) : '0.0 m/s',
         };
       });
     });
@@ -652,7 +665,7 @@ export const AdminTechnicalPage: React.FC = () => {
       id: r.id,
       code: r.code,
       name: r.name,
-      status: r.status === 'delivering' || r.status === 'returning' ? 'delivering' : r.status === 'swapping_battery' ? 'swapping_battery' : 'idle',
+      status: r.status === 'Delivering' || r.status === 'Returning' ? 'Delivering' : r.status === 'SwappingBattery' ? 'SwappingBattery' : 'Idle',
       battery: r.battery,
       currentZone: r.currentLocation,
       worldX: r.worldX,
@@ -675,11 +688,11 @@ export const AdminTechnicalPage: React.FC = () => {
 
   // Action: Send to Battery Swap Rack
   const handleSendToDock = async (robotId: string) => {
-    await fleetService.updateRobotStatus(robotId, { status: 'swapping_battery' as any });
+    await fleetService.updateRobotStatus(robotId, { status: 'SwappingBattery' as any });
     setAmrNodes((prev) =>
       prev.map((n) =>
         n.id === robotId
-          ? { ...n, status: 'swapping_battery', mission: 'Đang điều hướng về Trạm Thay Pin (ST_BATTERY_RACK)', targetX: 140, targetY: 310 }
+          ? { ...n, status: 'SwappingBattery', mission: 'Đang điều hướng về Trạm Thay Pin (ST_BATTERY_RACK)', targetX: 140, targetY: 310 }
           : n
       )
     );
@@ -690,12 +703,12 @@ export const AdminTechnicalPage: React.FC = () => {
   // Action: Emergency Pause specific AMR
   const handlePauseAmr = async (robotId: string) => {
     const target = amrNodes.find((n) => n.id === robotId);
-    const nextStatus = target?.status === 'idle' ? 'delivering' : 'idle';
+    const nextStatus = target?.status === 'Idle' ? 'Delivering' : 'Idle';
     await fleetService.updateRobotStatus(robotId, { status: nextStatus as any });
     setAmrNodes((prev) =>
       prev.map((n) =>
         n.id === robotId
-          ? { ...n, status: n.status === 'idle' ? 'active' : 'idle', speed: n.status === 'idle' ? '1.0 m/s' : '0.0 m/s' }
+          ? { ...n, status: n.status === 'Idle' ? 'Active' : 'Idle', speed: n.status === 'Idle' ? '1.0 m/s' : '0.0 m/s' }
           : n
       )
     );
@@ -1261,13 +1274,13 @@ export const AdminTechnicalPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleOpenMaintenanceModal(selectedAmr)}
-                              className={`w-full py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${selectedAmr.status === 'maintenance'
+                              className={`w-full py-1.5 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${selectedAmr.status === 'Maintenance'
                                   ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow-sm'
                                   : 'bg-amber-600/90 hover:bg-amber-500 text-white'
                                 }`}
                             >
                               <Wrench className="w-3.5 h-3.5" />
-                              <span>{selectedAmr.status === 'maintenance' ? 'Đang Bảo Trì (Quản Lý)' : 'Bảo Trì Kỹ Thuật (Mở Phanh)'}</span>
+                              <span>{selectedAmr.status === 'Maintenance' ? 'Đang Bảo Trì (Quản Lý)' : 'Bảo Trì Kỹ Thuật (Mở Phanh)'}</span>
                             </button>
                             <button
                               type="button"
@@ -1283,7 +1296,7 @@ export const AdminTechnicalPage: React.FC = () => {
                               className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                             >
                               <Power className="w-3.5 h-3.5" />
-                              <span>{selectedAmr.status === 'idle' ? 'Kích Hoạt AMR' : 'Tạm Dừng AMR'}</span>
+                              <span>{selectedAmr.status === 'Idle' ? 'Kích Hoạt AMR' : 'Tạm Dừng AMR'}</span>
                             </button>
                           </div>
                         </div>
@@ -1294,16 +1307,16 @@ export const AdminTechnicalPage: React.FC = () => {
                     <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-mono">
                       <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-0.5">
                         <span className="flex items-center gap-1.5 shrink-0">
-                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Hoạt động ({amrNodes.filter(n => n.status === 'active').length})
+                          <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Hoạt động ({amrNodes.filter(n => n.status === 'Active').length})
                         </span>
                         <span className="flex items-center gap-1.5 shrink-0">
-                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Đang di chuyển ({amrNodes.filter(n => n.status === 'moving').length})
+                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" /> Đang di chuyển ({amrNodes.filter(n => n.status === 'Moving').length})
                         </span>
                         <span className="flex items-center gap-1.5 shrink-0">
-                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Sẵn sàng ({amrNodes.filter(n => n.status === 'idle').length})
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Sẵn sàng ({amrNodes.filter(n => n.status === 'Idle').length})
                         </span>
                         <span className="flex items-center gap-1.5 shrink-0">
-                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Thay pin ({amrNodes.filter(n => n.status === 'swapping_battery').length})
+                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Thay pin ({amrNodes.filter(n => n.status === 'SwappingBattery').length})
                         </span>
                       </div>
                       <span className="hidden md:inline text-slate-500 shrink-0">Tần số quét cảm biến: 20 Hz</span>
@@ -1528,7 +1541,7 @@ export const AdminTechnicalPage: React.FC = () => {
                       <span className="text-xs text-slate-500 font-bold">AMR Hoạt Động:</span>
                       <div className="mt-2 flex items-baseline gap-2">
                         <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
-                          {amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length}
+                          {amrNodes.filter((n) => n.status === 'Active' || n.status === 'Moving').length}
                         </span>
                         <span className="text-sm font-bold text-slate-400 font-mono">/ {amrNodes.length}</span>
                       </div>
@@ -1539,7 +1552,7 @@ export const AdminTechnicalPage: React.FC = () => {
                             width:
                               amrNodes.length > 0
                                 ? `${Math.round(
-                                  (amrNodes.filter((n) => n.status === 'active' || n.status === 'moving').length /
+                                  (amrNodes.filter((n) => n.status === 'Active' || n.status === 'Moving').length /
                                     amrNodes.length) *
                                   100
                                 )}%`
@@ -1581,7 +1594,7 @@ export const AdminTechnicalPage: React.FC = () => {
                         <span className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">
                           {amrNodes.length > 0
                             ? Math.round(
-                              (amrNodes.filter((n) => n.status !== 'alert').length / amrNodes.length) * 100
+                              (amrNodes.filter((n) => n.status !== 'Alert').length / amrNodes.length) * 100
                             )
                             : 100}
                           %
@@ -1594,7 +1607,7 @@ export const AdminTechnicalPage: React.FC = () => {
                           style={{
                             width: `${amrNodes.length > 0
                               ? Math.round(
-                                (amrNodes.filter((n) => n.status !== 'alert').length / amrNodes.length) * 100
+                                (amrNodes.filter((n) => n.status !== 'Alert').length / amrNodes.length) * 100
                               )
                               : 100
                               }%`,
@@ -1874,13 +1887,13 @@ export const AdminTechnicalPage: React.FC = () => {
                           <tr key={robot.id} className="hover:bg-slate-50 transition-colors">
                             <td className="py-3 px-3 font-mono font-bold text-blue-700">{robot.id} ({robot.name})</td>
                             <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${robot.status === 'active' ? 'bg-blue-100 text-blue-800' :
-                                  robot.status === 'moving' ? 'bg-cyan-100 text-cyan-800' :
-                                    robot.status === 'swapping_battery' ? 'bg-indigo-100 text-indigo-800' :
-                                      robot.status === 'maintenance' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                              <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${robot.status === 'Active' ? 'bg-blue-100 text-blue-800' :
+                                  robot.status === 'Moving' ? 'bg-cyan-100 text-cyan-800' :
+                                    robot.status === 'SwappingBattery' ? 'bg-indigo-100 text-indigo-800' :
+                                      robot.status === 'Maintenance' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                                         'bg-slate-100 text-slate-700'
                                 }`}>
-                                {robot.status === 'maintenance' ? 'BẢO TRÌ' : robot.status.toUpperCase()}
+                                {robot.status === 'Maintenance' ? 'BẢO TRÌ' : robot.status.toUpperCase()}
                               </span>
                             </td>
                             <td className="py-3 px-3">
@@ -1899,14 +1912,14 @@ export const AdminTechnicalPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleOpenMaintenanceModal(robot)}
-                                className={`px-2.5 py-1 rounded-lg font-bold border cursor-pointer text-[11px] inline-flex items-center gap-1 transition-colors ${robot.status === 'maintenance'
+                                className={`px-2.5 py-1 rounded-lg font-bold border cursor-pointer text-[11px] inline-flex items-center gap-1 transition-colors ${robot.status === 'Maintenance'
                                     ? 'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300'
                                     : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
                                   }`}
                                 title="Chế độ bảo trì kỹ thuật viên (Phanh điện từ)"
                               >
                                 <Wrench className="w-3 h-3" />
-                                <span>{robot.status === 'maintenance' ? 'Đang Bảo Trì' : 'Bảo Trì'}</span>
+                                <span>{robot.status === 'Maintenance' ? 'Đang Bảo Trì' : 'Bảo Trì'}</span>
                               </button>
                               <button
                                 type="button"
@@ -1920,7 +1933,7 @@ export const AdminTechnicalPage: React.FC = () => {
                                 onClick={() => handlePauseAmr(robot.id)}
                                 className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer text-[11px]"
                               >
-                                {robot.status === 'idle' ? 'Chạy' : 'Dừng'}
+                                {robot.status === 'Idle' ? 'Chạy' : 'Dừng'}
                               </button>
                             </td>
                           </tr>
@@ -2277,11 +2290,11 @@ export const AdminTechnicalPage: React.FC = () => {
                                   </td>
                                   <td className="py-1.5 px-2 whitespace-nowrap">
                                     <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
-                                      r.status === 'moving' || r.status === 'active'
+                                      r.status === 'Moving' || r.status === 'Active'
                                         ? 'bg-blue-100 text-blue-800'
-                                        : r.status === 'swapping_battery'
+                                        : r.status === 'SwappingBattery'
                                         ? 'bg-indigo-100 text-indigo-800'
-                                        : r.status === 'maintenance'
+                                        : r.status === 'Maintenance'
                                         ? 'bg-amber-100 text-amber-800'
                                         : 'bg-slate-100 text-slate-700'
                                     }`}>
@@ -2712,19 +2725,19 @@ export const AdminTechnicalPage: React.FC = () => {
                                 {robot.id} <span className="text-slate-500 font-sans font-normal">({robot.name})</span>
                               </div>
                               <div className="text-[11px] text-slate-500 font-mono">
-                                Pin: {robot.battery}% • {robot.status === 'maintenance' ? 'ĐANG BẢO TRÌ' : robot.status.toUpperCase()}
+                                Pin: {robot.battery}% • {robot.status === 'Maintenance' ? 'ĐANG BẢO TRÌ' : robot.status.toUpperCase()}
                               </div>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleOpenMaintenanceModal(robot)}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border shrink-0 cursor-pointer transition-colors ${
-                                robot.status === 'maintenance'
+                                robot.status === 'Maintenance'
                                   ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
                                   : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200'
                               }`}
                             >
-                              {robot.status === 'maintenance' ? 'Quản Lý' : 'Bảo Trì'}
+                              {robot.status === 'Maintenance' ? 'Quản Lý' : 'Bảo Trì'}
                             </button>
                           </div>
                         ))}
@@ -2855,7 +2868,7 @@ export const AdminTechnicalPage: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className={`p-2.5 rounded-xl ${targetRobotForMaintenance.status === 'maintenance'
+                <div className={`p-2.5 rounded-xl ${targetRobotForMaintenance.status === 'Maintenance'
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-orange-100 text-orange-700'
                   }`}>
@@ -2891,17 +2904,17 @@ export const AdminTechnicalPage: React.FC = () => {
                 </div>
               </div>
               <div>
-                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-mono ${targetRobotForMaintenance.status === 'maintenance'
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-mono ${targetRobotForMaintenance.status === 'Maintenance'
                     ? 'bg-amber-100 text-amber-800 border border-amber-300'
                     : 'bg-slate-200 text-slate-700'
                   }`}>
-                  {targetRobotForMaintenance.status === 'maintenance' ? 'ĐANG BẢO TRÌ' : 'HOẠT ĐỘNG THƯỜNG'}
+                  {targetRobotForMaintenance.status === 'Maintenance' ? 'ĐANG BẢO TRÌ' : 'HOẠT ĐỘNG THƯỜNG'}
                 </span>
               </div>
             </div>
 
             {/* Current State Notice */}
-            {targetRobotForMaintenance.status === 'maintenance' ? (
+            {targetRobotForMaintenance.status === 'Maintenance' ? (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
@@ -3011,14 +3024,14 @@ export const AdminTechnicalPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmittingMaintenance || !maintenancePinInput.trim()}
-                  className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm text-white disabled:opacity-50 ${targetRobotForMaintenance.status === 'maintenance'
+                  className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm text-white disabled:opacity-50 ${targetRobotForMaintenance.status === 'Maintenance'
                       ? 'bg-slate-800 hover:bg-slate-900'
                       : 'bg-amber-600 hover:bg-amber-700'
                     }`}
                 >
                   {isSubmittingMaintenance && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>
-                    {targetRobotForMaintenance.status === 'maintenance'
+                    {targetRobotForMaintenance.status === 'Maintenance'
                       ? 'Kết Thúc Bảo Trì (Khóa Phanh)'
                       : 'Kích Hoạt Bảo Trì (Mở Phanh)'}
                   </span>

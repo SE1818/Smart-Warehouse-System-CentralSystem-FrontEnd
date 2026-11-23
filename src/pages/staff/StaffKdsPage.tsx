@@ -188,7 +188,7 @@ interface RobotFleetItem {
   id: string;
   code: string;
   name: string;
-  status: "idle" | "delivering" | "swapping_battery" | "offline";
+  status: "Idle" | "Delivering" | "SwappingBattery" | "Offline";
   battery: number;
   currentZone: string;
   dockNumber?: number;
@@ -690,11 +690,11 @@ export const StaffKdsPage: React.FC = () => {
           code: r.code || r.name || `AMR-${r.id.slice(0, 4)}`,
           name: r.name || r.code || "Robot AMR",
           status:
-            r.status === "delivering" || r.status === "returning"
-              ? "delivering"
-              : r.status === "swapping_battery"
-                ? "swapping_battery"
-                : "idle",
+            r.status === "Delivering" || r.status === "Returning"
+              ? "Delivering"
+              : r.status === "SwappingBattery"
+                ? "SwappingBattery"
+                : "Idle",
           battery: typeof r.battery === "number" ? r.battery : 100,
           currentZone: r.currentLocation || "Quầy Bếp",
         }));
@@ -814,7 +814,7 @@ export const StaffKdsPage: React.FC = () => {
 
             if (activeTasks.length > 0) {
               const busyRobot =
-                mappedRobots.find((r) => r.status === "delivering") ||
+                mappedRobots.find((r) => r.status === "Delivering") ||
                 mappedRobots[0];
               const currentIdx = Math.max(
                 0,
@@ -888,7 +888,7 @@ export const StaffKdsPage: React.FC = () => {
         setRobots((prev) =>
           prev.map((r) =>
             r.code === activeSequence.robotCode
-              ? { ...r, status: "delivering", currentZone: `Đã đến ${currentLeg.tableNo}` }
+              ? { ...r, status: "Delivering", currentZone: `Đã đến ${currentLeg.tableNo}` }
               : r,
           ),
         );
@@ -963,7 +963,7 @@ export const StaffKdsPage: React.FC = () => {
           setRobots((prev) =>
             prev.map((r) =>
               !targetCode || r.code === targetCode || r.id === matched.id
-                ? { ...r, status: "idle", currentZone: "Bếp Trung Tâm", battery: Math.round(matched.battery ?? r.battery) }
+                ? { ...r, status: "Idle", currentZone: "Bếp Trung Tâm", battery: Math.round(matched.battery ?? r.battery) }
                 : r,
             ),
           );
@@ -1029,7 +1029,7 @@ export const StaffKdsPage: React.FC = () => {
   // 2. Prioritize robot with highest battery
   const autoSelectedRobot = useMemo(() => {
     const idleRobots = robots.filter(
-      (r) => (r.status === "idle" || !r.status) && (r.battery >= 30 || r.battery === undefined),
+      (r) => (r.status === "Idle" || !r.status) && (r.battery >= 30 || r.battery === undefined),
     );
     if (idleRobots.length > 0) {
       return [...idleRobots].sort((a, b) => b.battery - a.battery)[0];
@@ -1466,7 +1466,7 @@ export const StaffKdsPage: React.FC = () => {
       setRobots((prev) =>
         prev.map((r) =>
           r.code === effectiveRobot.code
-            ? { ...r, status: "delivering", currentZone: `Đang đến ${legs[0].tableNo}` }
+            ? { ...r, status: "Delivering", currentZone: `Đang đến ${legs[0].tableNo}` }
             : r,
         ),
       );
@@ -1594,7 +1594,7 @@ export const StaffKdsPage: React.FC = () => {
             r.code === activeSequence.robotCode
               ? {
                   ...r,
-                  status: "delivering",
+                  status: "Delivering",
                   currentZone: `Đang di chuyển tới ${nextLeg.tableNo}`,
                 }
               : r,
@@ -1630,7 +1630,7 @@ export const StaffKdsPage: React.FC = () => {
         setRobots((prev) =>
           prev.map((r) =>
             r.code === activeSequence.robotCode
-              ? { ...r, status: "delivering", currentZone: "Đang tự động quay về Bếp..." }
+              ? { ...r, status: "Delivering", currentZone: "Đang tự động quay về Bếp..." }
               : r,
           ),
         );
@@ -2034,7 +2034,7 @@ export const StaffKdsPage: React.FC = () => {
       setRobots((prev) =>
         prev.map((r) =>
           r.code === activeSequence.robotCode
-            ? { ...r, status: "idle", currentZone: "Bếp Trung Tâm" }
+            ? { ...r, status: "Idle", currentZone: "Bếp Trung Tâm" }
             : r,
         ),
       );
@@ -2086,7 +2086,7 @@ export const StaffKdsPage: React.FC = () => {
     setIsMobileMenuOpen(false);
   };
 
-  const readyRobotsCount = robots.filter((r) => r.status === "idle").length;
+  const readyRobotsCount = robots.filter((r) => r.status === "Idle").length;
   const waitingTablesCount = tables.filter((t) => t.status === "waiting").length;
   const assignedStationCount = tables.filter((t) => Boolean(t.stationId || t.stationName)).length;
 
@@ -2630,7 +2630,7 @@ export const StaffKdsPage: React.FC = () => {
                     const isDeliveringToTable =
                       robots.some(
                         (r) =>
-                          r.status === "delivering" &&
+                          r.status === "Delivering" &&
                           (r.currentZone?.toLowerCase().includes(table.name.toLowerCase()) ||
                             (table.tableNo &&
                               r.currentZone?.toLowerCase().includes(table.tableNo.toLowerCase()))),
@@ -3980,7 +3980,7 @@ export const StaffKdsPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   {robots.map((r) => {
                     const isSelected = manualSelectedRobot === r.code;
-                    const isBusy = r.status !== "idle";
+                    const isBusy = r.status !== "Idle";
                     return (
                       <button
                         key={r.code}
@@ -4001,7 +4001,7 @@ export const StaffKdsPage: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-500 truncate mt-1">
-                          {r.status === "idle" ? "Sẵn sàng" : "Bận"}
+                          {r.status === "Idle" ? "Sẵn sàng" : "Bận"}
                         </span>
                       </button>
                     );

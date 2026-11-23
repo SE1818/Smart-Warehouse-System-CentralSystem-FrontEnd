@@ -43,7 +43,7 @@ export interface MapRobotItem {
   id: string;
   code: string;
   name: string;
-  status: 'idle' | 'delivering' | 'swapping_battery' | 'offline';
+  status: 'Idle' | 'Delivering' | 'SwappingBattery' | 'Offline';
   battery: number;
   currentZone: string;
   worldX?: number; // Tọa độ thực mét từ ROS / Telemetry
@@ -895,7 +895,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     resolvedRobots.forEach((robot) => {
       if (robot.worldX === undefined || robot.worldY === undefined) return;
       const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
-      const isDelivering = robot.status === 'delivering';
+      const isDelivering = robot.status === 'Delivering';
 
       // Laser trajectory path
       if (isDelivering && (mode === 'simplified' || showTrajectories)) {
@@ -1043,7 +1043,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                 </span>
                 {robots && robots.length > 0 && (() => {
                   const activeRobot = (selectedRobotId ? robots.find(r => r.id === selectedRobotId) : null)
-                    || robots.find(r => r.status === 'delivering')
+                    || robots.find(r => r.status === 'Delivering')
                     || robots[0];
                   return (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono font-bold flex items-center gap-1">
@@ -1111,7 +1111,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
                 </span>
                 {robots && robots.length > 0 && (() => {
                   const activeRobot = (selectedRobotId ? robots.find(r => r.id === selectedRobotId) : null)
-                    || robots.find(r => r.status === 'delivering')
+                    || robots.find(r => r.status === 'Delivering')
                     || robots[0];
                   return (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono flex items-center gap-1 font-semibold shrink-0">

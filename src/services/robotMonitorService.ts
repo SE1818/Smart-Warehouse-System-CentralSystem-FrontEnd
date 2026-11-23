@@ -4,7 +4,7 @@ export interface RobotConnection {
   robotId: string;
   name: string;
   ip: string;
-  status: 'idle' | 'moving' | 'swapping_battery' | 'offline' | 'fault';
+  status: 'Idle' | 'Moving' | 'SwappingBattery' | 'Offline' | 'Fault';
   battery: number;
   x: number;
   y: number;
