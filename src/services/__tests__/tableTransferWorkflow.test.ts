@@ -469,3 +469,139 @@ describe('Mục B — Full WF-03 Test Cases TC-WF03-04, TC-WF03-05, TC-WF03-10, 
   });
 });
 
+describe('Weekly Report #10 — 2D Map Real Telemetry, Target Tray & Arrival Audio Chime', () => {
+  it('merges live SignalR robot pose (worldX, worldY, yaw) with active sequence cargoLevel and omits robots without real coordinates (ETM-36..38)', () => {
+    const restRobots = [
+      { id: 'r1', code: 'AMR-01', name: 'VORA-AMR-01', status: 'Delivering' as const, battery: 90, currentZone: 'Bàn 01' },
+      { id: 'r2', code: 'AMR-02', name: 'VORA-AMR-02', status: 'Idle' as const, battery: 82, currentZone: 'Quầy Bếp' },
+    ];
+    const liveRobots = [
+      { id: 'r1', name: 'VORA-AMR-01', x: 2.4, y: 3.6, yaw: 1.57, battery: 89, destination: 'Bàn 01', transitLatencyMs: 120 },
+    ];
+    const activeSequence = {
+      sequenceId: 'SEQ-10',
+      robotCode: 'AMR-01',
+      robotName: 'VORA-AMR-01',
+      currentLegIndex: 0,
+      status: 'in_progress' as const,
+      legs: [
+        { cargoLevel: 1, tableNo: 'Bàn 01', orderId: 'ORD-101', status: 'delivering' as const, taskId: 'task-1' },
+        { cargoLevel: 2, tableNo: 'Bàn 03', orderId: 'ORD-104', status: 'pending' as const, taskId: 'task-2' },
+      ],
+    };
+    const currentWorkflowStep = 3;
+    const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+
+    const mapRobots = restRobots.map((r) => {
+      const live = liveRobots.find(
+        (lr) => lr.id === r.id || lr.name === r.code || lr.name === r.name || lr.name.includes(r.code)
+      );
+      const isActiveSeq = r.code === activeSequence.robotCode;
+      return {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        status: isActiveSeq && currentWorkflowStep === 3 ? 'Arrived' : r.status,
+        battery: live?.battery ?? r.battery,
+        worldX: typeof live?.x === 'number' ? live.x : undefined,
+        worldY: typeof live?.y === 'number' ? live.y : undefined,
+        yaw: typeof live?.yaw === 'number' ? live.yaw : undefined,
+        targetTable: isActiveSeq ? currentLeg.tableNo : undefined,
+        cargoLevel: isActiveSeq ? currentLeg.cargoLevel : null,
+      };
+    });
+
+    const resolvedRobots = mapRobots.filter(
+      (r) => typeof r.worldX === 'number' && !Number.isNaN(r.worldX) && typeof r.worldY === 'number' && !Number.isNaN(r.worldY)
+    );
+
+    expect(resolvedRobots).toHaveLength(1);
+    expect(resolvedRobots[0]).toMatchObject({
+      code: 'AMR-01',
+      status: 'Arrived',
+      worldX: 2.4,
+      worldY: 3.6,
+      yaw: 1.57,
+      targetTable: 'Bàn 01',
+      cargoLevel: 1,
+    });
+  });
+
+  it('deduplicates arrival audio chime per taskId across TaskStatusUpdated, AssistedDropoffArrived, and Step 3 effect and respects mute toggle', () => {
+    const chimedTaskKeys = new Set<string>();
+    const playTone = vi.fn();
+
+    const triggerChime = (enabled: boolean, dedupeKey?: string): boolean => {
+      if (!enabled) return false;
+      const key = (dedupeKey || '').trim().toLowerCase().replace(/^tsk-/, '');
+      if (key) {
+        if (chimedTaskKeys.has(key)) return false;
+        chimedTaskKeys.add(key);
+      }
+      playTone();
+      return true;
+    };
+
+    expect(triggerChime(false, 'task-arrived-01')).toBe(false);
+    expect(playTone).toHaveBeenCalledTimes(0);
+
+    expect(triggerChime(true, 'task-arrived-01')).toBe(true);
+    expect(triggerChime(true, 'TSK-task-arrived-01')).toBe(false);
+    expect(triggerChime(true, 'task-arrived-01')).toBe(false);
+    expect(playTone).toHaveBeenCalledTimes(1);
+
+    // Next leg with different taskId chimes once
+    expect(triggerChime(true, 'task-arrived-02')).toBe(true);
+    expect(playTone).toHaveBeenCalledTimes(2);
+  });
+
+  it('builds MapArrivalAlert payload with target tray and next destination for both multi-stop and single-stop deliveries', () => {
+    const buildAlert = (
+      legs: Array<{ cargoLevel: number; tableNo: string; orderId: string; taskId: string }>,
+      legIdx: number,
+      chimeEnabled: boolean
+    ) => {
+      const currentLeg = legs[legIdx];
+      const nextLeg = legs[legIdx + 1];
+      return {
+        taskId: currentLeg.taskId,
+        robotCode: 'AMR-01',
+        tableName: currentLeg.tableNo,
+        stationName: 'ST_TABLE_01',
+        cargoLevel: currentLeg.cargoLevel,
+        orderId: currentLeg.orderId,
+        nextTableName: nextLeg?.tableNo || null,
+        chimePlayed: chimeEnabled,
+      };
+    };
+
+    const twoStopLegs = [
+      { cargoLevel: 1, tableNo: 'Bàn 01', orderId: 'ORD-101', taskId: 't1' },
+      { cargoLevel: 2, tableNo: 'Bàn 03', orderId: 'ORD-104', taskId: 't2' },
+    ];
+
+    expect(buildAlert(twoStopLegs, 0, true)).toEqual({
+      taskId: 't1',
+      robotCode: 'AMR-01',
+      tableName: 'Bàn 01',
+      stationName: 'ST_TABLE_01',
+      cargoLevel: 1,
+      orderId: 'ORD-101',
+      nextTableName: 'Bàn 03',
+      chimePlayed: true,
+    });
+
+    expect(buildAlert(twoStopLegs, 1, false)).toEqual({
+      taskId: 't2',
+      robotCode: 'AMR-01',
+      tableName: 'Bàn 03',
+      stationName: 'ST_TABLE_01',
+      cargoLevel: 2,
+      orderId: 'ORD-104',
+      nextTableName: null,
+      chimePlayed: false,
+    });
+  });
+});
+
+

@@ -53,7 +53,12 @@ import { useRobotStore } from "@/stores/robotStore";
 import { fixMojibake, getUserInitials } from "@/utils/textUtils";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/common/Pagination";
-import { SlamFloorMapViewer } from "@/components/map/SlamFloorMapViewer";
+import {
+  SlamFloorMapViewer,
+  type MapTableNode,
+  type MapRobotItem,
+  type MapArrivalAlert,
+} from "@/components/map/SlamFloorMapViewer";
 
 interface TableNode {
   id: string;
@@ -266,28 +271,107 @@ export const StaffKdsPage: React.FC = () => {
   const transitTimerRef = React.useRef<any>(null);
   const lastChimedLegRef = React.useRef<string>("");
   const lastAssistedLegRef = React.useRef<string>("");
-  const playStationArrivalChime = React.useCallback(() => {
+  const audioCtxRef = React.useRef<AudioContext | null>(null);
+  const chimedTaskKeysRef = React.useRef<Set<string>>(new Set());
+  const [isChimeEnabled, setIsChimeEnabled] = useState<boolean>(() => {
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const now = ctx.currentTime;
-      [587.33, 880].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
-        gain.gain.setValueAtTime(0.12, now + idx * 0.14);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.25);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + idx * 0.14);
-        osc.stop(now + idx * 0.14 + 0.26);
-      });
+      const saved = localStorage.getItem("kds_arrival_chime_enabled");
+      return saved === null ? true : saved === "true";
     } catch {
-      // Ignore audio autoplay restriction in headless browsers
+      return true;
+    }
+  });
+  const isChimeEnabledRef = React.useRef<boolean>(isChimeEnabled);
+  useEffect(() => {
+    isChimeEnabledRef.current = isChimeEnabled;
+  }, [isChimeEnabled]);
+
+  const ensureUnlockedAudioContext = React.useCallback((): AudioContext | null => {
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        void audioCtxRef.current.resume().catch(() => {});
+      }
+      return audioCtxRef.current;
+    } catch {
+      return null;
     }
   }, []);
+
+  // Unlock singleton AudioContext on first user touch/click on mobile tablets
+  useEffect(() => {
+    const unlock = () => {
+      ensureUnlockedAudioContext();
+    };
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("keydown", unlock, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("keydown", unlock);
+      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+        void audioCtxRef.current.close().catch(() => {});
+      }
+      audioCtxRef.current = null;
+    };
+  }, [ensureUnlockedAudioContext]);
+
+  const playStationArrivalChime = React.useCallback(
+    (dedupeKey?: string): boolean => {
+      if (!isChimeEnabledRef.current) return false;
+      const normKey = dedupeKey ? normalizeTaskKey(dedupeKey) : "";
+      if (normKey) {
+        if (chimedTaskKeysRef.current.has(normKey)) return false;
+        chimedTaskKeysRef.current.add(normKey);
+        if (chimedTaskKeysRef.current.size > 50) {
+          const first = chimedTaskKeysRef.current.values().next().value;
+          if (first) chimedTaskKeysRef.current.delete(first);
+        }
+      }
+
+      try {
+        const ctx = ensureUnlockedAudioContext();
+        if (!ctx) return false;
+        const scheduleTone = () => {
+          const now = ctx.currentTime;
+          [587.33, 880].forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+            gain.gain.setValueAtTime(0.12, now + idx * 0.14);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.25);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.onended = () => {
+              osc.disconnect();
+              gain.disconnect();
+            };
+            osc.start(now + idx * 0.14);
+            osc.stop(now + idx * 0.14 + 0.26);
+          });
+        };
+
+        if (ctx.state === "suspended") {
+          void ctx.resume().then(scheduleTone).catch(() => {});
+        } else {
+          scheduleTone();
+        }
+        return true;
+      } catch {
+        // Ignore audio autoplay restriction in headless browsers
+        return false;
+      }
+    },
+    [ensureUnlockedAudioContext],
+  );
 
   // Active Multi-Table Sequence Mission (Realtime Tracking & Dual Confirmation)
   const [activeSequence, setActiveSequence] = useState<{
@@ -320,16 +404,18 @@ export const StaffKdsPage: React.FC = () => {
     robots: liveRobots,
     status: signalRStatus,
     connection: signalRConnection,
+    fetchRobots,
     connect: connectRobotHub,
     disconnect: disconnectRobotHub,
   } = useRobotStore();
 
   useEffect(() => {
+    void fetchRobots();
     connectRobotHub();
     return () => {
       disconnectRobotHub();
     };
-  }, [connectRobotHub, disconnectRobotHub]);
+  }, [fetchRobots, connectRobotHub, disconnectRobotHub]);
 
   const isSignalRConnected = signalRStatus === "connected";
 
@@ -371,10 +457,11 @@ export const StaffKdsPage: React.FC = () => {
 
   useEffect(() => {
     if (activeSequence && currentWorkflowStep === 3) {
+      const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
       const legKey = `${activeSequence.sequenceId}-${activeSequence.currentLegIndex}`;
       if (lastChimedLegRef.current !== legKey) {
         lastChimedLegRef.current = legKey;
-        playStationArrivalChime();
+        playStationArrivalChime(currentLeg?.taskId || legKey);
       }
     }
   }, [activeSequence, currentWorkflowStep, playStationArrivalChime]);
@@ -557,7 +644,26 @@ export const StaffKdsPage: React.FC = () => {
   // Tables State - Loaded from tableService API with comprehensive restaurant defaults
   const [tables, setTables] = useState<TableNode[]>([]);
 
-  // Subscribe to SignalR AssistedDropoffArrived events for restricted/shared-station banner (DS-03c)
+  const handleToggleChime = React.useCallback(() => {
+    setIsChimeEnabled((prev) => {
+      const next = !prev;
+      isChimeEnabledRef.current = next;
+      try {
+        localStorage.setItem("kds_arrival_chime_enabled", String(next));
+      } catch {
+        // ignore storage restrictions
+      }
+      if (next) {
+        ensureUnlockedAudioContext();
+        showToast("Đã bật chuông báo khi AMR cập trạm bàn.", "success");
+      } else {
+        showToast("Đã tắt chuông báo khi AMR cập trạm bàn.", "info");
+      }
+      return next;
+    });
+  }, [ensureUnlockedAudioContext]);
+
+  // Subscribe to SignalR AssistedDropoffArrived, TaskStatusUpdated & RobotStatusUpdated events
   useEffect(() => {
     if (!signalRConnection) return;
 
@@ -575,12 +681,86 @@ export const StaffKdsPage: React.FC = () => {
         destinationTableNo: payload.destinationTableNo || "Bàn khách",
         cargoLevel: Number(payload.cargoLevel ?? 1),
       });
-      playStationArrivalChime();
+      playStationArrivalChime(taskId);
+    };
+
+    const handleTaskStatusUpdated = (payload: any) => {
+      if (!payload) return;
+      const status = String(payload.status ?? payload.Status ?? "").toLowerCase();
+      const taskId = String(payload.taskId ?? payload.TaskId ?? "");
+      if (!taskId) return;
+
+      if (status === "arrived") {
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(taskId)
+              ? { ...rt, status: "arrived" }
+              : rt,
+          ),
+        );
+
+        setActiveSequence((prev) => {
+          if (!prev || prev.status !== "in_progress") return prev;
+          const currentLeg = prev.legs[prev.currentLegIndex];
+          if (currentLeg && normalizeTaskKey(currentLeg.taskId) === normalizeTaskKey(taskId)) {
+            setMissionPhase("arrived");
+            setRobots((rPrev) =>
+              rPrev.map((r) =>
+                r.code === prev.robotCode
+                  ? { ...r, status: "Delivering", currentZone: `Đã đến ${currentLeg.tableNo}` }
+                  : r,
+              ),
+            );
+          }
+          return prev;
+        });
+
+        playStationArrivalChime(taskId);
+      }
+    };
+
+    const handleRobotStatusUpdated = (payload: any) => {
+      if (!payload) return;
+      const status = String(payload.status ?? payload.Status ?? "").toLowerCase();
+      const robotId = String(payload.robotId ?? payload.RobotId ?? "");
+      const robotName = String(payload.robotName ?? payload.RobotName ?? "");
+      const batteryLevel =
+        typeof payload.batteryLevel === "number" ? Math.round(payload.batteryLevel) : undefined;
+
+      setRobots((prev) =>
+        prev.map((r) => {
+          const matches =
+            (robotId && r.id === robotId) ||
+            (robotName && (r.name === robotName || r.code === robotName));
+          if (!matches) return r;
+          return {
+            ...r,
+            status:
+              status === "idle"
+                ? "Idle"
+                : status === "swappingbattery"
+                  ? "SwappingBattery"
+                  : status === "offline"
+                    ? "Offline"
+                    : "Delivering",
+            battery: batteryLevel ?? r.battery,
+            currentZone: status === "idle" ? "Bếp Trung Tâm" : r.currentZone,
+          };
+        }),
+      );
+
+      if (status === "idle") {
+        setMissionPhase((prev) => (prev === "returning" ? "idle" : prev));
+      }
     };
 
     signalRConnection.on("AssistedDropoffArrived", handleAssistedDropoffArrived);
+    signalRConnection.on("TaskStatusUpdated", handleTaskStatusUpdated);
+    signalRConnection.on("RobotStatusUpdated", handleRobotStatusUpdated);
     return () => {
       signalRConnection.off("AssistedDropoffArrived", handleAssistedDropoffArrived);
+      signalRConnection.off("TaskStatusUpdated", handleTaskStatusUpdated);
+      signalRConnection.off("RobotStatusUpdated", handleRobotStatusUpdated);
     };
   }, [signalRConnection, playStationArrivalChime]);
 
@@ -2090,6 +2270,144 @@ export const StaffKdsPage: React.FC = () => {
   const waitingTablesCount = tables.filter((t) => t.status === "waiting").length;
   const assignedStationCount = tables.filter((t) => Boolean(t.stationId || t.stationName)).length;
 
+  const mapTables: MapTableNode[] = useMemo(() => {
+    const activeLeg =
+      activeSequence?.status === "in_progress"
+        ? activeSequence.legs[activeSequence.currentLegIndex]
+        : undefined;
+    const arrivedTableKey =
+      currentWorkflowStep === 3 && activeLeg
+        ? activeLeg.tableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase()
+        : assistedDropoffAlert?.destinationTableNo
+          ? assistedDropoffAlert.destinationTableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase()
+          : "";
+
+    return tables.map((t) => {
+      const tNameNorm = (t.name || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+      const tNoNorm = (t.tableNo || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+      const matchedLeg =
+        activeSequence?.status === "in_progress"
+          ? activeSequence.legs.find((leg) => {
+              const legNorm = leg.tableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase();
+              return (
+                leg.tableNo.toLowerCase() === t.name.toLowerCase() ||
+                (legNorm && (tNameNorm === legNorm || tNoNorm === legNorm))
+              );
+            })
+          : undefined;
+      const isArrivedTarget = Boolean(
+        arrivedTableKey && (tNameNorm === arrivedTableKey || tNoNorm === arrivedTableKey),
+      );
+      const assignedCargoLevel =
+        matchedLeg?.cargoLevel ??
+        (isArrivedTarget && assistedDropoffAlert ? assistedDropoffAlert.cargoLevel : null);
+
+      return {
+        ...t,
+        assignedRobot:
+          t.assignedRobot ||
+          (matchedLeg && activeSequence ? activeSequence.robotCode : null),
+        assignedCargoLevel,
+        isArrivedTarget,
+      };
+    });
+  }, [tables, activeSequence, currentWorkflowStep, assistedDropoffAlert]);
+
+  const mapRobots: MapRobotItem[] = useMemo(() => {
+    const currentLeg =
+      activeSequence?.status === "in_progress"
+        ? activeSequence.legs[activeSequence.currentLegIndex]
+        : undefined;
+
+    const baseRobots: RobotFleetItem[] =
+      robots.length > 0
+        ? robots
+        : liveRobots.map((lr) => ({
+            id: lr.id,
+            code: lr.name || lr.id,
+            name: lr.name || lr.id,
+            status:
+              lr.status === "Moving"
+                ? "Delivering"
+                : lr.status === "SwappingBattery"
+                  ? "SwappingBattery"
+                  : lr.status === "Offline" || lr.status === "Error"
+                    ? "Offline"
+                    : "Idle",
+            battery: Math.round(lr.battery ?? 100),
+            currentZone: lr.destination || "Bếp Trung Tâm",
+          }));
+
+    return baseRobots.map((r) => {
+      const live = liveRobots.find(
+        (lr) =>
+          lr.id === r.id ||
+          lr.name === r.code ||
+          lr.name === r.name ||
+          (r.code && lr.name.includes(r.code)),
+      );
+      const isExecutingActiveSeq = Boolean(
+        activeSequence &&
+          activeSequence.status === "in_progress" &&
+          (r.code === activeSequence.robotCode || r.name === activeSequence.robotName),
+      );
+
+      return {
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        status: isExecutingActiveSeq && currentWorkflowStep === 3 ? "Arrived" : r.status,
+        battery: typeof live?.battery === "number" ? Math.round(live.battery) : r.battery,
+        currentZone: live?.destination || r.currentZone,
+        worldX: typeof live?.x === "number" ? live.x : undefined,
+        worldY: typeof live?.y === "number" ? live.y : undefined,
+        yaw: typeof live?.yaw === "number" ? live.yaw : undefined,
+        latencyMs: live?.transitLatencyMs,
+        targetTable: isExecutingActiveSeq && currentLeg ? currentLeg.tableNo : undefined,
+        cargoLevel: isExecutingActiveSeq && currentLeg ? currentLeg.cargoLevel : null,
+      };
+    });
+  }, [robots, liveRobots, activeSequence, currentWorkflowStep]);
+
+  const mapArrivalAlert: MapArrivalAlert | null = useMemo(() => {
+    if (activeSequence && activeSequence.status === "in_progress" && currentWorkflowStep === 3) {
+      const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
+      if (!currentLeg) return null;
+      const nextLeg = activeSequence.legs[activeSequence.currentLegIndex + 1];
+      const normLeg = currentLeg.tableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase();
+      const matchedTable = tables.find((t) => {
+        const tNo = (t.tableNo || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+        const tName = (t.name || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+        return (normLeg && (tNo === normLeg || tName === normLeg)) || t.name === currentLeg.tableNo;
+      });
+      return {
+        taskId: currentLeg.taskId,
+        robotCode: activeSequence.robotCode,
+        tableName: currentLeg.tableNo,
+        stationName: matchedTable?.stationName || assistedDropoffAlert?.stagingStationName || null,
+        cargoLevel: currentLeg.cargoLevel ?? 1,
+        orderId: currentLeg.orderId || null,
+        nextTableName: nextLeg?.tableNo || null,
+        chimePlayed: isChimeEnabled,
+      };
+    }
+
+    if (assistedDropoffAlert) {
+      return {
+        taskId: assistedDropoffAlert.taskId,
+        robotCode: assistedDropoffAlert.robotName || assistedDropoffAlert.robotId || "AMR",
+        tableName: assistedDropoffAlert.destinationTableNo,
+        stationName: assistedDropoffAlert.stagingStationName,
+        cargoLevel: assistedDropoffAlert.cargoLevel,
+        orderId: assistedDropoffAlert.orderId || null,
+        nextTableName: null,
+        chimePlayed: isChimeEnabled,
+      };
+    }
+
+    return null;
+  }, [activeSequence, currentWorkflowStep, tables, assistedDropoffAlert, isChimeEnabled]);
+
   const renderKdsSidebarContent = (collapsed: boolean) => (
     <div className="flex flex-col h-full bg-white text-slate-700 select-none overflow-hidden">
       {/* Brand Header */}
@@ -2585,12 +2903,15 @@ export const StaffKdsPage: React.FC = () => {
             {/* View Mode 1: Floor Map Viewer (Staff Simplified Mode) */}
             {viewMode === "slam-map" ? (
               <SlamFloorMapViewer
-                tables={tables}
+                tables={mapTables}
                 selectedTableId={selectedTableId}
                 onSelectTable={(id) => handleTableSelect(id)}
-                robots={robots}
+                robots={mapRobots}
                 stations={stations}
                 mode="simplified"
+                chimeEnabled={isChimeEnabled}
+                onToggleChime={handleToggleChime}
+                arrivalAlert={mapArrivalAlert}
                 className="flex-1 min-h-[500px] lg:min-h-[560px]"
               />
             ) : tables.length === 0 ? (

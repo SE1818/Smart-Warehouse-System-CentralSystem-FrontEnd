@@ -10,6 +10,9 @@ import {
   Crosshair,
   RefreshCw,
   MapPin,
+  Bell,
+  BellOff,
+  Layers,
 } from 'lucide-react';
 import {
   rosToCanvasPixel,
@@ -33,6 +36,8 @@ export interface MapTableNode {
   guestsCount?: number;
   currentOrders?: string[];
   assignedRobot?: string | null;
+  assignedCargoLevel?: number | null;
+  isArrivedTarget?: boolean;
   worldX?: number; // Tọa độ thực mét từ ROS / CSDL
   worldY?: number;
   stationId?: string | null;
@@ -43,7 +48,7 @@ export interface MapRobotItem {
   id: string;
   code: string;
   name: string;
-  status: 'Idle' | 'Delivering' | 'SwappingBattery' | 'Offline';
+  status: 'Idle' | 'Delivering' | 'Arrived' | 'SwappingBattery' | 'Offline' | string;
   battery: number;
   currentZone: string;
   worldX?: number; // Tọa độ thực mét từ ROS / Telemetry
@@ -51,6 +56,18 @@ export interface MapRobotItem {
   yaw?: number;
   latencyMs?: number;
   targetTable?: string;
+  cargoLevel?: number | null;
+}
+
+export interface MapArrivalAlert {
+  taskId: string;
+  robotCode: string;
+  tableName: string;
+  stationName?: string | null;
+  cargoLevel: number;
+  orderId?: string | null;
+  nextTableName?: string | null;
+  chimePlayed?: boolean;
 }
 
 export interface SlamFloorMapViewerProps {
@@ -67,7 +84,40 @@ export interface SlamFloorMapViewerProps {
   className?: string;
   kitchenLocation?: WorldPoint;
   mode?: 'simplified' | 'technical';
+  chimeEnabled?: boolean;
+  onToggleChime?: () => void;
+  arrivalAlert?: MapArrivalAlert | null;
 }
+
+const normalizeTableMatch = (value?: string | null): string =>
+  (value || '').replace(/^Bàn\s+/i, '').trim().toLowerCase();
+
+const drawRoundedRectPath = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) => {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+};
 
 export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   tables,
@@ -83,9 +133,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   className = '',
   kitchenLocation,
   mode = 'technical',
+  chimeEnabled,
+  onToggleChime,
+  arrivalAlert,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const staticLayerRef = useRef<HTMLCanvasElement | null>(null);
 
   // Measure container dimensions for true responsive canvas fitting across devices
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({
@@ -309,18 +363,16 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     return [];
   }, [waypoints, activeSlamMap, sqliteWaypoints]);
 
-  // 5. REAL ROBOTS: render robot có tọa độ thực hoặc ở vị trí trạm chờ trong simplified mode
+  // 5. REAL ROBOTS: Chỉ render robot có tọa độ thực từ Telemetry / CSDL (ETM-36..38: không tạo tọa độ giả)
   const resolvedRobots = useMemo(() => {
-    const valid = robots.filter((r) => typeof r.worldX === 'number' && typeof r.worldY === 'number');
-    if (mode === 'simplified' && valid.length === 0 && robots.length > 0) {
-      return robots.map((r, idx) => ({
-        ...r,
-        worldX: 1.0 + idx * 1.8,
-        worldY: 0.8,
-      }));
-    }
-    return valid;
-  }, [robots, mode]);
+    return robots.filter(
+      (r) =>
+        typeof r.worldX === 'number' &&
+        !Number.isNaN(r.worldX) &&
+        typeof r.worldY === 'number' &&
+        !Number.isNaN(r.worldY)
+    );
+  }, [robots]);
 
   // Auto-fit Scale: Tự động tính hệ số tỷ lệ để vừa vặn hoàn hảo trong khung hiển thị bất kể thiết bị (Mobile/Tablet/Desktop)
   const autoScale = useMemo(() => {
@@ -335,6 +387,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
   const canvasDisplayWidth = Math.max(200, Math.round((effectiveMetadata.width || 800) * autoScale));
   const canvasDisplayHeight = Math.max(150, Math.round((effectiveMetadata.height || 600) * autoScale));
+  const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
 
   // Handle Zoom
   const handleZoomIn = () => setZoom((prev) => Math.min(prev * 1.25, 5.0));
@@ -377,14 +430,22 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     const rawPx = (clientX - pan.x) / totalScale;
     const rawPy = (clientY - pan.y) / totalScale;
 
-    const world = canvasPixelToRos(rawPx, rawPy, effectiveMetadata);
-
-    setHoveredCoord({
-      pixelX: Math.round(rawPx),
-      pixelY: Math.round(rawPy),
-      worldX: world.x,
-      worldY: world.y,
-    });
+    if (mode === 'technical' && showCoordinateOverlay) {
+      const nextPixelX = Math.round(rawPx);
+      const nextPixelY = Math.round(rawPy);
+      setHoveredCoord((prev) => {
+        if (prev && prev.pixelX === nextPixelX && prev.pixelY === nextPixelY) {
+          return prev;
+        }
+        const world = canvasPixelToRos(rawPx, rawPy, effectiveMetadata);
+        return {
+          pixelX: nextPixelX,
+          pixelY: nextPixelY,
+          worldX: world.x,
+          worldY: world.y,
+        };
+      });
+    }
 
     let foundTable: MapTableNode | null = null;
     const hitRadiusPixel = mode === 'simplified' ? 28 : 22;
@@ -399,7 +460,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         }
       }
     }
-    setHoveredTable(foundTable);
+    setHoveredTable((prev) => (prev?.id === foundTable?.id ? prev : foundTable));
 
     let foundWaypoint: SlamMapWaypointDto | null = null;
     if (mode === 'technical') {
@@ -415,7 +476,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         }
       }
     }
-    setHoveredWaypoint(foundWaypoint);
+    setHoveredWaypoint((prev) =>
+      prev?.id === foundWaypoint?.id && prev?.name === foundWaypoint?.name ? prev : foundWaypoint
+    );
   };
 
   const handleMouseUp = () => {
@@ -591,7 +654,141 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     }
   };
 
-  // Main Canvas Render Loop
+  const drawStaticLayers = useCallback(
+    (ctx: CanvasRenderingContext2D) => {
+      const width = effectiveMetadata.width;
+      const height = effectiveMetadata.height;
+
+      // =======================================================================
+      // LAYER 1: BACKGROUND / SLAM OCCUPANCY GRID
+      // =======================================================================
+      if (mode === 'simplified') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 0.6;
+        const gridSpacing = 40;
+        for (let x = 0; x <= width; x += gridSpacing) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= height; y += gridSpacing) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        if (imageLoaded && mapImage) {
+          ctx.globalAlpha = 0.25;
+          ctx.drawImage(mapImage, 0, 0, width, height);
+          ctx.globalAlpha = 1.0;
+        }
+      } else if (showRawSlam) {
+        if (imageLoaded && mapImage) {
+          ctx.globalAlpha = 0.85;
+          ctx.drawImage(mapImage, 0, 0, width, height);
+          ctx.globalAlpha = 1.0;
+        } else {
+          ctx.fillStyle = '#090d16';
+          ctx.fillRect(0, 0, width, height);
+
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+          ctx.lineWidth = 0.5;
+          const oneMeterPixels = 1.0 / effectiveMetadata.resolution;
+          for (let x = 0; x <= width; x += oneMeterPixels) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+          }
+          for (let y = 0; y <= height; y += oneMeterPixels) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+          }
+
+          const originPx = rosToCanvasPixel(0, 0, effectiveMetadata);
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, originPx.y);
+          ctx.lineTo(width, originPx.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(originPx.x, 0);
+          ctx.lineTo(originPx.x, height);
+          ctx.stroke();
+
+          ctx.fillStyle = '#64748b';
+          ctx.font = '10px monospace';
+          ctx.fillText('Gốc Tọa Độ (0,0)', originPx.x + 6, originPx.y - 6);
+        }
+      } else {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      // =======================================================================
+      // LAYER 2.1 & 2.2: STATIONS & KITCHEN
+      // =======================================================================
+      resolvedStations.forEach((st) => {
+        const stPx = rosToCanvasPixel(st.worldX, st.worldY, effectiveMetadata);
+        const isPickup =
+          st.stationType === 'Pickup' ||
+          st.stationType === 'Kitchen' ||
+          st.stationType.toLowerCase() === 'pickup' ||
+          st.stationType.toLowerCase() === 'kitchen';
+        ctx.fillStyle = isPickup ? '#0284c7' : '#eab308';
+        drawRoundedRectPath(ctx, stPx.x - 30, stPx.y - 20, 60, 40, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(st.name, stPx.x, stPx.y + 3);
+      });
+
+      if (kitchenLocation) {
+        const kPx = rosToCanvasPixel(kitchenLocation.x, kitchenLocation.y, effectiveMetadata);
+        ctx.fillStyle = '#0284c7';
+        drawRoundedRectPath(ctx, kPx.x - 30, kPx.y - 20, 60, 40, 6);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('QUẦY BẾP', kPx.x, kPx.y + 3);
+      }
+    },
+    [mode, effectiveMetadata, showRawSlam, imageLoaded, mapImage, resolvedStations, kitchenLocation]
+  );
+
+  // Cache static layers onto an offscreen canvas so 5Hz telemetry / hover doesn't redraw the grid & floorplan
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const width = effectiveMetadata.width || 800;
+    const height = effectiveMetadata.height || 600;
+    const offscreen = staticLayerRef.current ?? document.createElement('canvas');
+    offscreen.width = width;
+    offscreen.height = height;
+    const offCtx = offscreen.getContext('2d');
+    if (offCtx) {
+      offCtx.clearRect(0, 0, width, height);
+      drawStaticLayers(offCtx);
+      staticLayerRef.current = offscreen;
+    } else {
+      staticLayerRef.current = null;
+    }
+  }, [drawStaticLayers, effectiveMetadata.width, effectiveMetadata.height]);
+
+  // Main Canvas Render Function (On-demand, HiDPI aware)
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -601,126 +798,22 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     const width = effectiveMetadata.width;
     const height = effectiveMetadata.height;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvasDisplayWidth, canvasDisplayHeight);
 
     ctx.save();
     ctx.translate(pan.x, pan.y);
     ctx.scale(zoom * autoScale, zoom * autoScale);
     ctx.imageSmoothingEnabled = false;
 
-    // =========================================================================
-    // LAYER 1: BACKGROUND / SLAM OCCUPANCY GRID
-    // =========================================================================
-    if (mode === 'simplified') {
-      // Light restaurant floor background for Staff
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(0, 0, width, height);
-
-      // Light restaurant floor grid
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 0.6;
-      const gridSpacing = 40;
-      for (let x = 0; x <= width; x += gridSpacing) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= height; y += gridSpacing) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
-
-      if (imageLoaded && mapImage) {
-        ctx.globalAlpha = 0.25;
-        ctx.drawImage(mapImage, 0, 0, width, height);
-        ctx.globalAlpha = 1.0;
-      }
-    } else if (showRawSlam) {
-      if (imageLoaded && mapImage) {
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(mapImage, 0, 0, width, height);
-        ctx.globalAlpha = 1.0;
-      } else {
-        // Vẽ lưới Descartes kỹ thuật thực địa
-        ctx.fillStyle = '#090d16';
-        ctx.fillRect(0, 0, width, height);
-
-        // Lưới 1m
-        ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
-        ctx.lineWidth = 0.5;
-        const oneMeterPixels = 1.0 / effectiveMetadata.resolution;
-        for (let x = 0; x <= width; x += oneMeterPixels) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, height);
-          ctx.stroke();
-        }
-        for (let y = 0; y <= height; y += oneMeterPixels) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(width, y);
-          ctx.stroke();
-        }
-
-        // Trục tọa độ ROS World (0,0)
-        const originPx = rosToCanvasPixel(0, 0, effectiveMetadata);
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, originPx.y);
-        ctx.lineTo(width, originPx.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(originPx.x, 0);
-        ctx.lineTo(originPx.x, height);
-        ctx.stroke();
-
-        ctx.fillStyle = '#64748b';
-        ctx.font = '10px monospace';
-        ctx.fillText('Gốc Tọa Độ (0,0)', originPx.x + 6, originPx.y - 6);
-      }
+    const cachedStatic = staticLayerRef.current;
+    if (cachedStatic && cachedStatic.width === width && cachedStatic.height === height) {
+      ctx.drawImage(cachedStatic, 0, 0, width, height);
     } else {
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(0, 0, width, height);
+      drawStaticLayers(ctx);
     }
 
-    // =========================================================================
-    // LAYER 2: VECTOR FLOOR PLAN (STATIONS & TABLES)
-    // =========================================================================
-
-    // 2.1 Stations
-    resolvedStations.forEach((st) => {
-      const stPx = rosToCanvasPixel(st.worldX, st.worldY, effectiveMetadata);
-      const isPickup = st.stationType === 'Pickup' || st.stationType === 'Kitchen';
-      ctx.fillStyle = isPickup ? '#0284c7' : '#eab308';
-      ctx.beginPath();
-      ctx.roundRect(stPx.x - 30, stPx.y - 20, 60, 40, 6);
-      ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(st.name, stPx.x, stPx.y + 3);
-    });
-
-    // 2.2 Kitchen location
-    if (kitchenLocation) {
-      const kPx = rosToCanvasPixel(kitchenLocation.x, kitchenLocation.y, effectiveMetadata);
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(kPx.x - 30, kPx.y - 20, 60, 40, 6);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('QUẦY BẾP', kPx.x, kPx.y + 3);
-    }
+    const arrivedTargetNorm = normalizeTableMatch(arrivalAlert?.tableName);
 
     // 2.3 Dining Tables
     resolvedTables.forEach((table) => {
@@ -728,9 +821,27 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       const px = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
       const isSelected = table.id === selectedTableId;
       const isHovered = hoveredTable?.id === table.id;
+      const isArrivedTarget =
+        Boolean(table.isArrivedTarget) ||
+        (Boolean(arrivedTargetNorm) && normalizeTableMatch(table.name) === arrivedTargetNorm);
 
       if (mode === 'simplified') {
         const radius = isSelected ? 24 : 20;
+
+        // Arrival Halo Ring (Amber dashed ring from Figma 6:89)
+        if (isArrivedTarget) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.setLineDash([4, 3]);
+          ctx.arc(px.x, px.y, radius + 9, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(245, 158, 11, 0.16)';
+          ctx.fill();
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
 
         // Selection / Hover outer glow ring
         if (isSelected || isHovered) {
@@ -747,7 +858,10 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         let statusBadgeColor = '#94a3b8';
         let tableBorder = '#cbd5e1';
 
-        if (table.status === 'waiting') {
+        if (isArrivedTarget) {
+          statusBadgeColor = '#f59e0b';
+          tableBorder = '#2563eb';
+        } else if (table.status === 'waiting') {
           statusBadgeColor = '#f59e0b';
           tableBorder = '#f59e0b';
         } else if (table.status === 'serving') {
@@ -763,7 +877,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         ctx.fillStyle = isSelected ? '#eff6ff' : '#ffffff';
         ctx.fill();
         ctx.strokeStyle = isSelected ? '#2563eb' : tableBorder;
-        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.lineWidth = isSelected || isArrivedTarget ? 3 : 2;
         ctx.stroke();
 
         // Status indicator dot
@@ -895,12 +1009,18 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     resolvedRobots.forEach((robot) => {
       if (robot.worldX === undefined || robot.worldY === undefined) return;
       const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
-      const isDelivering = robot.status === 'Delivering';
+      const normStatus = (robot.status || '').toLowerCase();
+      const isArrived = normStatus === 'arrived';
+      const isDelivering = normStatus === 'delivering' || normStatus === 'moving' || isArrived;
 
       // Laser trajectory path
       if (isDelivering && (mode === 'simplified' || showTrajectories)) {
+        const targetNorm = normalizeTableMatch(robot.targetTable);
         const targetTable = resolvedTables.find(
-          (t) => t.assignedRobot === robot.code || (robot.currentZone && robot.currentZone.includes(t.name))
+          (t) =>
+            (targetNorm && normalizeTableMatch(t.name) === targetNorm) ||
+            t.assignedRobot === robot.code ||
+            (robot.currentZone && robot.currentZone.includes(t.name))
         );
 
         if (targetTable?.worldX !== undefined && targetTable?.worldY !== undefined) {
@@ -909,7 +1029,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           ctx.setLineDash([5, 4]);
           ctx.moveTo(robotPx.x, robotPx.y);
           ctx.lineTo(targetPx.x, targetPx.y);
-          ctx.strokeStyle = mode === 'simplified' ? '#2563eb' : '#22c55e';
+          ctx.strokeStyle = isArrived ? '#f59e0b' : mode === 'simplified' ? '#2563eb' : '#22c55e';
           ctx.lineWidth = 2;
           ctx.stroke();
           ctx.setLineDash([]);
@@ -920,33 +1040,76 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
       if (mode === 'simplified') {
         // Simplified avatar for Staff
-        if (isSelectedRobot) {
+        if (isSelectedRobot || isArrived) {
           ctx.beginPath();
           ctx.arc(robotPx.x, robotPx.y, 22, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+          ctx.fillStyle = isArrived ? 'rgba(245, 158, 11, 0.22)' : 'rgba(56, 189, 248, 0.25)';
           ctx.fill();
-          ctx.strokeStyle = '#0284c7';
+          ctx.strokeStyle = isArrived ? '#f59e0b' : '#0284c7';
           ctx.lineWidth = 2;
           ctx.stroke();
         }
 
         ctx.beginPath();
         ctx.arc(robotPx.x, robotPx.y, 16, 0, Math.PI * 2);
-        ctx.fillStyle = isSelectedRobot ? '#0284c7' : '#1e293b';
+        ctx.fillStyle = isArrived ? '#d97706' : isSelectedRobot ? '#0284c7' : '#0284c7';
         ctx.fill();
-        ctx.strokeStyle = isSelectedRobot ? '#ffffff' : '#38bdf8';
+        ctx.strokeStyle = isSelectedRobot ? '#ffffff' : isArrived ? '#fef3c7' : '#38bdf8';
         ctx.lineWidth = 2;
         ctx.stroke();
 
+        // Heading direction indicator from telemetry Yaw (F-08)
+        if (typeof robot.yaw === 'number') {
+          ctx.save();
+          ctx.translate(robotPx.x, robotPx.y);
+          ctx.rotate(-robot.yaw);
+          ctx.beginPath();
+          ctx.moveTo(19, 0);
+          ctx.lineTo(13, -4);
+          ctx.lineTo(13, 4);
+          ctx.closePath();
+          ctx.fillStyle = isArrived ? '#f59e0b' : '#38bdf8';
+          ctx.fill();
+          ctx.restore();
+        }
+
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 9px sans-serif';
+        ctx.font = 'bold 9px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('AMR', robotPx.x, robotPx.y);
 
-        ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText(`${robot.name || robot.code} (${robot.battery}%)`, robotPx.x, robotPx.y + 24);
+        ctx.fillStyle = isArrived ? '#b45309' : '#0284c7';
+        ctx.font = 'bold 10px "JetBrains Mono", monospace';
+        ctx.fillText(`${robot.code || robot.name} (${Math.round(robot.battery)}%)`, robotPx.x, robotPx.y + 24);
+
+        // Target Tray Badge directly on Robot Marker (Figma 31:22)
+        if (isDelivering && (robot.cargoLevel === 1 || robot.cargoLevel === 2 || robot.targetTable)) {
+          const trayLabel =
+            robot.cargoLevel && robot.targetTable
+              ? `Khay ${robot.cargoLevel} → ${robot.targetTable}`
+              : robot.cargoLevel
+                ? `Khay ${robot.cargoLevel}`
+                : `${robot.targetTable}`;
+          ctx.font = 'bold 9px "JetBrains Mono", monospace';
+          const textW = ctx.measureText(trayLabel).width;
+          const badgeW = Math.max(76, textW + 18);
+          const badgeH = 18;
+          const badgeX = robotPx.x - badgeW / 2;
+          const badgeY = robotPx.y + 32;
+
+          drawRoundedRectPath(ctx, badgeX, badgeY, badgeW, badgeH, 9);
+          ctx.fillStyle = isArrived ? '#d97706' : '#0062ff';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.fillStyle = '#f8fafc';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(trayLabel, robotPx.x, badgeY + badgeH / 2 + 0.5);
+        }
       } else {
         // Technical marker with Yaw rotation
         if (isSelectedRobot) {
@@ -964,9 +1127,8 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         const yawAngle = robot.yaw !== undefined ? -robot.yaw : 0;
         ctx.rotate(yawAngle);
 
-        ctx.fillStyle = isDelivering ? '#16a34a' : isSelectedRobot ? '#0284c7' : '#0369a1';
-        ctx.beginPath();
-        ctx.roundRect(-12, -12, 24, 24, 5);
+        ctx.fillStyle = isArrived ? '#d97706' : isDelivering ? '#16a34a' : isSelectedRobot ? '#0284c7' : '#0369a1';
+        drawRoundedRectPath(ctx, -12, -12, 24, 24, 5);
         ctx.fill();
         ctx.strokeStyle = isSelectedRobot ? '#00d2ff' : '#ffffff';
         ctx.lineWidth = isSelectedRobot ? 2 : 1.5;
@@ -993,14 +1155,13 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
   }, [
     mode,
     effectiveMetadata,
+    dpr,
+    canvasDisplayWidth,
+    canvasDisplayHeight,
     pan,
     zoom,
     autoScale,
-    showRawSlam,
-    imageLoaded,
-    mapImage,
-    kitchenLocation,
-    resolvedStations,
+    drawStaticLayers,
     resolvedTables,
     resolvedWaypoints,
     resolvedRobots,
@@ -1010,40 +1171,38 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     hoveredWaypoint,
     showTrajectories,
     showWaypoints,
+    arrivalAlert?.tableName,
   ]);
 
+  // Render on-demand when state/telemetry changes instead of an unconditional 60fps idle loop
   useEffect(() => {
-    let animId: number;
-    const loop = () => {
+    const animId = requestAnimationFrame(() => {
       render();
-      animId = requestAnimationFrame(loop);
-    };
-    animId = requestAnimationFrame(loop);
+    });
     return () => cancelAnimationFrame(animId);
   }, [render]);
 
   return (
     <div
-      ref={containerRef}
       className={`relative flex flex-col rounded-2xl overflow-hidden select-none shadow-xl ${
         mode === 'simplified' ? 'bg-white border border-slate-200 shadow-xs' : 'bg-slate-900 border border-slate-800'
       } ${className}`}
     >
       {/* Top Header / Map Toolbar */}
       {mode === 'simplified' ? (
-        <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 text-slate-800 z-10">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-white border-b border-slate-200 text-slate-800 z-10">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-200">
               <Compass className="w-4 h-4 animate-spin-slow" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold text-slate-900 tracking-wider">
                   Sơ Đồ Bàn Ăn & Vị Trí Robot
                 </span>
                 {robots && robots.length > 0 && (() => {
                   const activeRobot = (selectedRobotId ? robots.find(r => r.id === selectedRobotId) : null)
-                    || robots.find(r => r.status === 'Delivering')
+                    || robots.find(r => r.status === 'Delivering' || r.status === 'Arrived')
                     || robots[0];
                   return (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono font-bold flex items-center gap-1">
@@ -1060,6 +1219,31 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {(onToggleChime !== undefined || chimeEnabled !== undefined) && (
+              <button
+                type="button"
+                onClick={onToggleChime}
+                aria-pressed={chimeEnabled !== false}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer shrink-0 ${
+                  chimeEnabled !== false
+                    ? 'bg-[#fef3c7] border-[#f59e0b] text-[#92400e] hover:bg-amber-200/80'
+                    : 'bg-slate-100 border-slate-300 text-slate-500 hover:bg-slate-200/70'
+                }`}
+                title="Bật hoặc tắt chuông báo khi robot tới bàn"
+              >
+                {chimeEnabled !== false ? (
+                  <Bell className="w-3 h-3 text-[#b45309] shrink-0" />
+                ) : (
+                  <BellOff className="w-3 h-3 text-slate-400 shrink-0" />
+                )}
+                <span className="hidden sm:inline">
+                  {chimeEnabled !== false ? 'Chuông báo: Bật' : 'Chuông báo: Tắt'}
+                </span>
+                <span className="sm:hidden">
+                  {chimeEnabled !== false ? 'Chuông: Bật' : 'Chuông: Tắt'}
+                </span>
+              </button>
+            )}
             <button
               type="button"
               onClick={fetchActiveMap}
@@ -1253,8 +1437,9 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         )}
         <canvas
           ref={canvasRef}
-          width={canvasDisplayWidth}
-          height={canvasDisplayHeight}
+          width={Math.round(canvasDisplayWidth * dpr)}
+          height={Math.round(canvasDisplayHeight * dpr)}
+          style={{ width: `${canvasDisplayWidth}px`, height: `${canvasDisplayHeight}px` }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -1301,13 +1486,76 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
             )}
             {hoveredTable.assignedRobot && (
               <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                <span>Robot đảm nhiệm: {hoveredTable.assignedRobot}</span>
+                <span>
+                  Robot đảm nhiệm: {hoveredTable.assignedRobot}
+                  {hoveredTable.assignedCargoLevel ? ` (Khay ${hoveredTable.assignedCargoLevel})` : ''}
+                </span>
               </div>
             )}
             <p className={`text-[10px] italic pt-1 ${mode === 'simplified' ? 'text-slate-500 border-t border-slate-100' : 'text-slate-400 border-t border-slate-800'}`}>
               Nhấp chuột để chọn bàn này cho khay xuất món KDS
             </p>
           </div>
+        )}
+
+        {/* AMR Arrival & Target Tray Alert Overlay (Figma 31:29 Desktop / 31:52 Tablet) */}
+        {mode === 'simplified' && arrivalAlert && (
+          <>
+            {/* Desktop / Large Tablet Overlay Card */}
+            <div className="hidden sm:flex flex-col gap-1.5 absolute bottom-3 right-3 w-[360px] max-w-[calc(100%-24px)] bg-[#fffbeb]/95 backdrop-blur-md border-[1.5px] border-[#f59e0b] rounded-xl px-3 py-2.5 shadow-[0_6px_16px_rgba(15,23,42,0.14)] z-20 pointer-events-none">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Bell className="w-3.5 h-3.5 text-[#b45309] shrink-0" />
+                  <span className="font-heading font-bold text-[11.5px] text-[#78350f] truncate">
+                    {arrivalAlert.robotCode} Đã Tới {arrivalAlert.tableName}
+                    {arrivalAlert.stationName ? ` (${arrivalAlert.stationName})` : ''}
+                  </span>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold border shrink-0 ${
+                    arrivalAlert.chimePlayed !== false
+                      ? 'bg-[#dbf9eb] border-[#10b981] text-[#064e3b]'
+                      : 'bg-slate-100 border-slate-300 text-slate-600'
+                  }`}
+                >
+                  {arrivalAlert.chimePlayed !== false ? 'Đã phát chuông' : 'Đã tắt chuông'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#f59e0b] text-[#0f172a] font-mono font-bold text-[10px]">
+                  <Layers className="w-3 h-3 shrink-0" />
+                  <span>
+                    LẤY MÓN: KHAY {arrivalAlert.cargoLevel} ({arrivalAlert.cargoLevel === 1 ? 'TẦNG DƯỚI' : 'TẦNG TRÊN'})
+                  </span>
+                </span>
+                {arrivalAlert.orderId && (
+                  <span className="font-mono font-medium text-[10px] text-[#92400e]">
+                    Đơn: {arrivalAlert.orderId}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-[10px] font-medium text-[#78350f] leading-snug">
+                {arrivalAlert.nextTableName
+                  ? `Nhân viên lấy món ở Khay ${arrivalAlert.cargoLevel} và bấm xác nhận để đi tiếp ${arrivalAlert.nextTableName}.`
+                  : `Nhân viên lấy món ở Khay ${arrivalAlert.cargoLevel} và bấm xác nhận để robot quay về Bếp.`}
+              </p>
+            </div>
+
+            {/* Compact Mobile / Small Tablet Banner */}
+            <div className="flex sm:hidden items-center justify-between gap-2 absolute bottom-2.5 left-2.5 right-2.5 bg-[#fffbeb]/95 backdrop-blur-md border-[1.5px] border-[#f59e0b] rounded-[10px] px-2.5 py-2 shadow-lg z-20 pointer-events-none">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Bell className="w-3.5 h-3.5 text-[#b45309] shrink-0" />
+                <span className="text-[10.5px] font-bold text-[#78350f] truncate">
+                  {arrivalAlert.robotCode} đã tới {arrivalAlert.tableName} • Lấy món Khay {arrivalAlert.cargoLevel}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded-md bg-[#f59e0b] text-[#0f172a] font-mono font-bold text-[9.5px] shrink-0">
+                KHAY {arrivalAlert.cargoLevel}
+              </span>
+            </div>
+          </>
         )}
 
         {/* Hover Waypoint Tooltip Overlay (Technical Only) */}
