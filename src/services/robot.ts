@@ -520,73 +520,96 @@ export const robotService = {
 
 
   // Reroute active task to a new table station mid-transit
-
-  async rerouteTask(taskId: string, newStationId: string, newTableNo: string, reason: string = 'Đổi bàn giữa chặng'): Promise<{ success: boolean; message: string }> {
-
+  async rerouteTask(
+    taskId: string,
+    newStationId: string,
+    newTableNo: string,
+    reason: string = 'Đổi bàn giữa chặng'
+  ): Promise<{
+    success: boolean;
+    message: string;
+    errorCode?: string;
+    taskId?: string;
+    newStationId?: string;
+    newStationName?: string;
+    newTableNo?: string;
+  }> {
     try {
-
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/reroute`, {
-
+      const response = await apiClient.post<{
+        success: boolean;
+        message: string;
+        errorCode?: string;
+        taskId?: string;
+        newStationId?: string;
+        newStationName?: string;
+        newTableNo?: string;
+      }>(`/v1/tasks/${taskId}/reroute`, {
         newStationId,
-
         newTableNo,
-
         reason,
-
-        requestedBy: 'Staff KDS'
-
-      });
-
-      return response.data;
-
-    } catch (err) {
-
-      console.warn('[robotService] Lỗi gọi API reroute, fallback mô phỏng:', err);
-
-      return {
-
-        success: true,
-
-        message: `Đã chuyển hướng nhiệm vụ sang ${newTableNo} thành công (chế độ dự phòng).`
-
-      };
-
-    }
-
-  },
-
-
-
-  // Flow 3: Transfer order from current table to another table while cooking (Pre-dispatch)
-  async transferOrderTable(newTableId: string, orderId: string, reason: string = 'Đổi bàn khi đang nấu'): Promise<{ success: boolean; message: string }> {
-    try {
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tables/${newTableId}/transfer-order`, {
-        orderId,
-        reason
+        requestedBy: 'Staff KDS',
       });
       return response.data;
     } catch (err: any) {
-      console.warn('[robotService] Lỗi gọi API transfer-order, fallback mô phỏng:', err);
+      const errData = err?.response?.data;
       return {
-        success: true,
-        message: err?.response?.data?.message || 'Đã chuyển bàn cho đơn hàng thành công.'
+        success: false,
+        errorCode: errData?.errorCode || (err?.response?.status === 409 ? 'CONFLICT' : undefined),
+        taskId: errData?.taskId || taskId,
+        newStationId: errData?.newStationId || newStationId,
+        newStationName: errData?.newStationName,
+        newTableNo: errData?.newTableNo || newTableNo,
+        message: errData?.message || err?.message || 'Không thể chuyển hướng nhiệm vụ sang bàn mới.',
+      };
+    }
+  },
+
+  // Flow 3: Transfer order from current table to another table while cooking or in-transit
+  async transferOrderTable(
+    newTableId: string,
+    orderId: string,
+    reason: string = 'Đổi bàn khi đang nấu'
+  ): Promise<{ success: boolean; message: string; errorCode?: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; message: string; errorCode?: string }>(
+        `/v1/tables/${newTableId}/transfer-order`,
+        {
+          orderId,
+          reason,
+        }
+      );
+      return response.data;
+    } catch (err: any) {
+      const errData = err?.response?.data;
+      return {
+        success: false,
+        errorCode: errData?.errorCode || (err?.response?.status === 409 ? 'CONFLICT' : undefined),
+        message: errData?.message || err?.message || 'Không thể chuyển bàn cho đơn hàng.',
       };
     }
   },
 
   // Flow 3: Second-leg dispatch when robot arrived at previous table
-  async dispatchSecondLeg(taskId: string, newStationId: string, confirmedBy: string = 'Staff KDS'): Promise<{ success: boolean; message: string }> {
+  async dispatchSecondLeg(
+    taskId: string,
+    newStationId: string,
+    confirmedBy: string = 'Staff KDS'
+  ): Promise<{ success: boolean; message: string; errorCode?: string }> {
     try {
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/dispatch-second-leg`, {
-        newStationId,
-        confirmedBy
-      });
+      const response = await apiClient.post<{ success: boolean; message: string; errorCode?: string }>(
+        `/v1/tasks/${taskId}/dispatch-second-leg`,
+        {
+          newStationId,
+          confirmedBy,
+        }
+      );
       return response.data;
     } catch (err: any) {
-      console.warn('[robotService] Lỗi gọi API dispatch-second-leg, fallback mô phỏng:', err);
+      const errData = err?.response?.data;
       return {
-        success: true,
-        message: err?.response?.data?.message || 'Đã kích hoạt điều phối chặng 2 thành công.'
+        success: false,
+        errorCode: errData?.errorCode || (err?.response?.status === 409 ? 'CONFLICT' : undefined),
+        message: errData?.message || err?.message || 'Không thể kích hoạt điều phối chặng 2.',
       };
     }
   },

@@ -555,6 +555,17 @@ export const StaffKdsPage: React.FC = () => {
     useState<string>("");
   const [isSubmittingAssignStation, setIsSubmittingAssignStation] =
     useState<boolean>(false);
+  const [nearestStationCandidates, setNearestStationCandidates] = useState<
+    Array<{
+      stationId: string;
+      stationName: string;
+      stationType: string;
+      xCoord: number;
+      yCoord: number;
+      distanceMeters: number;
+      isRecommendedNearest: boolean;
+    }>
+  >([]);
 
   // Flow 3: HC-06 & UC-06 Arrival Race Condition & Second-Leg Dispatch State
   const [rerouteConflictModal, setRerouteConflictModal] = useState<{
@@ -754,13 +765,142 @@ export const StaffKdsPage: React.FC = () => {
       }
     };
 
+    const handleTableRerouteConflictArrived = (payload: any) => {
+      if (!payload) return;
+      const taskId = String(payload.taskId ?? payload.TaskId ?? "");
+      if (!taskId) return;
+      const oldTableNo = String(payload.oldTableNo ?? payload.OldTableNo ?? "Bàn cũ");
+      const newTableNo = String(payload.newTableNo ?? payload.NewTableNo ?? "Bàn mới");
+      const newStationId = String(payload.newStationId ?? payload.NewStationId ?? "");
+
+      setMissionPhase("arrived");
+      setRerouteConflictModal({
+        isOpen: true,
+        taskId,
+        oldTableNo,
+        newTableNo,
+        newStationId,
+      });
+      playStationArrivalChime(taskId);
+    };
+
+    const handleRealtimeTaskRerouted = (payload: any) => {
+      if (!payload) return;
+      const taskId = String(payload.taskId ?? payload.TaskId ?? "");
+      const orderId = String(payload.orderId ?? payload.OrderId ?? "");
+      const oldTableNo = String(payload.oldTableNo ?? payload.OldTableNo ?? "");
+      const newTableNo = String(
+        payload.newTableNo ?? payload.NewTableNo ?? payload.newStationName ?? "",
+      );
+      if (!newTableNo) return;
+
+      setActiveSequence((prev) => {
+        if (!prev || prev.status !== "in_progress") return prev;
+        let matchedIdx = -1;
+        const updatedLegs = prev.legs.map((leg, idx) => {
+          const matchesTask =
+            taskId && normalizeTaskKey(leg.taskId) === normalizeTaskKey(taskId);
+          const matchesOrder = orderId && leg.orderId === orderId;
+          if (matchesTask || matchesOrder) {
+            matchedIdx = idx;
+            return { ...leg, tableNo: newTableNo };
+          }
+          return leg;
+        });
+        if (matchedIdx === -1) return prev;
+        if (matchedIdx === prev.currentLegIndex) {
+          setRobots((rPrev) =>
+            rPrev.map((r) =>
+              r.code === prev.robotCode
+                ? { ...r, currentZone: `Bẻ lái sang ${newTableNo}` }
+                : r,
+            ),
+          );
+        }
+        return { ...prev, legs: updatedLegs };
+      });
+
+      if (taskId) {
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(taskId)
+              ? { ...rt, destination: newTableNo }
+              : rt,
+          ),
+        );
+      }
+
+      setTables((prev) =>
+        prev.map((t) => {
+          if (
+            oldTableNo &&
+            (t.name.toLowerCase() === oldTableNo.toLowerCase() || t.tableNo === oldTableNo) &&
+            t.status === "serving"
+          ) {
+            return { ...t, status: "empty", assignedRobot: null };
+          }
+          if (t.name.toLowerCase() === newTableNo.toLowerCase() || t.tableNo === newTableNo) {
+            return { ...t, status: "serving" };
+          }
+          return t;
+        }),
+      );
+    };
+
+    const handleReceiveTaskStatusChanged = (payload: any) => {
+      if (!payload) return;
+      const status = String(payload.status ?? payload.Status ?? "").toLowerCase();
+      const taskId = String(payload.taskId ?? payload.TaskId ?? "");
+      const newTableNo = String(
+        payload.newTableNo ?? payload.NewTableNo ?? payload.toStationName ?? "",
+      );
+      if (!taskId) return;
+
+      if (status === "in_transit_leg2" || status === "in_transit") {
+        setMissionPhase("moving");
+        setRerouteConflictModal((prev) =>
+          prev && normalizeTaskKey(prev.taskId) === normalizeTaskKey(taskId) ? null : prev,
+        );
+        setRecentSqliteTasks((prev) =>
+          prev.map((rt) =>
+            normalizeTaskKey(rt.taskId) === normalizeTaskKey(taskId)
+              ? {
+                  ...rt,
+                  status: "in_transit",
+                  destination: newTableNo || rt.destination,
+                }
+              : rt,
+          ),
+        );
+        if (newTableNo) {
+          setActiveSequence((prev) => {
+            if (!prev || prev.status !== "in_progress") return prev;
+            const updatedLegs = prev.legs.map((leg) =>
+              normalizeTaskKey(leg.taskId) === normalizeTaskKey(taskId)
+                ? { ...leg, tableNo: newTableNo, status: "delivering" as const }
+                : leg,
+            );
+            return { ...prev, legs: updatedLegs };
+          });
+        }
+      }
+    };
+
     signalRConnection.on("AssistedDropoffArrived", handleAssistedDropoffArrived);
     signalRConnection.on("TaskStatusUpdated", handleTaskStatusUpdated);
     signalRConnection.on("RobotStatusUpdated", handleRobotStatusUpdated);
+    signalRConnection.on("TableRerouteConflictArrived", handleTableRerouteConflictArrived);
+    signalRConnection.on("DestinationChanged", handleRealtimeTaskRerouted);
+    signalRConnection.on("ReceiveTaskRerouted", handleRealtimeTaskRerouted);
+    signalRConnection.on("ReceiveTaskStatusChanged", handleReceiveTaskStatusChanged);
     return () => {
       signalRConnection.off("AssistedDropoffArrived", handleAssistedDropoffArrived);
       signalRConnection.off("TaskStatusUpdated", handleTaskStatusUpdated);
       signalRConnection.off("RobotStatusUpdated", handleRobotStatusUpdated);
+      signalRConnection.off("TableRerouteConflictArrived", handleTableRerouteConflictArrived);
+      signalRConnection.off("DestinationChanged", handleRealtimeTaskRerouted);
+      signalRConnection.off("ReceiveTaskRerouted", handleRealtimeTaskRerouted);
+      signalRConnection.off("ReceiveTaskStatusChanged", handleReceiveTaskStatusChanged);
     };
   }, [signalRConnection, playStationArrivalChime]);
 
@@ -1826,22 +1966,36 @@ export const StaffKdsPage: React.FC = () => {
   const handleOpenWorkflowRerouteModal = (preferredLegIndex?: number) => {
     const targetIdx = preferredLegIndex ?? (activeSequence?.currentLegIndex || 0);
     setRerouteLegIndex(targetIdx);
-    const curTable = activeSequence
-      ? activeSequence.legs[targetIdx]?.tableNo
-      : (targetIdx === 0 ? tray1Table : tray2Table);
-    const otherLegTable = activeSequence
-      ? activeSequence.legs.find((_, i) => i !== targetIdx)?.tableNo
-      : (targetIdx === 0 ? tray2Table : tray1Table);
+    const excludedTables = new Set<string>(
+      activeSequence
+        ? activeSequence.legs.map((l) => l.tableNo).filter(Boolean)
+        : [...tray1Tables, ...tray2Tables].filter(Boolean),
+    );
     const defaultTarget = tables.find(
       (t) =>
-        t.name !== curTable &&
-        t.name !== otherLegTable &&
+        !excludedTables.has(t.name) &&
         t.status !== "occupied" &&
         t.status !== "serving" &&
-        t.status !== "waiting",
+        t.status !== "waiting" &&
+        Boolean(t.stationId || t.stationName),
     );
     setRerouteNewTable(defaultTarget?.name || "");
     setIsRerouteModalOpen(true);
+  };
+
+  // Resolve real station ID for a table (without falling back to table GUID or Kitchen GUID)
+  const resolveTargetStationIdForTable = (targetNode?: TableNode): string => {
+    if (!targetNode) return "";
+    if (targetNode.stationId) return targetNode.stationId;
+    if (targetNode.stationName) {
+      const matchedStation = stations.find(
+        (s) =>
+          s.name.toLowerCase() === targetNode.stationName!.toLowerCase() ||
+          s.id === targetNode.stationName,
+      );
+      if (matchedStation) return matchedStation.id;
+    }
+    return "";
   };
 
   // Confirm Flexible Table Transfer according to current delivery stage
@@ -1874,18 +2028,46 @@ export const StaffKdsPage: React.FC = () => {
       );
     }
 
+    const targetNode = tables.find(
+      (t) =>
+        t.name.toLowerCase() === rerouteNewTable.toLowerCase() ||
+        t.id === rerouteNewTable ||
+        t.tableNo === rerouteNewTable,
+    );
+    const targetStationId = resolveTargetStationIdForTable(targetNode);
+    if (!targetStationId) {
+      showToast(
+        `Bàn ${rerouteNewTable} chưa được gán trạm dừng Robot trên sơ đồ. Vui lòng gán trạm trước khi đổi bàn.`,
+        "info",
+      );
+      return;
+    }
+
+    const isEtm14Conflict = (code?: string, message?: string): boolean => {
+      const upper = (code || "").toUpperCase();
+      const lower = (message || "").toLowerCase();
+      return (
+        upper === "ETM-14" ||
+        lower.includes("etm-14") ||
+        lower.includes("arrived") ||
+        lower.includes("trạm giao cũ")
+      );
+    };
+
+    const openArrivedConflictModal = () => {
+      setMissionPhase("arrived");
+      setRerouteConflictModal({
+        isOpen: true,
+        taskId: leg.taskId,
+        oldTableNo: leg.tableNo,
+        newTableNo: rerouteNewTable,
+        newStationId: targetStationId,
+      });
+      setIsRerouteModalOpen(false);
+    };
+
     setIsSubmittingReroute(true);
     try {
-      const targetNode = tables.find(
-        (t) =>
-          t.name.toLowerCase() === rerouteNewTable.toLowerCase() ||
-          t.id === rerouteNewTable,
-      );
-      const targetStationId =
-        targetNode?.stationId ||
-        targetNode?.id ||
-        "55555555-5555-5555-5555-555555555555";
-
       // If robot is in transit or arrived, call backend reroute
       if (isRobotInTransit || currentWorkflowStep === 2 || currentWorkflowStep === 3 || liveRobotStatus === "moving" || liveRobotStatus === "arrived") {
         const res = await robotService.rerouteTask(
@@ -1896,22 +2078,16 @@ export const StaffKdsPage: React.FC = () => {
         );
         if (res && res.success === false) {
           const msg = res.message || "";
-          if (
-            msg.toLowerCase().includes("arrived") ||
-            msg.toLowerCase().includes("trạm giao cũ")
-          ) {
-            setRerouteConflictModal({
-              isOpen: true,
-              taskId: leg.taskId,
-              oldTableNo: leg.tableNo,
-              newTableNo: rerouteNewTable,
-              newStationId: targetStationId,
-            });
-            setIsRerouteModalOpen(false);
+          if (isEtm14Conflict(res.errorCode, msg)) {
+            openArrivedConflictModal();
             return;
           }
+          showToast(msg || "Không thể chuyển hướng nhiệm vụ sang bàn này.", "info");
+          return;
         }
       }
+
+      const oldTableNo = leg.tableNo;
 
       // Update sequence in state
       setActiveSequence((prev) => {
@@ -1924,12 +2100,46 @@ export const StaffKdsPage: React.FC = () => {
         return { ...prev, legs: updatedLegs };
       });
 
-      // Synchronize Dispatch Console display route
+      // Synchronize Dispatch Console multi-table tray array without wiping sibling tables
       if (rerouteLegIndex === 0) {
-        setTray1Table(rerouteNewTable);
+        setTray1Tables((prev) =>
+          prev.includes(oldTableNo)
+            ? prev.map((t) => (t === oldTableNo ? rerouteNewTable : t))
+            : [rerouteNewTable],
+        );
       } else if (rerouteLegIndex === 1) {
-        setTray2Table(rerouteNewTable);
+        setTray2Tables((prev) =>
+          prev.includes(oldTableNo)
+            ? prev.map((t) => (t === oldTableNo ? rerouteNewTable : t))
+            : [rerouteNewTable],
+        );
       }
+
+      setRecentSqliteTasks((prev) =>
+        prev.map((rt) =>
+          normalizeTaskKey(rt.taskId) === normalizeTaskKey(leg.taskId)
+            ? { ...rt, destination: rerouteNewTable }
+            : rt,
+        ),
+      );
+
+      setTables((prev) =>
+        prev.map((t) => {
+          if (
+            (t.name.toLowerCase() === oldTableNo.toLowerCase() || t.tableNo === oldTableNo) &&
+            t.status === "serving"
+          ) {
+            return { ...t, status: "empty", assignedRobot: null };
+          }
+          if (
+            t.name.toLowerCase() === rerouteNewTable.toLowerCase() ||
+            t.tableNo === rerouteNewTable
+          ) {
+            return { ...t, status: "serving", assignedRobot: activeSequence.robotCode };
+          }
+          return t;
+        }),
+      );
 
       if (activeSequence.currentLegIndex === rerouteLegIndex) {
         setRobots((prev) =>
@@ -1948,28 +2158,8 @@ export const StaffKdsPage: React.FC = () => {
       setIsRerouteModalOpen(false);
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || "";
-      if (
-        msg.toLowerCase().includes("arrived") ||
-        msg.toLowerCase().includes("trạm giao cũ") ||
-        err?.response?.data?.taskId
-      ) {
-        const targetNode = tables.find(
-          (t) =>
-            t.name.toLowerCase() === rerouteNewTable.toLowerCase() ||
-            t.id === rerouteNewTable,
-        );
-        const targetStationId =
-          targetNode?.stationId ||
-          targetNode?.id ||
-          "55555555-5555-5555-5555-555555555555";
-        setRerouteConflictModal({
-          isOpen: true,
-          taskId: leg.taskId,
-          oldTableNo: leg.tableNo,
-          newTableNo: rerouteNewTable,
-          newStationId: targetStationId,
-        });
-        setIsRerouteModalOpen(false);
+      if (isEtm14Conflict(err?.response?.data?.errorCode, msg)) {
+        openArrivedConflictModal();
         return;
       }
       showToast(msg || "Lỗi khi chuyển hướng bàn, vui lòng thử lại.", "info");
@@ -2057,7 +2247,55 @@ export const StaffKdsPage: React.FC = () => {
     showToast("Đã tải xuống file CSV mẫu", "info");
   };
 
-  // Assign Station to Table (SLAM Waypoint)
+  // Pre-select & rank nearest Drop-off stations for F-09 restricted/unassigned tables
+  useEffect(() => {
+    if (!isAssignStationModalOpen || !assignStationTableId) {
+      setNearestStationCandidates([]);
+      return;
+    }
+    const targetTable = tables.find(
+      (t) => t.id === assignStationTableId || t.tableNo === assignStationTableId,
+    );
+    let cancelled = false;
+    const loadNearest = async () => {
+      const candidates = await tableService.getNearestDropoffStations(
+        targetTable?.id || assignStationTableId,
+        typeof targetTable?.worldX === "number" && typeof targetTable?.worldY === "number"
+          ? { tableWorldX: targetTable.worldX, tableWorldY: targetTable.worldY }
+          : undefined,
+      );
+      if (cancelled) return;
+      setNearestStationCandidates(candidates);
+      if (!targetTable?.stationId && candidates.length > 0) {
+        const recommended =
+          candidates.find((c) => c.isRecommendedNearest) || candidates[0];
+        if (recommended?.stationId) {
+          setAssignStationTargetStationId((prev) => prev || recommended.stationId);
+        }
+      }
+    };
+    void loadNearest();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAssignStationModalOpen, assignStationTableId, tables]);
+
+  const sortedStationsForAssignModal = useMemo(() => {
+    if (nearestStationCandidates.length === 0) return stations;
+    const rankMap = new Map(
+      nearestStationCandidates.map((c, idx) => [c.stationId, { idx, candidate: c }]),
+    );
+    return [...stations].sort((a, b) => {
+      const ra = rankMap.get(a.id);
+      const rb = rankMap.get(b.id);
+      if (ra && rb) return ra.idx - rb.idx;
+      if (ra) return -1;
+      if (rb) return 1;
+      return 0;
+    });
+  }, [stations, nearestStationCandidates]);
+
+  // Assign Station to Table (SLAM Waypoint — preserves table physical coordinates if already defined per F-09)
   const handleAssignStation = async () => {
     if (!assignStationTableId) {
       showToast("Vui lòng chọn bàn cần gán", "info");
@@ -2079,17 +2317,20 @@ export const StaffKdsPage: React.FC = () => {
           (s) => s.id === assignStationTargetStationId,
         );
         setTables((prev) =>
-          prev.map((t) =>
-            t.id === assignStationTableId || t.id === effectiveTableId
-              ? {
-                  ...t,
-                  stationId: assignStationTargetStationId || null,
-                  stationName: stationObj ? stationObj.name : null,
-                  worldX: stationObj ? stationObj.xCoord : t.worldX,
-                  worldY: stationObj ? stationObj.yCoord : t.worldY,
-                }
-              : t,
-          ),
+          prev.map((t) => {
+            if (t.id !== assignStationTableId && t.id !== effectiveTableId) return t;
+            const hasOwnWaypoint =
+              typeof t.worldX === "number" &&
+              typeof t.worldY === "number" &&
+              (t.worldX !== 0 || t.worldY !== 0);
+            return {
+              ...t,
+              stationId: assignStationTargetStationId || null,
+              stationName: stationObj ? stationObj.name : null,
+              worldX: hasOwnWaypoint ? t.worldX : stationObj ? stationObj.xCoord : t.worldX,
+              worldY: hasOwnWaypoint ? t.worldY : stationObj ? stationObj.yCoord : t.worldY,
+            };
+          }),
         );
         showToast(
           assignStationTargetStationId
@@ -2114,11 +2355,57 @@ export const StaffKdsPage: React.FC = () => {
     if (!rerouteConflictModal) return;
     setIsSubmittingManualHandover(true);
     try {
-      await robotService.confirmNextTable(
+      const res = await robotService.confirmNextTable(
         rerouteConflictModal.taskId,
         "Nhân viên KDS (Bàn giao thủ công)",
         false,
       );
+      if (!res.success) {
+        showToast(res.message || "Không thể xác nhận bàn giao thủ công.", "info");
+        return;
+      }
+
+      setRecentSqliteTasks((prev) =>
+        prev.map((rt) =>
+          normalizeTaskKey(rt.taskId) === normalizeTaskKey(rerouteConflictModal.taskId)
+            ? { ...rt, status: "completed" }
+            : rt,
+        ),
+      );
+
+      setActiveSequence((prev) => {
+        if (!prev || prev.status !== "in_progress") return prev;
+        const isLastLeg =
+          res.nextAction === "return_to_kitchen" ||
+          prev.currentLegIndex >= prev.legs.length - 1;
+        const updatedLegs = [...prev.legs];
+        if (updatedLegs[prev.currentLegIndex]) {
+          updatedLegs[prev.currentLegIndex] = {
+            ...updatedLegs[prev.currentLegIndex],
+            status: "completed",
+          };
+        }
+        if (!isLastLeg && updatedLegs[prev.currentLegIndex + 1]) {
+          updatedLegs[prev.currentLegIndex + 1] = {
+            ...updatedLegs[prev.currentLegIndex + 1],
+            status: "delivering",
+          };
+          setMissionPhase("moving");
+          return {
+            ...prev,
+            currentLegIndex: prev.currentLegIndex + 1,
+            legs: updatedLegs,
+          };
+        }
+        setMissionPhase("returning");
+        return {
+          ...prev,
+          currentLegIndex: prev.legs.length,
+          legs: updatedLegs,
+          status: "completed",
+        };
+      });
+
       showToast(
         `Đã xác nhận bàn giao thủ công cho bàn ${rerouteConflictModal.newTableNo}. Robot tự động quay về quầy bếp!`,
         "success",
@@ -2136,11 +2423,55 @@ export const StaffKdsPage: React.FC = () => {
     if (!rerouteConflictModal) return;
     setIsSubmittingSecondLeg(true);
     try {
-      await robotService.dispatchSecondLeg(
+      const res = await robotService.dispatchSecondLeg(
         rerouteConflictModal.taskId,
         rerouteConflictModal.newStationId,
         "Nhân viên KDS",
       );
+      if (!res.success) {
+        showToast(res.message || "Không thể điều phối chặng 2.", "info");
+        return;
+      }
+
+      setMissionPhase("moving");
+      setActiveSequence((prev) => {
+        if (!prev) return prev;
+        const updatedLegs = prev.legs.map((leg) =>
+          normalizeTaskKey(leg.taskId) === normalizeTaskKey(rerouteConflictModal.taskId)
+            ? {
+                ...leg,
+                tableNo: rerouteConflictModal.newTableNo,
+                status: "delivering" as const,
+              }
+            : leg,
+        );
+        return { ...prev, status: "in_progress", legs: updatedLegs };
+      });
+      setRecentSqliteTasks((prev) =>
+        prev.map((rt) =>
+          normalizeTaskKey(rt.taskId) === normalizeTaskKey(rerouteConflictModal.taskId)
+            ? {
+                ...rt,
+                destination: rerouteConflictModal.newTableNo,
+                status: "in_transit",
+              }
+            : rt,
+        ),
+      );
+      if (activeSequence?.robotCode) {
+        setRobots((prev) =>
+          prev.map((r) =>
+            r.code === activeSequence.robotCode
+              ? {
+                  ...r,
+                  status: "Delivering",
+                  currentZone: `Chặng 2 tới ${rerouteConflictModal.newTableNo}`,
+                }
+              : r,
+          ),
+        );
+      }
+
       showToast(
         `Đã phát lệnh Robot tự hành đi chặng 2 tới ${rerouteConflictModal.newTableNo}!`,
         "success",
@@ -3944,8 +4275,8 @@ export const StaffKdsPage: React.FC = () => {
                                 type="button"
                                 onClick={() => {
                                   setTray1OrderId(chip);
-                                  if (order.tableNo && !tray1Table) {
-                                    setTray1Table(order.tableNo);
+                                  if (order.tableNo && tray1Tables.length === 0) {
+                                    addTableToTray1(order.tableNo);
                                   }
                                 }}
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border cursor-pointer shrink-0 ${
@@ -4119,8 +4450,8 @@ export const StaffKdsPage: React.FC = () => {
                                 type="button"
                                 onClick={() => {
                                   setTray2OrderId(chip);
-                                  if (order.tableNo && !tray2Table) {
-                                    setTray2Table(order.tableNo);
+                                  if (order.tableNo && tray2Tables.length === 0) {
+                                    addTableToTray2(order.tableNo);
                                   }
                                 }}
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border cursor-pointer shrink-0 ${
@@ -5059,11 +5390,12 @@ export const StaffKdsPage: React.FC = () => {
                         setRerouteLegIndex(0);
                         const avail = tables.find(
                           (t) =>
-                            t.name !== tray1Table &&
-                            t.name !== tray2Table &&
+                            !tray1Tables.includes(t.name) &&
+                            !tray2Tables.includes(t.name) &&
                             t.status !== "occupied" &&
                             t.status !== "serving" &&
-                            t.status !== "waiting",
+                            t.status !== "waiting" &&
+                            Boolean(t.stationId || t.stationName),
                         );
                         setRerouteNewTable(avail?.name || "");
                       }}
@@ -5086,11 +5418,12 @@ export const StaffKdsPage: React.FC = () => {
                         setRerouteLegIndex(1);
                         const avail = tables.find(
                           (t) =>
-                            t.name !== tray2Table &&
-                            t.name !== tray1Table &&
+                            !tray2Tables.includes(t.name) &&
+                            !tray1Tables.includes(t.name) &&
                             t.status !== "occupied" &&
                             t.status !== "serving" &&
-                            t.status !== "waiting",
+                            t.status !== "waiting" &&
+                            Boolean(t.stationId || t.stationName),
                         );
                         setRerouteNewTable(avail?.name || "");
                       }}
@@ -5152,19 +5485,11 @@ export const StaffKdsPage: React.FC = () => {
                   <option value="">-- Chọn bàn đích chuyển hướng --</option>
                   {tables
                     .filter((t) => {
-                      const curTable = activeSequence
-                        ? activeSequence.legs[rerouteLegIndex]?.tableNo
-                        : rerouteLegIndex === 0
-                          ? tray1Table
-                          : tray2Table;
-                      const otherLegTable = activeSequence
-                        ? activeSequence.legs.find((_, i) => i !== rerouteLegIndex)?.tableNo
-                        : rerouteLegIndex === 0
-                          ? tray2Table
-                          : tray1Table;
+                      const excluded = activeSequence
+                        ? activeSequence.legs.map((l) => l.tableNo)
+                        : [...tray1Tables, ...tray2Tables];
                       return (
-                        t.name !== curTable &&
-                        t.name !== otherLegTable &&
+                        !excluded.includes(t.name) &&
                         t.status !== "occupied" &&
                         t.status !== "serving" &&
                         t.status !== "waiting" &&
@@ -5564,12 +5889,22 @@ export const StaffKdsPage: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
                 >
                   <option value="">-- Hủy gán trạm (Không gán xe) --</option>
-                  {stations.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (X: {s.xCoord}, Y: {s.yCoord}) •{" "}
-                      {s.stationType || "Bàn ăn"}
-                    </option>
-                  ))}
+                  {sortedStationsForAssignModal.map((s) => {
+                    const candidate = nearestStationCandidates.find(
+                      (c) => c.stationId === s.id,
+                    );
+                    const distanceHint =
+                      candidate && typeof candidate.distanceMeters === "number"
+                        ? ` • Cách ${candidate.distanceMeters}m${candidate.isRecommendedNearest ? " (Gần nhất)" : ""}`
+                        : "";
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.name} (X: {s.xCoord}, Y: {s.yCoord}) •{" "}
+                        {s.stationType || "Bàn ăn"}
+                        {distanceHint}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200 text-[11px] text-purple-900 space-y-1">

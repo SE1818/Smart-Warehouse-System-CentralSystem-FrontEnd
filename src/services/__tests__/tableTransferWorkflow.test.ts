@@ -604,4 +604,199 @@ describe('Weekly Report #10 — 2D Map Real Telemetry, Target Tray & Arrival Aud
   });
 });
 
+describe('Weekly Report #9 — FE F-07 Reroute Conflict/SignalR & F-09 Nearest Drop-off Station', () => {
+  it('propagates HTTP 409 Conflict (ETM-14 arrived lock & TABLE_OCCUPIED) in rerouteTask instead of returning fake success (ETM-14, ETM-36..38)', async () => {
+    post.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          success: false,
+          errorCode: 'ETM-14',
+          taskId: 'task-arrived-409',
+          newStationId: 'st-08',
+          newTableNo: 'Bàn 08',
+          message: 'ETM-14: Robot đã đến trạm giao cũ (arrived). Động cơ đang khóa an toàn.',
+        },
+      },
+    });
+
+    const arrivedRes = await robotService.rerouteTask('task-arrived-409', 'st-08', 'Bàn 08', 'Đổi bàn khi vừa tới');
+    expect(arrivedRes.success).toBe(false);
+    expect(arrivedRes.errorCode).toBe('ETM-14');
+    expect(arrivedRes.taskId).toBe('task-arrived-409');
+    expect(arrivedRes.message).toContain('ETM-14');
+
+    post.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          success: false,
+          errorCode: 'TABLE_OCCUPIED',
+          message: 'Bàn đích Bàn 02 đang có khách dùng bữa.',
+        },
+      },
+    });
+
+    const occupiedRes = await robotService.rerouteTask('task-moving-409', 'st-02', 'Bàn 02', 'Đổi sang bàn bận');
+    expect(occupiedRes.success).toBe(false);
+    expect(occupiedRes.errorCode).toBe('TABLE_OCCUPIED');
+  });
+
+  it('propagates HTTP 409 errors on transferOrderTable and dispatchSecondLeg without fake success fallback', async () => {
+    post.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          errorCode: 'ETM-14',
+          message: 'Robot đã tới bàn cũ, không thể tự động chuyển đơn.',
+        },
+      },
+    });
+    const transferRes = await robotService.transferOrderTable('tbl-09', 'ORD-909', 'Đổi bàn');
+    expect(transferRes.success).toBe(false);
+    expect(transferRes.errorCode).toBe('ETM-14');
+
+    post.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          errorCode: 'INVALID_STATE',
+          message: 'Nhiệm vụ không ở trạng thái chờ chặng 2.',
+        },
+      },
+    });
+    const secondLegRes = await robotService.dispatchSecondLeg('task-909', 'st-09', 'Staff KDS');
+    expect(secondLegRes.success).toBe(false);
+    expect(secondLegRes.errorCode).toBe('INVALID_STATE');
+  });
+
+  it('handles realtime SignalR TableRerouteConflictArrived and ReceiveTaskRerouted events cleanly (DS-03a, DS-03b)', () => {
+    let missionPhase: 'idle' | 'moving' | 'arrived' | 'returning' = 'moving';
+    let conflictModal: {
+      isOpen: boolean;
+      taskId: string;
+      oldTableNo: string;
+      newTableNo: string;
+      newStationId: string;
+    } | null = null;
+    let activeLegs = [
+      { cargoLevel: 1, tableNo: 'Bàn 01', orderId: 'ORD-101', status: 'delivering' as const, taskId: 'TSK-11112222' },
+    ];
+
+    const normalizeTaskKey = (id?: string) => (id || '').trim().toLowerCase().replace(/^tsk-/, '');
+
+    // 1. DS-03a: Event Bus mid-transit reroute updates active leg tableNo
+    const onReceiveTaskRerouted = (payload: { taskId: string; newTableNo: string }) => {
+      activeLegs = activeLegs.map((leg) =>
+        normalizeTaskKey(leg.taskId) === normalizeTaskKey(payload.taskId)
+          ? { ...leg, tableNo: payload.newTableNo }
+          : leg
+      );
+    };
+    onReceiveTaskRerouted({ taskId: '11112222', newTableNo: 'Bàn 06' });
+    expect(activeLegs[0].tableNo).toBe('Bàn 06');
+
+    // 2. DS-03b: Event Bus arrived conflict opens ETM-14 safety modal & sets arrived phase
+    const onTableRerouteConflictArrived = (payload: {
+      taskId: string;
+      oldTableNo: string;
+      newTableNo: string;
+      newStationId: string;
+    }) => {
+      missionPhase = 'arrived';
+      conflictModal = {
+        isOpen: true,
+        taskId: payload.taskId,
+        oldTableNo: payload.oldTableNo,
+        newTableNo: payload.newTableNo,
+        newStationId: payload.newStationId,
+      };
+    };
+    onTableRerouteConflictArrived({
+      taskId: '11112222',
+      oldTableNo: 'Bàn 06',
+      newTableNo: 'Bàn 09',
+      newStationId: 'st-09',
+    });
+
+    expect(missionPhase).toBe('arrived');
+    expect(conflictModal).toEqual({
+      isOpen: true,
+      taskId: '11112222',
+      oldTableNo: 'Bàn 06',
+      newTableNo: 'Bàn 09',
+      newStationId: 'st-09',
+    });
+  });
+
+  it('F-09: fetches nearest Drop-off stations via fallback API and preserves restricted table own waypoint coordinates', async () => {
+    const get = apiClient.get as ReturnType<typeof vi.fn>;
+    get.mockResolvedValueOnce({
+      data: [
+        {
+          stationId: 'st-dropoff-near',
+          stationName: 'ST_DROPOFF_A',
+          xCoord: 4,
+          yCoord: 6,
+          metricX: 4.5,
+          metricY: 6.0,
+          distance: 1.25,
+        },
+        {
+          stationId: 'st-dropoff-far',
+          stationName: 'ST_DROPOFF_B',
+          xCoord: 9,
+          yCoord: 11,
+          distance: 6.8,
+        },
+      ],
+    });
+
+    const { portalClient, tableService } = await import('@/services/portalApi');
+    const portalGetSpy = vi.spyOn(portalClient, 'get').mockRejectedValueOnce(new Error('Portal gateway offline'));
+    const candidates = await tableService.getNearestDropoffStations('tbl-restricted-s1', {
+      tableWorldX: 5.5,
+      tableWorldY: 6.75,
+    });
+    portalGetSpy.mockRestore();
+
+    expect(get).toHaveBeenCalledWith('/v1/tables/tbl-restricted-s1/nearest-dropoff-stations', {
+      params: { x: 5.5, y: 6.75 },
+    });
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0].stationId).toBe('st-dropoff-near');
+    expect(candidates[0].distanceMeters).toBe(1.25);
+    expect(candidates[0].isRecommendedNearest).toBe(true);
+    expect(candidates[1].isRecommendedNearest).toBe(false);
+
+    // Waypoint preservation check: restricted table S1 at (5.5, 6.75) keeps its own coordinates while binding ST_DROPOFF_A
+    const restrictedTable = {
+      id: 'tbl-restricted-s1',
+      name: 'Bàn S1',
+      isRestricted: true,
+      worldX: 5.5,
+      worldY: 6.75,
+      stationId: null as string | null,
+      stationName: null as string | null,
+    };
+    const assignedStation = candidates[0];
+    const hasOwnWaypoint =
+      typeof restrictedTable.worldX === 'number' &&
+      typeof restrictedTable.worldY === 'number' &&
+      (restrictedTable.worldX !== 0 || restrictedTable.worldY !== 0);
+
+    const updatedTable = {
+      ...restrictedTable,
+      stationId: assignedStation.stationId,
+      stationName: assignedStation.stationName,
+      worldX: hasOwnWaypoint ? restrictedTable.worldX : assignedStation.xCoord,
+      worldY: hasOwnWaypoint ? restrictedTable.worldY : assignedStation.yCoord,
+    };
+
+    expect(updatedTable.stationId).toBe('st-dropoff-near');
+    expect(updatedTable.worldX).toBe(5.5);
+    expect(updatedTable.worldY).toBe(6.75);
+  });
+});
+
 

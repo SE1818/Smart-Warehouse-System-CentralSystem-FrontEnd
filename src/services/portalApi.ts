@@ -755,6 +755,89 @@ export const tableService = {
     }
   },
 
+  getNearestDropoffStations: async (
+    tableId: string,
+    params?: { x?: number; y?: number; tableWorldX?: number; tableWorldY?: number }
+  ): Promise<
+    Array<{
+      stationId: string;
+      stationName: string;
+      stationType: string;
+      xCoord: number;
+      yCoord: number;
+      distanceMeters: number;
+      isRecommendedNearest: boolean;
+    }>
+  > => {
+    const x = params?.x ?? params?.tableWorldX;
+    const y = params?.y ?? params?.tableWorldY;
+    const queryParams = typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined;
+    const normalizeCandidates = (raw: any[]) =>
+      raw.map((item, idx) => ({
+        stationId: String(item.stationId ?? item.StationId ?? ''),
+        stationName: String(item.stationName ?? item.StationName ?? ''),
+        stationType: String(item.stationType ?? item.StationType ?? 'Dropoff'),
+        xCoord: Number(item.metricX ?? item.xCoord ?? item.XCoord ?? 0),
+        yCoord: Number(item.metricY ?? item.yCoord ?? item.YCoord ?? 0),
+        distanceMeters: Number(item.distance ?? item.Distance ?? item.distanceMeters ?? 0),
+        isRecommendedNearest:
+          typeof item.isRecommendedNearest === 'boolean' ? item.isRecommendedNearest : idx === 0,
+      }));
+
+    try {
+      const res = await portalClient.get(`/tables/${tableId}/nearest-dropoff-stations`, { params: queryParams });
+      return Array.isArray(res.data) ? normalizeCandidates(res.data) : [];
+    } catch {
+      try {
+        const edgeRes = await apiClient.get(`/v1/tables/${tableId}/nearest-dropoff-stations`, { params: queryParams });
+        return Array.isArray(edgeRes.data) ? normalizeCandidates(edgeRes.data) : [];
+      } catch {
+        return [];
+      }
+    }
+  },
+
+  assignNearestDropoffStation: async (
+    tableId: string,
+    payload?: { x?: number; y?: number; tableWorldX?: number; tableWorldY?: number; isRestricted?: boolean }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    stationId?: string;
+    stationName?: string;
+    distanceMeters?: number;
+    worldX?: number;
+    worldY?: number;
+  }> => {
+    const x = payload?.x ?? payload?.tableWorldX;
+    const y = payload?.y ?? payload?.tableWorldY;
+    const body = typeof x === 'number' && typeof y === 'number' ? { x, y } : {};
+    const mapAssignNearestResponse = (data: any) => {
+      const tbl = data?.table || data;
+      return {
+        success: data?.success !== false,
+        message: data?.message || 'Đã gán trạm Drop-off gần nhất thành công',
+        stationId: tbl?.stationId ?? data?.stationId,
+        stationName: tbl?.stationName ?? data?.stationName,
+        distanceMeters: data?.distance ?? data?.distanceMeters,
+        worldX: tbl?.worldX ?? tbl?.xCoord ?? data?.worldX,
+        worldY: tbl?.worldY ?? tbl?.yCoord ?? data?.worldY,
+      };
+    };
+
+    try {
+      const res = await portalClient.post(`/tables/${tableId}/assign-nearest-dropoff`, body);
+      return mapAssignNearestResponse(res.data);
+    } catch (err: any) {
+      try {
+        const edgeRes = await apiClient.post(`/v1/tables/${tableId}/assign-nearest-dropoff`, body);
+        return mapAssignNearestResponse(edgeRes.data);
+      } catch {
+        return { success: false, message: extractErrorMessage(err, 'Lỗi tự gán trạm Drop-off gần nhất') };
+      }
+    }
+  },
+
   batchAssignStations: async (storeId?: string, assignments: { tableId?: string; tableNo?: string; stationId?: string; stationName?: string }[] = []): Promise<{ success: boolean; totalSuccess: number; totalFailed: number; messages: string[] }> => {
     const effectiveStoreId = resolveEffectiveStoreId(storeId);
     try {
