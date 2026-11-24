@@ -1,6 +1,6 @@
 import apiClient from './api';
 
-import type { Robot, Area, Station, Order } from '@/types/robot';
+import type { Robot, Area, Station, StationType, Order } from '@/types/robot';
 
 import { sqliteService } from './sqliteService';
 
@@ -809,7 +809,7 @@ export interface SlamMapStationDto {
 
   name: string;
 
-  stationType: string;
+  stationType: StationType;
 
   worldX: number;
 
@@ -831,7 +831,7 @@ export interface SlamMapWaypointDto {
 
   theta?: number;
 
-  type?: string;
+  type?: StationType;
 
 }
 

@@ -24,14 +24,25 @@ export interface Area {
   updatedAt?: string;
 }
 
+export type StationType =
+  | 'Kitchen'
+  | 'DiningTable'
+  | 'ChargingDock'
+  | 'Standby'
+  | 'Pickup'
+  | 'Dropoff'
+  | 'Charging';
+
+export type StationStatus = 'Available' | 'Occupied' | 'Maintenance' | 'Disabled';
+
 export interface Station {
   id: string;
   name: string;
-  stationType: 'pickup' | 'dropoff' | 'charging' | string;
+  stationType: StationType;
   xCoord: number;
   yCoord: number;
   areaId: string;
-  status?: string;
+  status?: StationStatus;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -1392,7 +1392,7 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       // 1. Call Backend API /v1/tasks/sequence/start
-      const kitchenStation = stations.find((s) => s.stationType === "kitchen" || s.name.toLowerCase().includes("bếp") || s.name.toLowerCase().includes("st05")) || stations[0];
+      const kitchenStation = stations.find((s) => s.stationType === "Kitchen" || s.stationType === "Pickup" || s.name.toLowerCase().includes("bếp") || s.name.toLowerCase().includes("st05")) || stations[0];
       const result = await robotService.startServiceSequence({
         robotId: effectiveRobot.id,
         fromStationId: kitchenStation?.id,

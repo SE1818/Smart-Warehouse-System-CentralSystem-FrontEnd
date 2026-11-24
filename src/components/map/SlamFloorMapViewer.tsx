@@ -221,7 +221,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       return stations.map((s: any) => ({
         id: s.id?.toString() || s.stationId || '',
         name: s.name || s.stationName || `Trạm ${s.id}`,
-        stationType: s.stationType || s.type || 'dropoff',
+        stationType: s.stationType || s.type || 'Dropoff',
         status: s.status || 'active',
         worldX:
           typeof s.worldX === 'number'
@@ -694,7 +694,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     // 2.1 Stations
     resolvedStations.forEach((st) => {
       const stPx = rosToCanvasPixel(st.worldX, st.worldY, effectiveMetadata);
-      const isPickup = st.stationType.toLowerCase() === 'pickup' || st.stationType.toLowerCase() === 'kitchen';
+      const isPickup = st.stationType === 'Pickup' || st.stationType === 'Kitchen';
       ctx.fillStyle = isPickup ? '#0284c7' : '#eab308';
       ctx.beginPath();
       ctx.roundRect(stPx.x - 30, stPx.y - 20, 60, 40, 6);

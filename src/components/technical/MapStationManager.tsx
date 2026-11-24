@@ -20,6 +20,33 @@ import {
   type SlamMapStationDto,
 } from '@/services/robot';
 import { SlamFloorMapViewer, type MapTableNode, type MapRobotItem } from '@/components/map/SlamFloorMapViewer';
+import type { StationType } from '@/types/robot';
+
+/**
+ * Chuẩn hóa chuỗi StationType từ file JSON nạp vào (có thể là lowercase kiểu ROS cũ)
+ * sang PascalCase chuẩn của hệ thống ngay tại biên nhập dữ liệu.
+ */
+function normalizeStationType(raw?: string | null): StationType {
+  const normalized = (raw || '').trim().toLowerCase().replace(/[\s_-]/g, '');
+  switch (normalized) {
+    case 'kitchen':
+      return 'Kitchen';
+    case 'diningtable':
+      return 'DiningTable';
+    case 'chargingdock':
+      return 'ChargingDock';
+    case 'standby':
+    case 'waiting':
+      return 'Standby';
+    case 'pickup':
+      return 'Pickup';
+    case 'charging':
+      return 'Charging';
+    case 'dropoff':
+    default:
+      return 'Dropoff';
+  }
+}
 
 /**
  * Phân giải file ảnh định dạng Netpbm PGM (.pgm) từ ROS 2 Nav2/Cartographer sang PNG DataURL
@@ -113,7 +140,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
   // Manual Station Editor State
   const [stationList, setStationList] = useState<SlamMapWaypointDto[]>([]);
   const [newStationName, setNewStationName] = useState<string>('');
-  const [newStationType, setNewStationType] = useState<'pickup' | 'dropoff' | 'charging' | 'waiting'>('dropoff');
+  const [newStationType, setNewStationType] = useState<StationType>('Dropoff');
   const [newStationX, setNewStationX] = useState<number>(0);
   const [newStationY, setNewStationY] = useState<number>(0);
 
@@ -148,7 +175,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
           : (map.stations || []).map((s: SlamMapStationDto) => ({
               id: s.id,
               name: s.name,
-              type: s.stationType || 'dropoff',
+              type: s.stationType || 'Dropoff',
               worldX: s.worldX,
               worldY: s.worldY,
             }));
@@ -217,17 +244,20 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
             parsed = raw.map((item, idx) => ({
               id: item.id || `WP-${idx + 1}`,
               name: item.name || item.stationName || `Trạm ${idx + 1}`,
-              type: item.type || item.stationType || 'dropoff',
+              type: normalizeStationType(item.type || item.stationType),
               worldX: typeof item.worldX === 'number' ? item.worldX : (typeof item.metricX === 'number' ? item.metricX : (typeof item.x === 'number' ? item.x : 0)),
               worldY: typeof item.worldY === 'number' ? item.worldY : (typeof item.metricY === 'number' ? item.metricY : (typeof item.y === 'number' ? item.y : 0)),
             }));
           } else if (raw.waypoints && Array.isArray(raw.waypoints)) {
-            parsed = raw.waypoints;
+            parsed = raw.waypoints.map((w: any) => ({
+              ...w,
+              type: normalizeStationType(w.type || w.stationType),
+            }));
           } else if (raw.stations && Array.isArray(raw.stations)) {
             parsed = raw.stations.map((s: any) => ({
               id: s.id || `ST-${s.name}`,
               name: s.name,
-              type: s.stationType || 'dropoff',
+              type: normalizeStationType(s.stationType || s.type),
               worldX: s.worldX ?? s.x ?? 0,
               worldY: s.worldY ?? s.y ?? 0,
             }));
@@ -687,13 +717,13 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                 <label className="font-bold text-slate-700 block mb-1">Loại Trạm:</label>
                 <select
                   value={newStationType}
-                  onChange={(e) => setNewStationType(e.target.value as any)}
+                  onChange={(e) => setNewStationType(e.target.value as StationType)}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-xs"
                 >
-                  <option value="pickup">Trạm Lấy Món / Bếp</option>
-                  <option value="dropoff">Trạm Giao Món / Bàn</option>
-                  <option value="charging">Trạm Thay Pin</option>
-                  <option value="waiting">Điểm Chờ / Nghỉ</option>
+                  <option value="Pickup">Trạm Lấy Món / Bếp</option>
+                  <option value="Dropoff">Trạm Giao Món / Bàn</option>
+                  <option value="Charging">Trạm Thay Pin</option>
+                  <option value="Standby">Điểm Chờ / Nghỉ</option>
                 </select>
               </div>
 
@@ -788,19 +818,19 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                           <td className="py-2.5 px-3">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border ${
-                                st.type === 'pickup'
+                                st.type === 'Pickup' || st.type === 'Kitchen'
                                   ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : st.type === 'charging'
+                                  : st.type === 'Charging' || st.type === 'ChargingDock'
                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : st.type === 'waiting'
+                                  : st.type === 'Standby'
                                   ? 'bg-purple-50 text-purple-700 border-purple-200'
                                   : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               }`}
                             >
-                              {st.type === 'pickup' && 'Trạm Bếp'}
-                              {st.type === 'charging' && 'Trạm Thay Pin'}
-                              {st.type === 'waiting' && 'Điểm Chờ'}
-                              {st.type === 'dropoff' && 'Trạm Bàn'}
+                              {(st.type === 'Pickup' || st.type === 'Kitchen') && 'Trạm Bếp'}
+                              {(st.type === 'Charging' || st.type === 'ChargingDock') && 'Trạm Thay Pin'}
+                              {st.type === 'Standby' && 'Điểm Chờ'}
+                              {(st.type === 'Dropoff' || st.type === 'DiningTable' || !st.type) && 'Trạm Bàn'}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 font-mono text-slate-700">
