@@ -89,13 +89,27 @@ describe('App routing and integration', () => {
     await waitFor(() => expect(screen.getByText('Reset Password Page')).toBeInTheDocument());
   });
 
-  /* ── Technical Engineer & Staff KDS routes ── */
+  /* ── Technician & Staff KDS routes ── */
 
-  it('renders AdminTechnicalPage on /technical when authenticated as technical', async () => {
-    storeAuth('technical');
+  it('renders AdminTechnicalPage on /technical when authenticated as technician', async () => {
+    storeAuth('Technician');
     window.history.pushState(null, '', '/technical');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
+  });
+
+  it('renders AdminTechnicalPage on /technical when authenticated as SuperAdmin', async () => {
+    storeAuth('SuperAdmin');
+    window.history.pushState(null, '', '/technical');
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
+  });
+
+  it('blocks Admin from /technical and redirects to /unauthorized', async () => {
+    storeAuth('Admin');
+    window.history.pushState(null, '', '/technical');
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('403')).toBeInTheDocument());
   });
 
   it('redirects unauthenticated user from /technical to /login', async () => {
@@ -105,37 +119,37 @@ describe('App routing and integration', () => {
   });
 
   it('renders StaffKdsPage on /staff when authenticated as staff', async () => {
-    storeAuth('staff');
+    storeAuth('Staff');
     window.history.pushState(null, '', '/staff');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('staff-page')).toBeInTheDocument());
   });
 
   it('renders StoreEdgeSetupPage on /edge-setup when authenticated', async () => {
-    storeAuth('technical');
+    storeAuth('Technician');
     window.history.pushState(null, '', '/edge-setup');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('edge-setup-page')).toBeInTheDocument());
   });
 
   it('renders RobotMonitorPage on /robot-monitor when authenticated', async () => {
-    storeAuth('technical');
+    storeAuth('Technician');
     window.history.pushState(null, '', '/robot-monitor');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('robot-monitor-page')).toBeInTheDocument());
   });
 
-  /* ── Admin route redirects to /technical ── */
+  /* ── Admin route redirects to /technical for SuperAdmin ── */
 
-  it('redirects /admin to /technical', async () => {
-    storeAuth('admin');
+  it('redirects /admin to /technical for SuperAdmin', async () => {
+    storeAuth('SuperAdmin');
     window.history.pushState(null, '', '/admin');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());
   });
 
-  it('redirects /admin/dashboard to /technical', async () => {
-    storeAuth('admin');
+  it('redirects /admin/dashboard to /technical for SuperAdmin', async () => {
+    storeAuth('SuperAdmin');
     window.history.pushState(null, '', '/admin/dashboard');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('technical-page')).toBeInTheDocument());

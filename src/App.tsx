@@ -96,7 +96,7 @@ function App() {
 					<Route
 						path="/technical"
 						element={
-							<ProtectedRoute allowedRoles={['Technical', 'Admin']}>
+							<ProtectedRoute allowedRoles={['Technician', 'SuperAdmin']}>
 								<AdminTechnicalPage />
 							</ProtectedRoute>
 						}
@@ -104,7 +104,7 @@ function App() {
 					<Route
 						path="/staff"
 						element={
-							<ProtectedRoute allowedRoles={['Staff', 'Admin']}>
+							<ProtectedRoute allowedRoles={['Staff', 'SuperAdmin']}>
 								<StaffKdsPage />
 							</ProtectedRoute>
 						}
@@ -114,7 +114,7 @@ function App() {
 					<Route
 						path="/edge-setup"
 						element={
-							<ProtectedRoute allowedRoles={['Technical', 'Admin']}>
+							<ProtectedRoute allowedRoles={['Technician', 'SuperAdmin']}>
 								<StoreEdgeSetupPage />
 							</ProtectedRoute>
 						}
@@ -122,7 +122,7 @@ function App() {
 					<Route
 						path="/robot-monitor"
 						element={
-							<ProtectedRoute allowedRoles={['Technical', 'Admin']}>
+							<ProtectedRoute allowedRoles={['Technician', 'SuperAdmin']}>
 								<RobotMonitorPage />
 							</ProtectedRoute>
 						}

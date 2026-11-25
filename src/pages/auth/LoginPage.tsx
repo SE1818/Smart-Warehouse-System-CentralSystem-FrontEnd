@@ -111,7 +111,6 @@ export function LoginPage() {
       const roleNormalized = (res.role || '').toLowerCase().replace(/[-_\s]/g, '');
       const isSuperAdmin =
         roleNormalized === 'superadmin' ||
-        roleNormalized === 'admin' ||
         Boolean(tenantInfo?.isSuperAdmin);
 
       if (edgeInfo && edgeInfo.isEdgeNode && edgeInfo.subdomain) {
@@ -165,9 +164,17 @@ export function LoginPage() {
         roleStr.includes('phucvu')
       ) {
         navigate('/staff');
-      } else {
-        // Technical Engineer / Kỹ sư kỹ thuật / Quản trị viên
+      } else if (
+        isSuperAdmin ||
+        roleStr.includes('tech') ||
+        roleStr.includes('engineer') ||
+        roleStr.includes('ky thuat')
+      ) {
+        // Technician / SuperAdmin
         navigate('/technical');
+      } else {
+        // Admin only uses the SaaS Admin Portal, not Technician/KDS console
+        navigate('/unauthorized');
       }
     } catch (err) {
       console.error('API error during login', err);

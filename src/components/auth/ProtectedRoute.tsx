@@ -11,7 +11,7 @@ export const isSuperAdminUser = (user: any): boolean => {
   if (!user) return false;
   if (user.isSuperAdmin) return true;
   const role = (user.role || '').toLowerCase().replace(/[-_\s]/g, '');
-  return role === 'superadmin' || role === 'admin';
+  return role === 'superadmin';
 };
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
@@ -81,7 +81,6 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
           cleanRole.includes('tech') ||
           cleanRole.includes('engineer') ||
           cleanRole.includes('ky thuat') ||
-          userRole === 'admin' ||
           userRole === 'superadmin' ||
           userRole === 'super_admin'
         );
