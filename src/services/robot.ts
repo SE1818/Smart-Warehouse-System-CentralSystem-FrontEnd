@@ -633,33 +633,76 @@ export const robotService = {
     }
   },
 
-  // Technician Maintenance Mode
-  async generateMaintenancePin(robotId: string): Promise<{ success: boolean; pin: string; expiresInSeconds: number; message?: string }> {
+  // Technician Maintenance Mode (LOTO — Personal Staff PIN)
+  async getMaintenanceStatus(robotId: string): Promise<MaintenanceStatusResponse | null> {
     try {
-      const response = await apiClient.post<{ success: boolean; pin: string; expiresInSeconds: number; message?: string }>(`/v1/robots/${robotId}/maintenance-pin`);
+      const response = await apiClient.get<MaintenanceStatusResponse>(`/v1/robots/${robotId}/maintenance-status`);
       return response.data;
-    } catch (err: any) {
-      console.error('[robotService] Lỗi tạo mã PIN bảo trì:', err);
-      throw err;
+    } catch (err) {
+      console.warn('[robotService] Không thể tải trạng thái khóa bảo trì:', err);
+      return null;
     }
   },
 
-  async setMaintenanceMode(robotId: string, technicianPin: string, enable: boolean): Promise<{ success: boolean; message: string; status?: string }> {
+  async setMaintenanceMode(
+    robotId: string,
+    technicianPin: string,
+    enable: boolean,
+    reason?: string,
+    forceOverride: boolean = false
+  ): Promise<SetMaintenanceModeResponse> {
     try {
-      const response = await apiClient.post<{ success: boolean; message: string; status?: string }>(`/v1/robots/${robotId}/maintenance-mode`, {
+      const response = await apiClient.post<SetMaintenanceModeResponse>(`/v1/robots/${robotId}/maintenance-mode`, {
         technicianPin,
         enable,
+        reason: reason?.trim() || undefined,
+        forceOverride,
       });
       return response.data;
     } catch (err: any) {
-      const msg = err.response?.data?.message || (enable ? 'Không thể kích hoạt chế độ bảo trì' : 'Không thể kết thúc chế độ bảo trì');
-      throw new Error(msg);
+      const errData = err?.response?.data;
+      const msg = errData?.message || (enable ? 'Không thể kích hoạt chế độ bảo trì' : 'Không thể kết thúc chế độ bảo trì');
+      const error = new Error(msg) as Error & {
+        errorCode?: string;
+        lockInfo?: MaintenanceLockInfoDto | null;
+      };
+      error.errorCode = errData?.errorCode;
+      error.lockInfo = errData?.lockInfo ?? null;
+      throw error;
     }
   }
 
 };
 
 
+
+export interface MaintenanceLockInfoDto {
+  lockedByStaffId: string;
+  lockedByName: string;
+  lockedByRole: string;
+  lockedAtUtc: string;
+  reason?: string | null;
+}
+
+export interface MaintenanceStatusResponse {
+  success: boolean;
+  amrId: string;
+  robotName: string;
+  isInMaintenance: boolean;
+  status: string;
+  lockInfo?: MaintenanceLockInfoDto | null;
+}
+
+export interface SetMaintenanceModeResponse {
+  success: boolean;
+  amrId?: string;
+  maintenanceMode?: boolean;
+  status?: string;
+  actorName?: string | null;
+  wasAdminOverride?: boolean;
+  lockInfo?: MaintenanceLockInfoDto | null;
+  message: string;
+}
 
 export interface CargoTrayAssignmentDto {
 

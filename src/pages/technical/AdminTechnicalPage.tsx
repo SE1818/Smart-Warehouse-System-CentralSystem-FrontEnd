@@ -20,8 +20,6 @@ import {
   Store,
   Wrench,
   KeyRound,
-  Copy,
-  Check,
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
@@ -331,34 +329,22 @@ export const AdminTechnicalPage: React.FC = () => {
   const [newMissionDest, setNewMissionDest] = useState('');
   const [newMissionRobot, setNewMissionRobot] = useState('');
 
-  // Maintenance Mode Modal State (Dynamic Technician PIN)
+  // Maintenance Mode Modal State (LOTO Personal Staff PIN)
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [targetRobotForMaintenance, setTargetRobotForMaintenance] = useState<AMRNode | null>(null);
   const [maintenancePinInput, setMaintenancePinInput] = useState('');
-  const [generatedPin, setGeneratedPin] = useState<string | null>(null);
-  const [pinExpiresAt, setPinExpiresAt] = useState<number | null>(null);
-  const [pinCountdown, setPinCountdown] = useState<number>(0);
-  const [isGeneratingPin, setIsGeneratingPin] = useState(false);
+  const [maintenanceReason, setMaintenanceReason] = useState('');
+  const [forceAdminOverride, setForceAdminOverride] = useState(false);
+  const [maintenanceLockInfo, setMaintenanceLockInfo] = useState<{
+    lockedByStaffId: string;
+    lockedByName: string;
+    lockedByRole: string;
+    lockedAtUtc: string;
+    reason?: string | null;
+  } | null>(null);
+  const [isLoadingMaintenanceStatus, setIsLoadingMaintenanceStatus] = useState(false);
   const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
-  const [copiedPin, setCopiedPin] = useState(false);
-
-  useEffect(() => {
-    if (!pinExpiresAt) {
-      setPinCountdown(0);
-      return;
-    }
-    const tick = () => {
-      const remaining = Math.max(0, Math.floor((pinExpiresAt - Date.now()) / 1000));
-      setPinCountdown(remaining);
-      if (remaining <= 0) {
-        setGeneratedPin(null);
-        setPinExpiresAt(null);
-      }
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [pinExpiresAt]);
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
 
   const getRealRobotGuid = (node: AMRNode): string => {
     if (node.robotGuid) return node.robotGuid;
@@ -366,59 +352,55 @@ export const AdminTechnicalPage: React.FC = () => {
     return match?.id || node.id;
   };
 
-  const handleOpenMaintenanceModal = (robot: AMRNode) => {
+  const handleOpenMaintenanceModal = async (robot: AMRNode) => {
     setTargetRobotForMaintenance(robot);
     setMaintenancePinInput('');
-    setGeneratedPin(null);
-    setPinExpiresAt(null);
-    setCopiedPin(false);
+    setMaintenanceReason('');
+    setForceAdminOverride(false);
+    setMaintenanceLockInfo(null);
+    setMaintenanceError(null);
     setShowMaintenanceModal(true);
-  };
 
-  const handleGeneratePin = async () => {
-    if (!targetRobotForMaintenance) return;
+    const robotId = getRealRobotGuid(robot);
     try {
-      setIsGeneratingPin(true);
-      const robotId = getRealRobotGuid(targetRobotForMaintenance);
-      const res = await robotService.generateMaintenancePin(robotId);
-      if (res && res.pin) {
-        setGeneratedPin(res.pin);
-        setPinExpiresAt(Date.now() + (res.expiresInSeconds || 600) * 1000);
-        setMaintenancePinInput(res.pin);
-        showToast('Đã tạo mã PIN kỹ thuật viên động thành công! Hiệu lực 10 phút.', 'success');
-      } else {
-        showToast('Không nhận được mã PIN từ máy chủ.', 'warning');
+      setIsLoadingMaintenanceStatus(true);
+      const statusRes = await robotService.getMaintenanceStatus(robotId);
+      if (statusRes?.lockInfo) {
+        setMaintenanceLockInfo(statusRes.lockInfo);
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Lỗi khi tạo mã PIN';
-      showToast(msg, 'warning');
+    } catch {
+      // Non-blocking: modal still functions even if lock metadata cannot be loaded
     } finally {
-      setIsGeneratingPin(false);
+      setIsLoadingMaintenanceStatus(false);
     }
-  };
-
-  const handleCopyPin = () => {
-    if (!generatedPin) return;
-    navigator.clipboard.writeText(generatedPin);
-    setCopiedPin(true);
-    setTimeout(() => setCopiedPin(false), 2000);
-    showToast('Đã sao chép mã PIN vào bộ nhớ tạm!', 'info');
   };
 
   const handleToggleMaintenanceMode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetRobotForMaintenance) return;
     if (!maintenancePinInput.trim()) {
-      showToast('Vui lòng nhập mã PIN kỹ thuật viên.', 'warning');
+      setMaintenanceError('Vui lòng nhập mã PIN cá nhân của Kỹ thuật viên hoặc Quản trị viên.');
       return;
     }
 
     const isEnabling = targetRobotForMaintenance.status !== 'Maintenance';
+    if (!isEnabling && forceAdminOverride && !maintenanceReason.trim()) {
+      setMaintenanceError('Vui lòng nhập lý do khi cưỡng chế kết thúc bảo trì.');
+      return;
+    }
+
     const robotId = getRealRobotGuid(targetRobotForMaintenance);
 
     try {
       setIsSubmittingMaintenance(true);
-      const res = await robotService.setMaintenanceMode(robotId, maintenancePinInput.trim(), isEnabling);
+      setMaintenanceError(null);
+      const res = await robotService.setMaintenanceMode(
+        robotId,
+        maintenancePinInput.trim(),
+        isEnabling,
+        maintenanceReason.trim() || undefined,
+        !isEnabling && forceAdminOverride
+      );
 
       const newStatus = isEnabling ? 'Maintenance' : 'Idle';
       setAmrNodes((prev) =>
@@ -455,7 +437,14 @@ export const AdminTechnicalPage: React.FC = () => {
 
       loadData();
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Xác thực mã PIN thất bại hoặc không thể chuyển trạng thái.';
+      if (err?.lockInfo) {
+        setMaintenanceLockInfo(err.lockInfo);
+      }
+      if (err?.errorCode === 'ADMIN_OVERRIDE_REASON_REQUIRED') {
+        setForceAdminOverride(true);
+      }
+      const msg = err?.message || 'Xác thực mã PIN thất bại hoặc không thể chuyển trạng thái.';
+      setMaintenanceError(msg);
       showToast(msg, 'warning');
     } finally {
       setIsSubmittingMaintenance(false);
@@ -2550,12 +2539,12 @@ export const AdminTechnicalPage: React.FC = () => {
                         <div>
                           <span className="font-bold text-slate-800 block flex items-center gap-1.5">
                             <KeyRound className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>Xác Thực Mở Phanh Bảo Trì (Mã PIN Động)</span>
+                            <span>Khóa Bảo Trì An Toàn (LOTO)</span>
                           </span>
-                          <span className="text-[11px] text-slate-500">Mã PIN ngẫu nhiên bảo mật cho kỹ thuật viên</span>
+                          <span className="text-[11px] text-slate-500">Xác thực mã PIN cá nhân của Kỹ thuật viên hoặc Quản trị viên</span>
                         </div>
                         <span className="self-start font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                          6 chữ số • Hiệu lực 10 phút
+                          Định danh chủ khóa • Ghi đè Admin có lý do
                         </span>
                       </div>
                     </div>
@@ -2925,94 +2914,62 @@ export const AdminTechnicalPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Current State Notice */}
+            {/* Current State & LOTO Lock Owner Notice */}
             {targetRobotForMaintenance.status === 'Maintenance' ? (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-bold">Robot đang trong chế độ bảo trì kỹ thuật</p>
+                <div className="space-y-1 flex-1">
+                  <p className="font-bold">
+                    {isLoadingMaintenanceStatus
+                      ? 'Đang tải thông tin người giữ khóa bảo trì...'
+                      : maintenanceLockInfo
+                        ? `Đang khóa bảo trì bởi: ${maintenanceLockInfo.lockedByName} (${maintenanceLockInfo.lockedByRole === 'Admin' ? 'Quản Trị Viên' : 'Kỹ Thuật Viên'})`
+                        : 'Robot đang trong chế độ bảo trì kỹ thuật'}
+                  </p>
+                  {maintenanceLockInfo && (
+                    <p className="font-mono text-[11px] text-amber-800">
+                      Bắt đầu lúc {new Date(maintenanceLockInfo.lockedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                      {maintenanceLockInfo.reason ? ` • Lý do: ${maintenanceLockInfo.reason}` : ''}
+                    </p>
+                  )}
                   <p className="text-amber-800/90 text-[11px]">
-                    Phanh điện từ đã mở. Nhập mã PIN kỹ thuật viên xác nhận để kết thúc bảo trì và khóa phanh, đưa robot trở về trạng thái sẵn sàng (Idle).
+                    Phanh điện từ đã mở. Chỉ đúng người giữ khóa (hoặc Quản trị viên xác nhận ghi đè có lý do) mới được kết thúc bảo trì và khóa phanh.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-start gap-2.5">
+              <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-bold">Kích hoạt bảo trì an toàn</p>
+                  <p className="font-bold">Khóa bảo trì an toàn (Lockout / Tagout)</p>
                   <p className="text-blue-800/90 text-[11px]">
-                    Khi kích hoạt, robot sẽ tạm dừng mọi điều phối tự động và nhả phanh điện từ động cơ giúp kỹ thuật viên có thể đẩy tay di chuyển thiết bị.
+                    Khi kích hoạt, robot sẽ tạm dừng mọi điều phối tự động và nhả phanh điện từ. Hệ thống ghi nhận người giữ khóa — chỉ đúng người này hoặc Quản trị viên mới có quyền kết thúc bảo trì.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Dynamic PIN Generation Block */}
-            <div className="p-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 text-white space-y-3 shadow-inner">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-bold text-slate-200">Mã PIN Kỹ Thuật Viên Động (Dynamic PIN)</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGeneratePin}
-                  disabled={isGeneratingPin}
-                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isGeneratingPin ? 'animate-spin' : ''}`} />
-                  <span>{generatedPin ? 'Tạo Lại PIN' : 'Tạo Mã PIN'}</span>
-                </button>
-              </div>
-
-              {generatedPin ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-slate-950/60 rounded-xl px-4 py-2.5 border border-slate-700/60">
-                    <div className="font-mono text-2xl font-black tracking-[0.35em] text-amber-400">
-                      {generatedPin}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleCopyPin}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                        title="Sao chép mã PIN"
-                      >
-                        {copiedPin ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                    <span className="flex items-center gap-1 text-amber-300">
-                      <Clock className="w-3 h-3" />
-                      Hiệu lực: {Math.floor(pinCountdown / 60)}:{(pinCountdown % 60).toString().padStart(2, '0')}
-                    </span>
-                    <span className="text-emerald-400 text-[10px]">Đã tự động điền vào ô xác thực bên dưới</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-[11px] text-slate-400 italic">
-                  Chưa có mã PIN phiên làm việc. Nhấn &quot;Tạo Mã PIN&quot; để sinh mã 6 chữ số ngẫu nhiên (hết hạn sau 10 phút).
-                </p>
-              )}
-            </div>
-
             {/* Confirmation Form */}
             <form onSubmit={handleToggleMaintenanceMode} className="space-y-4 text-xs">
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  Mã PIN Xác Nhận Kỹ Thuật Viên:
+                  {targetRobotForMaintenance.status === 'Maintenance'
+                    ? 'Mã PIN Cá Nhân Xác Nhận Kết Thúc:'
+                    : 'Mã PIN Cá Nhân Kỹ Thuật Viên / Quản Trị Viên:'}
                 </label>
                 <div className="relative">
                   <input
-                    type="text"
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
                     required
                     maxLength={10}
-                    placeholder="Nhập 6 chữ số PIN..."
+                    placeholder="Nhập mã PIN cá nhân..."
                     value={maintenancePinInput}
-                    onChange={(e) => setMaintenancePinInput(e.target.value)}
+                    onChange={(e) => {
+                      setMaintenancePinInput(e.target.value);
+                      if (maintenanceError) setMaintenanceError(null);
+                    }}
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl font-mono text-base tracking-widest font-bold focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
                   />
                   <div className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono">
@@ -3020,9 +2977,62 @@ export const AdminTechnicalPage: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Chấp nhận mã PIN động vừa tạo ở trên, hoặc mã PIN tài khoản nhân viên kỹ thuật đã phân quyền trong hệ thống.
+                  Chỉ chấp nhận mã PIN cá nhân của tài khoản Kỹ thuật viên hoặc Quản trị viên đang hoạt động.
                 </p>
               </div>
+
+              {targetRobotForMaintenance.status !== 'Maintenance' ? (
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Lý Do Bảo Trì (Tùy chọn):
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={120}
+                    placeholder="Ví dụ: Hiệu chỉnh cảm biến, kiểm tra bánh xe..."
+                    value={maintenanceReason}
+                    onChange={(e) => setMaintenanceReason(e.target.value)}
+                    className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                  />
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200 space-y-2.5">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={forceAdminOverride}
+                      onChange={(e) => {
+                        setForceAdminOverride(e.target.checked);
+                        if (maintenanceError) setMaintenanceError(null);
+                      }}
+                      className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    <span className="font-bold text-rose-900 text-[11px]">
+                      Cưỡng chế kết thúc thay người giữ khóa (Chỉ Quản trị viên)
+                    </span>
+                  </label>
+                  {forceAdminOverride && (
+                    <input
+                      type="text"
+                      required
+                      maxLength={150}
+                      placeholder="Nhập lý do cưỡng chế bắt buộc (vd: Kỹ thuật viên đã hết ca)..."
+                      value={maintenanceReason}
+                      onChange={(e) => {
+                        setMaintenanceReason(e.target.value);
+                        if (maintenanceError) setMaintenanceError(null);
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-rose-200 rounded-lg text-xs focus:outline-none focus:border-rose-500"
+                    />
+                  )}
+                </div>
+              )}
+
+              {maintenanceError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-medium">
+                  {maintenanceError}
+                </div>
+              )}
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
