@@ -44,7 +44,7 @@ import { StoreEdgeSetupPage } from './StoreEdgeSetupPage';
 import { LocalSqliteSyncCard } from '@/components/technical/LocalSqliteSyncCard';
 import { EdgeRobotLogsPanel } from '@/components/technical/EdgeRobotLogsPanel';
 import { useRobotStore } from '@/stores/robotStore';
-import { robotService } from '@/services/robot';
+import { robotService, type AmrOperationalConfigDto } from '@/services/robot';
 import {
   fleetService,
   missionService,
@@ -345,6 +345,109 @@ export const AdminTechnicalPage: React.FC = () => {
   const [isLoadingMaintenanceStatus, setIsLoadingMaintenanceStatus] = useState(false);
   const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
+
+  // AMR Operational & Safety Config State (Figma node 51:2)
+  const [operationalConfig, setOperationalConfig] = useState<AmrOperationalConfigDto | null>(null);
+  const [opConfigLoading, setOpConfigLoading] = useState(false);
+  const [opConfigSaving, setOpConfigSaving] = useState(false);
+  const [opConfigError, setOpConfigError] = useState<string | null>(null);
+  const [opBatteryInput, setOpBatteryInput] = useState('20');
+  const [opMaxSpeedInput, setOpMaxSpeedInput] = useState('0.8');
+  const [opEstopTimeoutInput, setOpEstopTimeoutInput] = useState('30');
+
+  const loadOperationalConfig = async () => {
+    try {
+      setOpConfigLoading(true);
+      setOpConfigError(null);
+      const cfg = await robotService.getOperationalConfig();
+      setOperationalConfig(cfg);
+      setOpBatteryInput(String(cfg.batteryCriticalThresholdPercent));
+      setOpMaxSpeedInput(String(cfg.maxSpeedMetersPerSecond));
+      setOpEstopTimeoutInput(String(cfg.estopTimeoutSeconds));
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Không thể tải tham số vận hành AMR từ Robot Service.';
+      setOpConfigError(msg);
+    } finally {
+      setOpConfigLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'settings') {
+      loadOperationalConfig();
+    }
+  }, [activeSubTab]);
+
+  const handleResetOperationalConfigDefaults = () => {
+    setOpBatteryInput('20');
+    setOpMaxSpeedInput('0.8');
+    setOpEstopTimeoutInput('30');
+    setOpConfigError(null);
+    showToast('Đã đặt lại tham số mặc định (20%, 0.8 m/s, 30 giây). Bấm "Lưu Cấu Hình" để áp dụng.', 'info');
+  };
+
+  const handleSaveOperationalConfig = async () => {
+    const minBattery = operationalConfig?.minBatteryThresholdPercent ?? 15;
+    const maxBattery = operationalConfig?.maxBatteryThresholdPercent ?? 50;
+    const minSpeed = operationalConfig?.minSpeedMetersPerSecond ?? 0.2;
+    const maxSpeed = operationalConfig?.maxSpeedCapMetersPerSecond ?? 1.2;
+    const minEstop = operationalConfig?.minEstopTimeoutSeconds ?? 5;
+    const maxEstop = operationalConfig?.maxEstopTimeoutSeconds ?? 300;
+
+    const batteryVal = Number(opBatteryInput);
+    const speedVal = Number(opMaxSpeedInput);
+    const estopVal = Number(opEstopTimeoutInput);
+
+    if (!Number.isFinite(batteryVal) || batteryVal < minBattery || batteryVal > maxBattery) {
+      const msg = `Ngưỡng pin cảnh báo phải nằm trong khoảng an toàn ${minBattery}% – ${maxBattery}%.`;
+      setOpConfigError(msg);
+      showToast(msg, 'warning');
+      return;
+    }
+    if (!Number.isFinite(speedVal) || speedVal < minSpeed || speedVal > maxSpeed) {
+      const msg = `Tốc độ tối đa phải nằm trong khoảng an toàn ${minSpeed} – ${maxSpeed} m/s.`;
+      setOpConfigError(msg);
+      showToast(msg, 'warning');
+      return;
+    }
+    if (!Number.isFinite(estopVal) || !Number.isInteger(estopVal) || estopVal < minEstop || estopVal > maxEstop) {
+      const msg = `Thời gian giữ phanh khẩn cấp phải là số nguyên từ ${minEstop} – ${maxEstop} giây.`;
+      setOpConfigError(msg);
+      showToast(msg, 'warning');
+      return;
+    }
+
+    try {
+      setOpConfigSaving(true);
+      setOpConfigError(null);
+      const updated = await robotService.updateOperationalConfig({
+        batteryCriticalThresholdPercent: batteryVal,
+        maxSpeedMetersPerSecond: speedVal,
+        estopTimeoutSeconds: estopVal,
+      });
+      setOperationalConfig(updated);
+      setOpBatteryInput(String(updated.batteryCriticalThresholdPercent));
+      setOpMaxSpeedInput(String(updated.maxSpeedMetersPerSecond));
+      setOpEstopTimeoutInput(String(updated.estopTimeoutSeconds));
+      showToast('Đã lưu tham số vận hành & an toàn AMR!', 'success');
+    } catch (err: any) {
+      const errData = err?.response?.data;
+      const msg =
+        errData?.message ||
+        errData?.error ||
+        errData?.title ||
+        err?.message ||
+        'Không thể lưu tham số vận hành AMR.';
+      setOpConfigError(msg);
+      showToast(msg, 'warning');
+    } finally {
+      setOpConfigSaving(false);
+    }
+  };
 
   const getRealRobotGuid = (node: AMRNode): string => {
     if (node.robotGuid) return node.robotGuid;
@@ -2746,6 +2849,170 @@ export const AdminTechnicalPage: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Full-width Card: Tham Số Vận Hành & An Toàn AMR (Figma node 51:2) */}
+                {(() => {
+                  const minBattery = operationalConfig?.minBatteryThresholdPercent ?? 15;
+                  const maxBattery = operationalConfig?.maxBatteryThresholdPercent ?? 50;
+                  const minSpeed = operationalConfig?.minSpeedMetersPerSecond ?? 0.2;
+                  const maxSpeed = operationalConfig?.maxSpeedCapMetersPerSecond ?? 1.2;
+                  const minEstop = operationalConfig?.minEstopTimeoutSeconds ?? 5;
+                  const maxEstop = operationalConfig?.maxEstopTimeoutSeconds ?? 300;
+                  const formattedUpdatedAt = operationalConfig?.updatedAtUtc
+                    ? new Date(operationalConfig.updatedAtUtc).toLocaleString('vi-VN', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })
+                    : null;
+
+                  return (
+                    <div className="lg:col-span-12 bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+                      <div className="space-y-1">
+                        <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                          Tham Số Vận Hành &amp; An Toàn AMR
+                        </h3>
+                        <p className="text-xs text-slate-600">
+                          Kỹ thuật viên điều chỉnh trong giới hạn an toàn của thiết bị. Thay đổi áp dụng cho toàn bộ robot của quán.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        <div className="bg-slate-50 rounded-xl px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-slate-700 block">
+                              Ngưỡng Pin Cảnh Báo Thay Pin
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              Giới hạn an toàn: {minBattery}% – {maxBattery}%. Robot dưới ngưỡng sẽ báo thay pin.
+                            </span>
+                          </div>
+                          <div className="bg-white border border-[#0062ff] rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+                            <input
+                              type="number"
+                              step="1"
+                              min={minBattery}
+                              max={maxBattery}
+                              aria-label="Ngưỡng Pin Cảnh Báo Thay Pin"
+                              value={opBatteryInput}
+                              onChange={(e) => {
+                                setOpBatteryInput(e.target.value);
+                                if (opConfigError) setOpConfigError(null);
+                              }}
+                              disabled={opConfigLoading || opConfigSaving}
+                              className="w-14 bg-transparent font-mono font-bold text-xs text-slate-900 focus:outline-none text-right tabular-nums"
+                            />
+                            <span className="text-[11px] text-slate-500 font-medium">%</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-xl px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-slate-700 block">
+                              Tốc Độ Di Chuyển Tối Đa
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              Giới hạn an toàn: {minSpeed} – {maxSpeed} m/s, tùy độ rộng lối đi.
+                            </span>
+                          </div>
+                          <div className="bg-white border border-[#0062ff] rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min={minSpeed}
+                              max={maxSpeed}
+                              aria-label="Tốc Độ Di Chuyển Tối Đa"
+                              value={opMaxSpeedInput}
+                              onChange={(e) => {
+                                setOpMaxSpeedInput(e.target.value);
+                                if (opConfigError) setOpConfigError(null);
+                              }}
+                              disabled={opConfigLoading || opConfigSaving}
+                              className="w-14 bg-transparent font-mono font-bold text-xs text-slate-900 focus:outline-none text-right tabular-nums"
+                            />
+                            <span className="text-[11px] text-slate-500 font-medium">m/s</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-xl px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-slate-700 block">
+                              Thời Gian Giữ Phanh Khẩn Cấp
+                            </span>
+                            <span className="text-[11px] text-slate-500">
+                              Giới hạn an toàn: {minEstop} – {maxEstop} giây trước khi cho phép mở khóa.
+                            </span>
+                          </div>
+                          <div className="bg-white border border-[#0062ff] rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+                            <input
+                              type="number"
+                              step="1"
+                              min={minEstop}
+                              max={maxEstop}
+                              aria-label="Thời Gian Giữ Phanh Khẩn Cấp"
+                              value={opEstopTimeoutInput}
+                              onChange={(e) => {
+                                setOpEstopTimeoutInput(e.target.value);
+                                if (opConfigError) setOpConfigError(null);
+                              }}
+                              disabled={opConfigLoading || opConfigSaving}
+                              className="w-14 bg-transparent font-mono font-bold text-xs text-slate-900 focus:outline-none text-right tabular-nums"
+                            />
+                            <span className="text-[11px] text-slate-500 font-medium">giây</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {opConfigError && (
+                        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between gap-2">
+                          <span>{opConfigError}</span>
+                          {!operationalConfig && (
+                            <button
+                              type="button"
+                              onClick={loadOperationalConfig}
+                              disabled={opConfigLoading}
+                              className="px-2.5 py-1 rounded-lg bg-white border border-rose-300 text-rose-700 font-bold hover:bg-rose-100 cursor-pointer shrink-0"
+                            >
+                              Thử lại
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="pt-2.5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
+                        <p className="text-[11px] text-slate-500">
+                          {opConfigLoading
+                            ? 'Đang tải cấu hình...'
+                            : operationalConfig && formattedUpdatedAt
+                            ? `Cập nhật gần nhất: ${formattedUpdatedAt}${
+                                operationalConfig.updatedBy ? `, bởi ${operationalConfig.updatedBy}` : ''
+                              }`
+                            : 'Chưa đồng bộ được cấu hình từ Robot Service'}
+                        </p>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={handleResetOperationalConfigDefaults}
+                            disabled={opConfigLoading || opConfigSaving}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-[10px] transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            Khôi Phục Mặc Định
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveOperationalConfig}
+                            disabled={opConfigLoading || opConfigSaving}
+                            className="bg-[#0062ff] hover:bg-[#0052cc] text-white font-bold text-xs px-3.5 py-2 rounded-[10px] transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {opConfigSaving ? 'Đang lưu...' : 'Lưu Cấu Hình'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

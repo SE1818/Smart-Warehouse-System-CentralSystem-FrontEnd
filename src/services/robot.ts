@@ -670,9 +670,39 @@ export const robotService = {
       error.lockInfo = errData?.lockInfo ?? null;
       throw error;
     }
+  },
+
+  async getOperationalConfig(): Promise<AmrOperationalConfigDto> {
+    const response = await apiClient.get<AmrOperationalConfigDto>('/v1/robots/operational-config');
+    return response.data;
+  },
+
+  async updateOperationalConfig(payload: UpdateAmrOperationalConfigRequest): Promise<AmrOperationalConfigDto> {
+    const response = await apiClient.put<AmrOperationalConfigDto>('/v1/robots/operational-config', payload);
+    return response.data;
   }
 
 };
+
+export interface AmrOperationalConfigDto {
+  batteryCriticalThresholdPercent: number;
+  maxSpeedMetersPerSecond: number;
+  estopTimeoutSeconds: number;
+  minBatteryThresholdPercent: number;
+  maxBatteryThresholdPercent: number;
+  minSpeedMetersPerSecond: number;
+  maxSpeedCapMetersPerSecond: number;
+  minEstopTimeoutSeconds: number;
+  maxEstopTimeoutSeconds: number;
+  updatedBy?: string | null;
+  updatedAtUtc: string;
+}
+
+export interface UpdateAmrOperationalConfigRequest {
+  batteryCriticalThresholdPercent: number;
+  maxSpeedMetersPerSecond: number;
+  estopTimeoutSeconds: number;
+}
 
 
 
