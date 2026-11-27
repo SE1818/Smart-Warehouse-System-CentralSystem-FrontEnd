@@ -514,7 +514,6 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
                     <th className="px-3.5 py-2.5">Robot</th>
                     <th className="px-3.5 py-2.5">Bàn Đích</th>
                     <th className="px-3.5 py-2.5">Kết Quả</th>
-                    <th className="px-3.5 py-2.5">Quãng Đường</th>
                     <th className="px-3.5 py-2.5">Ghi Chú</th>
                     <th className="px-3.5 py-2.5 text-right">Chi Tiết</th>
                   </tr>
@@ -593,9 +592,6 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
                           {item.statusResult}
                         </span>
                       </td>
-                      <td className="px-3.5 py-2.5 font-mono whitespace-nowrap">
-                        {item.distanceTravelled != null ? `${Number(item.distanceTravelled).toFixed(1)} m` : '—'}
-                      </td>
                       <td className="px-3.5 py-2.5 max-w-[260px]">
                         <p className="truncate text-slate-600" title={item.errorNotes || ''}>
                           {item.errorNotes || '—'}
@@ -611,7 +607,6 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
                                 { label: 'Robot', value: item.robotName || item.robotId },
                                 { label: 'Bàn Đích', value: item.destinationTableNo ? `Bàn ${item.destinationTableNo}` : '—' },
                                 { label: 'Kết Quả', value: item.statusResult },
-                                { label: 'Quãng Đường', value: item.distanceTravelled != null ? `${item.distanceTravelled} m` : '—' },
                                 { label: 'Bắt Đầu', value: formatDateTime(item.startedAt) },
                                 { label: 'Kết Thúc', value: formatDateTime(item.finishedAt) },
                                 { label: 'Người Tạo', value: item.createdBy || 'Hệ thống' },

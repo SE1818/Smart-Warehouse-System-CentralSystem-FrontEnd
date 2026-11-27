@@ -494,13 +494,32 @@ export const alertService = {
     try {
       const res = await portalClient.get('/notifications');
       if (res.data && Array.isArray(res.data) && res.data.length > 0) {
-        return res.data.map((n: any) => ({
-          id: n.id?.toString() || `alt-${Date.now()}`,
-          robot: n.robotCode || n.source || 'AMR',
-          type: n.type === 'error' || n.priority === 'High' ? 'critical' : n.type === 'warning' ? 'warning' : 'info',
-          message: n.message || n.title || 'Thông báo hệ thống',
-          time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('vi-VN') : 'Vừa xong',
-        }));
+        return res.data
+          .filter((n: any) => n.status !== 'Read')
+          .map((n: any) => {
+            const text = `${n.title || ''} ${n.message || ''}`.toLowerCase();
+            const isCritical =
+              n.type === 'error' ||
+              n.priority === 'High' ||
+              text.includes('thất bại') ||
+              text.includes('lỗi') ||
+              text.includes('fault') ||
+              text.includes('failed');
+            const isWarning =
+              !isCritical &&
+              (n.type === 'warning' ||
+                text.includes('cảnh báo') ||
+                text.includes('pin') ||
+                text.includes('tạm dừng') ||
+                text.includes('warning'));
+            return {
+              id: n.id?.toString() || `alt-${Date.now()}`,
+              robot: n.robotCode || n.source || 'AMR',
+              type: isCritical ? 'critical' : isWarning ? 'warning' : 'info',
+              message: n.message || n.title || 'Thông báo hệ thống',
+              time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('vi-VN') : 'Vừa xong',
+            };
+          });
       }
     } catch {
       // Empty
@@ -510,7 +529,7 @@ export const alertService = {
 
   resolveAlert: async (id: string): Promise<boolean> => {
     try {
-      await portalClient.post(`/notifications/${id}/read`);
+      await portalClient.post(`/notifications/read/${id}`);
       return true;
     } catch {
       return false;

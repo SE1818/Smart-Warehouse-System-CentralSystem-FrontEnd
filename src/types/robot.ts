@@ -67,7 +67,6 @@ export interface LogTransfer {
   transferRequestId: string;
   robotId: string;
   statusResult: string;
-  distanceTravelled: number | null;
   errorNotes: string | null;
   startedAt: string;
   finishedAt: string | null;

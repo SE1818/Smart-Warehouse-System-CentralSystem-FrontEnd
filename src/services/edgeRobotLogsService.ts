@@ -15,7 +15,6 @@ export interface EdgeTransferLogItem {
   robotName?: string | null;
   destinationTableNo?: string | null;
   statusResult: string;
-  distanceTravelled?: number | null;
   errorNotes?: string | null;
   startedAt: string;
   finishedAt?: string | null;
