@@ -109,7 +109,7 @@ describe('App routing and integration', () => {
     storeAuth('Admin');
     window.history.pushState(null, '', '/technical');
     render(<App />);
-    await waitFor(() => expect(screen.getByText('403')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Không có quyền truy cập')).toBeInTheDocument());
   });
 
   it('redirects unauthenticated user from /technical to /login', async () => {
