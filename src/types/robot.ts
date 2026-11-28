@@ -41,6 +41,8 @@ export interface Station {
   stationType: StationType;
   xCoord: number;
   yCoord: number;
+  metricX?: number | null;
+  metricY?: number | null;
   areaId: string;
   status?: StationStatus;
   createdAt?: string;

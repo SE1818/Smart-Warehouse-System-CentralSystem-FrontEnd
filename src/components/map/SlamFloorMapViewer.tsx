@@ -27,6 +27,7 @@ import {
   type SlamMapWaypointDto,
 } from '@/services/robot';
 import { sqliteService } from '@/services/sqliteService';
+import { normalizeTableCode } from '@/utils/tableMatching';
 
 export interface MapTableNode {
   id: string;
@@ -88,9 +89,6 @@ export interface SlamFloorMapViewerProps {
   onToggleChime?: () => void;
   arrivalAlert?: MapArrivalAlert | null;
 }
-
-const normalizeTableMatch = (value?: string | null): string =>
-  (value || '').replace(/^Bàn\s+/i, '').trim().toLowerCase();
 
 const drawRoundedRectPath = (
   ctx: CanvasRenderingContext2D,
@@ -280,25 +278,33 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
         worldX:
           typeof s.worldX === 'number'
             ? s.worldX
-            : typeof s.metric_x === 'number'
-              ? s.metric_x
-              : typeof s.x_coord === 'number'
-                ? s.x_coord * 0.5
-                : 0,
+            : typeof s.metricX === 'number'
+              ? s.metricX
+              : typeof s.metric_x === 'number'
+                ? s.metric_x
+                : typeof s.xCoord === 'number'
+                  ? s.xCoord * effectiveMetadata.resolution
+                  : typeof s.x_coord === 'number'
+                    ? s.x_coord * effectiveMetadata.resolution
+                    : 0,
         worldY:
           typeof s.worldY === 'number'
             ? s.worldY
-            : typeof s.metric_y === 'number'
-              ? s.metric_y
-              : typeof s.y_coord === 'number'
-                ? s.y_coord * 0.5
-                : 0,
+            : typeof s.metricY === 'number'
+              ? s.metricY
+              : typeof s.metric_y === 'number'
+                ? s.metric_y
+                : typeof s.yCoord === 'number'
+                  ? s.yCoord * effectiveMetadata.resolution
+                  : typeof s.y_coord === 'number'
+                    ? s.y_coord * effectiveMetadata.resolution
+                    : 0,
         yaw: s.yaw ?? 0,
         areaId: s.areaId || s.area_id,
       }));
     }
     return activeSlamMap?.stations || [];
-  }, [stations, activeSlamMap]);
+  }, [stations, activeSlamMap, effectiveMetadata.resolution]);
 
   // 4. REAL TABLES: Ràng buộc bất biến - Chỉ load lên bản đồ khi bàn ĐÃ ĐƯỢC GÁN TRẠM VẬT LÝ trong SQLite
   // Tuyệt đối không tự ý sinh tọa độ bàn giả lập khi chưa có trạm.
@@ -560,6 +566,37 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     }
   };
 
+  const hitTestCanvas = (
+    clientX: number,
+    clientY: number,
+    hitRadiusRobot: number,
+    hitRadiusTable: number
+  ) => {
+    const totalScale = zoom * autoScale;
+    const rawPx = (clientX - pan.x) / totalScale;
+    const rawPy = (clientY - pan.y) / totalScale;
+
+    for (const robot of resolvedRobots) {
+      if (robot.worldX !== undefined && robot.worldY !== undefined) {
+        const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
+        if (Math.hypot(rawPx - robotPx.x, rawPy - robotPx.y) <= hitRadiusRobot) {
+          onSelectRobot?.(robot.id || robot.code);
+          return;
+        }
+      }
+    }
+
+    for (const table of resolvedTables) {
+      if (table.worldX !== undefined && table.worldY !== undefined) {
+        const tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
+        if (Math.hypot(rawPx - tablePx.x, rawPy - tablePx.y) <= hitRadiusTable) {
+          onSelectTable?.(table.id);
+          break;
+        }
+      }
+    }
+  };
+
   const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
     const wasMoved = touchStateRef.current.moved;
     const duration = Date.now() - touchStateRef.current.startTime;
@@ -573,41 +610,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
       const t = e.changedTouches[0];
       const rect = canvas.getBoundingClientRect();
-      const clientX = t.clientX - rect.left;
-      const clientY = t.clientY - rect.top;
-
-      const totalScale = zoom * autoScale;
-      const rawPx = (clientX - pan.x) / totalScale;
-      const rawPy = (clientY - pan.y) / totalScale;
-
-      // Touch hit radius: extra generous for fingers (36px for simplified KDS mode)
-      const hitRadiusRobot = mode === 'simplified' ? 36 : 28;
-      for (const robot of resolvedRobots) {
-        if (robot.worldX !== undefined && robot.worldY !== undefined) {
-          const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
-          const dist = Math.hypot(rawPx - robotPx.x, rawPy - robotPx.y);
-          if (dist <= hitRadiusRobot) {
-            if (onSelectRobot) {
-              onSelectRobot(robot.id || robot.code);
-              return;
-            }
-          }
-        }
-      }
-
-      const hitRadiusPixel = mode === 'simplified' ? 38 : 30;
-      for (const table of resolvedTables) {
-        if (table.worldX !== undefined && table.worldY !== undefined) {
-          const tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
-          const dist = Math.hypot(rawPx - tablePx.x, rawPy - tablePx.y);
-          if (dist <= hitRadiusPixel) {
-            if (onSelectTable) {
-              onSelectTable(table.id);
-            }
-            break;
-          }
-        }
-      }
+      hitTestCanvas(
+        t.clientX - rect.left,
+        t.clientY - rect.top,
+        mode === 'simplified' ? 36 : 28,
+        mode === 'simplified' ? 38 : 30
+      );
     }
   };
 
@@ -616,42 +624,12 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.clientX - rect.left;
-    const clientY = e.clientY - rect.top;
-
-    const totalScale = zoom * autoScale;
-    const rawPx = (clientX - pan.x) / totalScale;
-    const rawPy = (clientY - pan.y) / totalScale;
-
-    // 1. Hit test robots first (prioritize robot selection)
-    const hitRadiusRobot = mode === 'simplified' ? 28 : 22;
-    for (const robot of resolvedRobots) {
-      if (robot.worldX !== undefined && robot.worldY !== undefined) {
-        const robotPx = rosToCanvasPixel(robot.worldX, robot.worldY, effectiveMetadata);
-        const dist = Math.hypot(rawPx - robotPx.x, rawPy - robotPx.y);
-        if (dist <= hitRadiusRobot) {
-          if (onSelectRobot) {
-            onSelectRobot(robot.id || robot.code);
-            return;
-          }
-        }
-      }
-    }
-
-    // 2. Hit test dining tables
-    const hitRadiusPixel = mode === 'simplified' ? 32 : 25;
-    for (const table of resolvedTables) {
-      if (table.worldX !== undefined && table.worldY !== undefined) {
-        const tablePx = rosToCanvasPixel(table.worldX, table.worldY, effectiveMetadata);
-        const dist = Math.hypot(rawPx - tablePx.x, rawPy - tablePx.y);
-        if (dist <= hitRadiusPixel) {
-          if (onSelectTable) {
-            onSelectTable(table.id);
-          }
-          break;
-        }
-      }
-    }
+    hitTestCanvas(
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+      mode === 'simplified' ? 28 : 22,
+      mode === 'simplified' ? 32 : 25
+    );
   };
 
   const drawStaticLayers = useCallback(
@@ -813,7 +791,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       drawStaticLayers(ctx);
     }
 
-    const arrivedTargetNorm = normalizeTableMatch(arrivalAlert?.tableName);
+    const arrivedTargetNorm = normalizeTableCode(arrivalAlert?.tableName);
 
     // 2.3 Dining Tables
     resolvedTables.forEach((table) => {
@@ -823,7 +801,7 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
       const isHovered = hoveredTable?.id === table.id;
       const isArrivedTarget =
         Boolean(table.isArrivedTarget) ||
-        (Boolean(arrivedTargetNorm) && normalizeTableMatch(table.name) === arrivedTargetNorm);
+        (Boolean(arrivedTargetNorm) && normalizeTableCode(table.name) === arrivedTargetNorm);
 
       if (mode === 'simplified') {
         const radius = isSelected ? 24 : 20;
@@ -1015,10 +993,10 @@ export const SlamFloorMapViewer: React.FC<SlamFloorMapViewerProps> = ({
 
       // Laser trajectory path
       if (isDelivering && (mode === 'simplified' || showTrajectories)) {
-        const targetNorm = normalizeTableMatch(robot.targetTable);
+        const targetNorm = normalizeTableCode(robot.targetTable);
         const targetTable = resolvedTables.find(
           (t) =>
-            (targetNorm && normalizeTableMatch(t.name) === targetNorm) ||
+            (targetNorm && normalizeTableCode(t.name) === targetNorm) ||
             t.assignedRobot === robot.code ||
             (robot.currentZone && robot.currentZone.includes(t.name))
         );

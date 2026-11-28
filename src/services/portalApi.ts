@@ -592,7 +592,7 @@ export const tableService = {
             status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
               : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
               : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
-              : t.status === 'Served' || t.status === 'serving' ? 'serving'
+              : t.status === 'Served' || t.status === 'Serving' || t.status === 'serving' ? 'serving'
               : 'empty') as DiningTableDto['status'],
             assignedRobotCode: t.assignedRobotCode || null,
             stationId: t.stationId || null,
@@ -622,7 +622,7 @@ export const tableService = {
           status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
             : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
             : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
-            : t.status === 'Served' || t.status === 'serving' ? 'serving'
+            : t.status === 'Served' || t.status === 'Serving' || t.status === 'serving' ? 'serving'
             : 'empty') as DiningTableDto['status'],
           assignedRobotCode: t.assignedRobotCode || null,
           stationId: t.stationId || null,
@@ -651,7 +651,7 @@ export const tableService = {
           status: (t.status === 'Available' || t.status === 'empty' ? 'empty'
             : t.status === 'Occupied' || t.status === 'occupied' ? 'occupied'
             : t.status === 'WaitingForService' || t.status === 'waiting' ? 'waiting'
-            : t.status === 'Served' || t.status === 'serving' ? 'serving'
+            : t.status === 'Served' || t.status === 'Serving' || t.status === 'serving' ? 'serving'
             : 'empty') as DiningTableDto['status'],
           assignedRobotCode: t.assignedRobotCode || null,
           stationId: t.stationId || null,

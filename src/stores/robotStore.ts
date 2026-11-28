@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as signalR from '@microsoft/signalr';
-import { robotService } from '@/services/robot';
+import { robotService, normalizeRobotStatus } from '@/services/robot';
 import { resolveBaseUrl, resolveEdgeBaseUrl, getValidAuthTokenOrRefresh, handleSignalR401, isUnauthorizedError } from '@/services/api';
 import { sqliteService } from '@/services/sqliteService';
 import { edgeSyncService } from '@/services/edgeSyncService';
@@ -232,34 +232,45 @@ export const useRobotStore = create<RobotState>((set, get) => {
         }
       });
 
-      connection.on('ReceiveRobotStatusChanged', (data: { robotId: string; status: string; batteryLevel: number }) => {
+      const handleRobotStatusPayload = (data: { robotId?: string; status?: string; batteryLevel?: number }) => {
+        if (!data?.robotId) return;
+        const existingRobot = get().robots.find((r) => r.id === data.robotId);
+        const displayStatus = normalizeRobotStatus(data.status);
+
         set((state) => {
           const idx = state.robots.findIndex((r) => r.id === data.robotId);
           if (idx > -1) {
             const newRobots = [...state.robots];
-            const displayStatus = data.status.length > 0 ? (data.status.charAt(0).toUpperCase() + data.status.slice(1).toLowerCase()) : 'Idle';
+            const nextBattery = typeof data.batteryLevel === 'number' ? data.batteryLevel : newRobots[idx].battery;
             newRobots[idx] = {
               ...newRobots[idx],
-              status: displayStatus as any,
-              battery: data.batteryLevel,
-              batteryLevel: data.batteryLevel,
+              status: displayStatus,
+              battery: nextBattery,
+              batteryLevel: nextBattery,
             };
             return { robots: newRobots };
           }
           return {};
         });
 
-        // Persist status change to SQLite
-        void sqliteService.updateRobotTelemetry({
-          id: data.robotId,
-          status: data.status,
-          battery: data.batteryLevel,
-          x: 0,
-          y: 0,
-        });
+        // Persist status change to SQLite while preserving current robot coordinates
+        if (existingRobot) {
+          void sqliteService.updateRobotTelemetry({
+            id: data.robotId,
+            name: existingRobot.name,
+            status: displayStatus,
+            battery: typeof data.batteryLevel === 'number' ? data.batteryLevel : existingRobot.battery,
+            x: existingRobot.x,
+            y: existingRobot.y,
+            destination: existingRobot.destination,
+          });
+        }
 
-        get().addLog(`Robot [ID: ${data.robotId.substring(0, 8)}] thay đổi trạng thái sang "${data.status}"`, 'warning');
-      });
+        get().addLog(`Robot [ID: ${data.robotId.substring(0, 8)}] thay đổi trạng thái sang "${displayStatus}"`, 'warning');
+      };
+
+      connection.on('ReceiveRobotStatusChanged', handleRobotStatusPayload);
+      connection.on('RobotStatusUpdated', handleRobotStatusPayload);
 
       connection.on('ReceiveSlamMapUpdate', (map: any) => {
         // Persist SLAM map and real MQTT waypoints directly into local SQLite

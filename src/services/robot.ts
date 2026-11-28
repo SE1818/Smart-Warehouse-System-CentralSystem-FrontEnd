@@ -4,7 +4,27 @@ import type { Robot, Area, Station, StationType, Order } from '@/types/robot';
 
 import { sqliteService } from './sqliteService';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function normalizeRobotStatus(status?: string | null): Robot['status'] {
+  const normalized = (status || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+  switch (normalized) {
+    case 'moving':
+    case 'delivering':
+    case 'intransit':
+      return 'Moving';
+    case 'swappingbattery':
+      return 'SwappingBattery';
+    case 'error':
+    case 'fault':
+      return 'Error';
+    case 'offline':
+      return 'Offline';
+    case 'idle':
+    default:
+      return 'Idle';
+  }
+}
 
 export interface EdgeNodeInfo {
   isEdgeNode: boolean;
@@ -86,7 +106,7 @@ export const robotService = {
 
         battery: r.batteryLevel ?? r.battery ?? 0,
 
-        status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) as Robot['status'] : 'Idle',
+        status: normalizeRobotStatus(r.status),
 
         currentAreaId: r.currentAreaId,
 
@@ -146,7 +166,7 @@ export const robotService = {
 
       currentY: y,
 
-      currentAreaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2'
+      ...(currentRobot.currentAreaId ? { currentAreaId: currentRobot.currentAreaId } : {})
 
     });
 
@@ -170,7 +190,7 @@ export const robotService = {
 
       currentY: currentRobot.y,
 
-      currentAreaId: 'a3f5a019-9c54-47b2-bd72-4a0075d9e5b2'
+      ...(currentRobot.currentAreaId ? { currentAreaId: currentRobot.currentAreaId } : {})
 
     });
 
@@ -485,8 +505,7 @@ export const robotService = {
 
   // Fetch live Transfer Audit Trail from SQLite (Request, StatusHistory, Commands, Responses, LogTransfer)
   async getTaskAuditHistory(taskId: string): Promise<TransferAuditDto | null> {
-    const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!guidRegex.test(taskId)) return null;
+    if (!UUID_REGEX.test(taskId)) return null;
     try {
       const response = await apiClient.get<TransferAuditDto>(`/v1/tasks/${taskId}/history`);
       return response.data;
@@ -496,8 +515,7 @@ export const robotService = {
   },
 
   async getCommandStatusHistory(commandId: string): Promise<TransferCommandStatusDto[]> {
-    const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!guidRegex.test(commandId)) return [];
+    if (!UUID_REGEX.test(commandId)) return [];
     try {
       const response = await apiClient.get<TransferCommandStatusDto[]>(`/v1/tasks/commands/${commandId}/history`);
       return Array.isArray(response.data) ? response.data : [];
@@ -507,8 +525,7 @@ export const robotService = {
   },
 
   async getCommandExecutionLog(commandId: string): Promise<LogTransferCommandDto | null> {
-    const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!guidRegex.test(commandId)) return null;
+    if (!UUID_REGEX.test(commandId)) return null;
     try {
       const response = await apiClient.get<LogTransferCommandDto>(`/v1/tasks/commands/${commandId}/log`);
       return response.data;
@@ -593,7 +610,8 @@ export const robotService = {
   async dispatchSecondLeg(
     taskId: string,
     newStationId: string,
-    confirmedBy: string = 'Staff KDS'
+    confirmedBy: string = 'Staff KDS',
+    newTableNo?: string
   ): Promise<{ success: boolean; message: string; errorCode?: string }> {
     try {
       const response = await apiClient.post<{ success: boolean; message: string; errorCode?: string }>(
@@ -601,6 +619,7 @@ export const robotService = {
         {
           newStationId,
           confirmedBy,
+          ...(newTableNo ? { newTableNo } : {}),
         }
       );
       return response.data;
@@ -615,21 +634,27 @@ export const robotService = {
   },
 
   // Flow 3: Pause and Resume AMR task on obstacle
-  async pauseTask(taskId: string, reason: string = 'Vật cản trên lộ trình'): Promise<{ success: boolean; message: string }> {
+  async pauseTask(taskId: string, reason: string = 'Vật cản trên lộ trình', requestedBy: string = 'Staff KDS'): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/pause`, { reason });
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/pause`, { reason, requestedBy });
       return response.data;
-    } catch (err) {
-      return { success: true, message: 'Đã tạm dừng nhiệm vụ robot.' };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.response?.data?.message || err?.message || 'Không thể tạm dừng nhiệm vụ robot.',
+      };
     }
   },
 
-  async resumeTask(taskId: string, reason?: string): Promise<{ success: boolean; message: string }> {
+  async resumeTask(taskId: string, requestedBy: string = 'Staff KDS'): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/resume`, { reason });
+      const response = await apiClient.post<{ success: boolean; message: string }>(`/v1/tasks/${taskId}/resume`, { requestedBy });
       return response.data;
-    } catch (err) {
-      return { success: true, message: 'Đã tiếp tục hành trình cho robot.' };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err?.response?.data?.message || err?.message || 'Không thể tiếp tục hành trình cho robot.',
+      };
     }
   },
 

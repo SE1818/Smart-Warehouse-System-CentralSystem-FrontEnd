@@ -6,7 +6,7 @@ vi.mock('@/services/api', () => ({
 }));
 
 import apiClient from '@/services/api';
-import { robotService } from '@/services/robot';
+import { robotService, normalizeRobotStatus } from '@/services/robot';
 import type { Robot } from '@/types/robot';
 
 const get = apiClient.get as ReturnType<typeof vi.fn>;
@@ -16,31 +16,82 @@ const post = apiClient.post as ReturnType<typeof vi.fn>;
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('robotService', () => {
-  it('listRobots maps currentX/x and title-cases status', async () => {
+  it('listRobots maps currentX/x and preserves canonical RobotStatus', async () => {
     get.mockResolvedValue({ data: [{ id: 'r1', name: 'Bot', currentX: 10, x: 5, currentY: 20, y: 25, batteryLevel: 80, battery: 60, status: 'IDLE', createdAt: '', updatedAt: '' }] });
     const res = await robotService.listRobots();
     expect(res[0].x).toBe(10);
     expect(res[0].status).toBe('Idle');
   });
 
-  it('listRobots maps Moving status', async () => {
-    get.mockResolvedValue({ data: [{ id: 'r2', name: 'B2', x: 3, y: 7, battery: 50, status: 'MOVING', createdAt: '', updatedAt: '' }] });
+  it('listRobots maps Moving and SwappingBattery statuses accurately', async () => {
+    get.mockResolvedValue({
+      data: [
+        { id: 'r2', name: 'B2', x: 3, y: 7, battery: 50, status: 'MOVING', createdAt: '', updatedAt: '' },
+        { id: 'r3', name: 'B3', x: 4, y: 8, battery: 18, status: 'SWAPPING_BATTERY', createdAt: '', updatedAt: '' },
+      ],
+    });
     const res = await robotService.listRobots();
     expect(res[0].status).toBe('Moving');
+    expect(res[1].status).toBe('SwappingBattery');
   });
 
-  it('moveRobot sends correct payload', async () => {
+  it('normalizeRobotStatus preserves SwappingBattery and maps Error/Offline', () => {
+    expect(normalizeRobotStatus('SwappingBattery')).toBe('SwappingBattery');
+    expect(normalizeRobotStatus('SWAPPING_BATTERY')).toBe('SwappingBattery');
+    expect(normalizeRobotStatus('swappingbattery')).toBe('SwappingBattery');
+    expect(normalizeRobotStatus('OFFLINE')).toBe('Offline');
+    expect(normalizeRobotStatus('ERROR')).toBe('Error');
+  });
+
+  it('moveRobot sends payload without hardcoded currentAreaId when unset', async () => {
     put.mockResolvedValue({ data: {} });
     const cur: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 0, y: 0, battery: 50 };
     await robotService.moveRobot('r1', 10, 20, cur);
-    expect(put).toHaveBeenCalled();
+    expect(put).toHaveBeenCalledWith('/v1/robots/r1', {
+      name: 'Bot',
+      batteryLevel: 50,
+      status: 'moving',
+      currentX: 10,
+      currentY: 20,
+    });
   });
 
-  it('updateRobotStatus sends correct payload', async () => {
+  it('moveRobot forwards real currentAreaId when present', async () => {
     put.mockResolvedValue({ data: {} });
-    const cur: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 5, y: 8, battery: 70 };
-    await robotService.updateRobotStatus('r1', 'SwappingBattery', cur);
-    expect(put).toHaveBeenCalled();
+    const cur: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 0, y: 0, battery: 50, currentAreaId: 'area-real-01' };
+    await robotService.moveRobot('r1', 10, 20, cur);
+    expect(put).toHaveBeenCalledWith('/v1/robots/r1', {
+      name: 'Bot',
+      batteryLevel: 50,
+      status: 'moving',
+      currentX: 10,
+      currentY: 20,
+      currentAreaId: 'area-real-01',
+    });
+  });
+
+  it('updateRobotStatus sends payload without hardcoded currentAreaId and forwards real one', async () => {
+    put.mockResolvedValue({ data: {} });
+    const curWithoutArea: Robot = { id: 'r1', name: 'Bot', status: 'Idle', x: 5, y: 8, battery: 70 };
+    await robotService.updateRobotStatus('r1', 'SwappingBattery', curWithoutArea);
+    expect(put).toHaveBeenLastCalledWith('/v1/robots/r1', {
+      name: 'Bot',
+      batteryLevel: 70,
+      status: 'swappingbattery',
+      currentX: 5,
+      currentY: 8,
+    });
+
+    const curWithArea: Robot = { ...curWithoutArea, currentAreaId: 'area-real-02' };
+    await robotService.updateRobotStatus('r1', 'Idle', curWithArea);
+    expect(put).toHaveBeenLastCalledWith('/v1/robots/r1', {
+      name: 'Bot',
+      batteryLevel: 70,
+      status: 'idle',
+      currentX: 5,
+      currentY: 8,
+      currentAreaId: 'area-real-02',
+    });
   });
 
   it('fulfillOrder posts task', async () => {

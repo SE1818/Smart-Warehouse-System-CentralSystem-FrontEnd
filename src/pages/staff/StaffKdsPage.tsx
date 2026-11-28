@@ -51,6 +51,7 @@ import { sqliteService } from "@/services/sqliteService";
 import apiClient from "@/services/api";
 import { useRobotStore } from "@/stores/robotStore";
 import { fixMojibake, getUserInitials } from "@/utils/textUtils";
+import { normalizeTableCode, matchesTableIdentifier } from "@/utils/tableMatching";
 import { usePagination } from "@/hooks/usePagination";
 import { Pagination } from "@/components/common/Pagination";
 import {
@@ -76,6 +77,9 @@ interface TableNode {
   isRestricted?: boolean;
 }
 
+export const normalizeEnumKey = (raw?: string | null): string =>
+  (raw || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+
 export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
   return (backendTables || []).map((t) => {
     let rawNo = t.tableNo || t.table_number || "";
@@ -83,16 +87,17 @@ export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
       const match = (t.tableName || "").match(/\d+/);
       rawNo = match ? `T${match[0].padStart(2, "0")}` : "Bàn";
     }
+    const statusKey = normalizeEnumKey(t.status);
     return {
       id: t.id ? t.id.toString() : rawNo || "Table",
       tableNo: rawNo,
       name: t.tableName || (rawNo ? (rawNo.startsWith("Bàn") ? rawNo : `Bàn ${rawNo}`) : `Bàn ${t.id}`),
       zone: t.zone || "Khu Trong Nhà",
-      status: (t.status === "serving"
+      status: (statusKey === "serving" || statusKey === "served"
         ? "serving"
-        : t.status === "occupied"
+        : statusKey === "occupied"
           ? "occupied"
-          : t.status === "waiting"
+          : statusKey === "waiting" || statusKey === "waitingforservice"
             ? "waiting"
             : "empty") as TableNode["status"],
       guestsCount: t.capacity || 4,
@@ -106,9 +111,6 @@ export const mapBackendTables = (backendTables?: any[]): TableNode[] => {
     };
   });
 };
-
-// Backward-compatible alias for any residual imports
-export const mergeWithDefaultTables = mapBackendTables;
 
 export const formatTableShortCode = (table?: TableNode | null): string => {
   if (!table) return "Bàn";
@@ -137,14 +139,16 @@ const normalizeTaskKey = (id?: string | null): string => {
 };
 
 const formatTransferStatusLabel = (raw?: string | null): string => {
-  const s = (raw || "").toLowerCase();
+  const s = normalizeEnumKey(raw);
   if (s === "pending") return "Chờ lệnh";
   if (s === "assigned") return "Đã gán khay";
-  if (s === "in_transit" || s === "in_progress" || s === "moving" || s === "delivering") {
+  if (s === "loading") return "Đang nạp món";
+  if (s === "intransit" || s === "inprogress" || s === "moving" || s === "movingtopickup" || s === "delivering") {
     return "Đang di chuyển";
   }
   if (s === "arrived") return "Chờ lấy món";
   if (s === "accepted") return "Đã tiếp nhận";
+  if (s === "paused") return "Đang tạm dừng";
   if (s === "delivered" || s === "completed") return "Hoàn tất";
   if (s === "failed") return "Thất bại";
   if (s === "cancelled") return "Đã hủy";
@@ -152,11 +156,12 @@ const formatTransferStatusLabel = (raw?: string | null): string => {
 };
 
 const formatCommandTypeLabel = (raw?: string | null): string => {
-  const s = (raw || "").toLowerCase();
-  if (s === "dispatch_waypoint" || s === "move_to_table" || s === "move_to_dropoff") return "Điều hướng tới bàn";
-  if (s === "move_to_kitchen" || s === "return_to_kitchen") return "Quay về quầy bếp";
-  if (s === "move_to_pickup") return "Đến trạm lấy món";
-  if (s === "pause") return "Tạm dừng tránh vật cản";
+  const s = normalizeEnumKey(raw);
+  if (s === "dispatchwaypoint" || s === "movetotable" || s === "movetodropoff" || s === "move") return "Điều hướng tới bàn";
+  if (s === "movetokitchen" || s === "returntokitchen" || s === "returnkitchen" || s === "returntodock") return "Quay về quầy bếp";
+  if (s === "movetopickup") return "Đến trạm lấy món";
+  if (s === "reroute") return "Đổi bàn giữa chặng";
+  if (s === "pause" || s === "stop") return "Tạm dừng tránh vật cản";
   if (s === "resume") return "Tiếp tục di chuyển";
   if (s === "cancel") return "Hủy lệnh giao món";
   return raw ? raw.replace(/_/g, " ") : "Điều hướng";
@@ -202,7 +207,7 @@ interface RobotFleetItem {
 export const StaffKdsPage: React.FC = () => {
   // Store context
   const [storeName, setStoreName] = useState<string>("Nhà Hàng VORA");
-  const [_subdomain, setSubdomain] = useState<string>("launuong-saigon");
+  const [_subdomain, setSubdomain] = useState<string>("");
   const [_isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedTableId, setSelectedTableId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "slam-map">("slam-map");
@@ -268,7 +273,6 @@ export const StaffKdsPage: React.FC = () => {
   const [missionPhase, setMissionPhase] = useState<
     "idle" | "moving" | "arrived" | "returning"
   >("idle");
-  const transitTimerRef = React.useRef<any>(null);
   const lastChimedLegRef = React.useRef<string>("");
   const lastAssistedLegRef = React.useRef<string>("");
   const audioCtxRef = React.useRef<AudioContext | null>(null);
@@ -475,12 +479,6 @@ export const StaffKdsPage: React.FC = () => {
     );
   }, [activeSequence, currentWorkflowStep]);
 
-  // Cleanup transit timer on unmount
-  useEffect(() => {
-    return () => {
-      if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
-    };
-  }, []);
   const [isConfirmingTable, setIsConfirmingTable] = useState<boolean>(false);
   const [liveTaskAudit, setLiveTaskAudit] = useState<TransferAuditDto | null>(null);
   const [modalTaskAudit, setModalTaskAudit] = useState<TransferAuditDto | null>(null);
@@ -535,9 +533,7 @@ export const StaffKdsPage: React.FC = () => {
     "upload",
   );
   const [importCsvFile, setImportCsvFile] = useState<File | null>(null);
-  const [importCsvContent, setImportCsvContent] = useState<string>(
-    "TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01\nT02,Bàn 02,4,ST_TABLE_02\nT03,Bàn VIP 03,6,ST_TABLE_03\nT04,Bàn 04,2,",
-  );
+  const [importCsvContent, setImportCsvContent] = useState<string>("");
   const [isSubmittingImportCsv, setIsSubmittingImportCsv] =
     useState<boolean>(false);
   const [importResult, setImportResult] = useState<{
@@ -834,12 +830,12 @@ export const StaffKdsPage: React.FC = () => {
         prev.map((t) => {
           if (
             oldTableNo &&
-            (t.name.toLowerCase() === oldTableNo.toLowerCase() || t.tableNo === oldTableNo) &&
+            matchesTableIdentifier(t, oldTableNo) &&
             t.status === "serving"
           ) {
             return { ...t, status: "empty", assignedRobot: null };
           }
-          if (t.name.toLowerCase() === newTableNo.toLowerCase() || t.tableNo === newTableNo) {
+          if (matchesTableIdentifier(t, newTableNo)) {
             return { ...t, status: "serving" };
           }
           return t;
@@ -889,16 +885,16 @@ export const StaffKdsPage: React.FC = () => {
     signalRConnection.on("AssistedDropoffArrived", handleAssistedDropoffArrived);
     signalRConnection.on("TaskStatusUpdated", handleTaskStatusUpdated);
     signalRConnection.on("RobotStatusUpdated", handleRobotStatusUpdated);
+    signalRConnection.on("ReceiveRobotStatusChanged", handleRobotStatusUpdated);
     signalRConnection.on("TableRerouteConflictArrived", handleTableRerouteConflictArrived);
-    signalRConnection.on("DestinationChanged", handleRealtimeTaskRerouted);
     signalRConnection.on("ReceiveTaskRerouted", handleRealtimeTaskRerouted);
     signalRConnection.on("ReceiveTaskStatusChanged", handleReceiveTaskStatusChanged);
     return () => {
       signalRConnection.off("AssistedDropoffArrived", handleAssistedDropoffArrived);
       signalRConnection.off("TaskStatusUpdated", handleTaskStatusUpdated);
       signalRConnection.off("RobotStatusUpdated", handleRobotStatusUpdated);
+      signalRConnection.off("ReceiveRobotStatusChanged", handleRobotStatusUpdated);
       signalRConnection.off("TableRerouteConflictArrived", handleTableRerouteConflictArrived);
-      signalRConnection.off("DestinationChanged", handleRealtimeTaskRerouted);
       signalRConnection.off("ReceiveTaskRerouted", handleRealtimeTaskRerouted);
       signalRConnection.off("ReceiveTaskStatusChanged", handleReceiveTaskStatusChanged);
     };
@@ -922,19 +918,7 @@ export const StaffKdsPage: React.FC = () => {
       return;
     }
 
-    const normalizedLegTable = currentLeg.tableNo
-      .replace(/^Bàn\s+/i, "")
-      .trim()
-      .toLowerCase();
-    const matchedTable = tables.find((t) => {
-      const tNo = (t.tableNo || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
-      const tName = (t.name || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
-      return (
-        (normalizedLegTable &&
-          (tNo === normalizedLegTable || tName === normalizedLegTable)) ||
-        t.name.trim().toLowerCase() === currentLeg.tableNo.trim().toLowerCase()
-      );
-    });
+    const matchedTable = tables.find((t) => matchesTableIdentifier(t, currentLeg.tableNo));
 
     const hasNoDedicatedStation = Boolean(matchedTable && !matchedTable.stationId);
     const sharesStation =
@@ -959,8 +943,8 @@ export const StaffKdsPage: React.FC = () => {
     const initKds = async () => {
       setIsLoading(true);
       try {
-        let sub = "launuong-saigon";
-        let currentStore = "Nhà Hàng Lẩu Nướng VORA Sài Gòn";
+        let sub = "";
+        let currentStore = "Nhà Hàng VORA";
         const stored = localStorage.getItem("user");
         if (stored) {
           const u = JSON.parse(stored);
@@ -1116,9 +1100,9 @@ export const StaffKdsPage: React.FC = () => {
             );
             const mappedTasks = sortedRaw.slice(0, 15).map((t: any) => ({
               taskId: String(t.id),
-              orderId: t.orderId ? String(t.orderId).slice(0, 8).toUpperCase() : "ORD-01",
-              robotCode: t.robotCode || t.robotName || (mappedRobots[0]?.code ?? "AMR-01"),
-              destination: t.destinationTableNo || (t.toStationId ? `Trạm ${String(t.toStationId).slice(0, 4)}` : "Bàn 01"),
+              orderId: t.orderId ? String(t.orderId).slice(0, 8).toUpperCase() : "",
+              robotCode: t.robotCode || t.robotName || mappedRobots[0]?.code || "",
+              destination: t.destinationTableNo || (t.toStationId ? `Trạm ${String(t.toStationId).slice(0, 4)}` : ""),
               status: t.status || "completed",
               time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Vừa xong",
               rawTask: t,
@@ -1127,9 +1111,9 @@ export const StaffKdsPage: React.FC = () => {
             localStorage.setItem("vora_recent_tasks", JSON.stringify(mappedTasks));
 
             // Reconstruct active sequence from backend SQLite active tasks
-            const activeStatuses = new Set(["in_transit", "in_progress", "arrived", "assigned", "pending"]);
+            const activeStatuses = new Set(["intransit", "inprogress", "moving", "movingtopickup", "loading", "arrived", "assigned", "pending", "paused"]);
             const activeTasks = [...tasksRes.data]
-              .filter((t: any) => activeStatuses.has(String(t.status || "").toLowerCase()))
+              .filter((t: any) => activeStatuses.has(normalizeEnumKey(t.status)))
               .sort((a: any, b: any) => (a.cargoLevel || 1) - (b.cargoLevel || 1));
 
             if (activeTasks.length > 0) {
@@ -1139,23 +1123,23 @@ export const StaffKdsPage: React.FC = () => {
               const currentIdx = Math.max(
                 0,
                 activeTasks.findIndex((t: any) => {
-                  const st = String(t.status || "").toLowerCase();
-                  return st === "arrived" || st === "in_transit" || st === "in_progress";
+                  const st = normalizeEnumKey(t.status);
+                  return st === "arrived" || st === "intransit" || st === "inprogress" || st === "moving";
                 }),
               );
-              const curTaskStatus = String(activeTasks[currentIdx]?.status || "").toLowerCase();
+              const curTaskStatus = normalizeEnumKey(activeTasks[currentIdx]?.status);
               const reconstructed = {
                 sequenceId: `SEQ-${String(activeTasks[0].id).slice(0, 4).toUpperCase()}`,
-                robotCode: busyRobot?.code || "AMR-01",
-                robotName: busyRobot?.name || "Robot AMR",
+                robotCode: busyRobot?.code || "",
+                robotName: busyRobot?.name || busyRobot?.code || "",
                 currentLegIndex: currentIdx,
                 legs: activeTasks.map((t: any, idx: number) => {
-                  const st = String(t.status || "").toLowerCase();
+                  const st = normalizeEnumKey(t.status);
                   return {
                     cargoLevel: t.cargoLevel || idx + 1,
-                    tableNo: t.destinationTableNo || `Bàn ${idx + 1}`,
-                    orderId: t.orderId ? String(t.orderId).slice(0, 8).toUpperCase() : `ORD-0${idx + 1}`,
-                    status: (st === "in_transit" || st === "in_progress" || st === "arrived"
+                    tableNo: t.destinationTableNo || (t.toStationId ? `Trạm ${String(t.toStationId).slice(0, 4)}` : ""),
+                    orderId: t.orderId ? String(t.orderId).slice(0, 8).toUpperCase() : "",
+                    status: (st === "intransit" || st === "inprogress" || st === "moving" || st === "arrived"
                       ? "delivering"
                       : "pending") as "pending" | "delivering" | "completed",
                     taskId: String(t.id),
@@ -1202,7 +1186,7 @@ export const StaffKdsPage: React.FC = () => {
       if (cancelled || !audit) return;
       setLiveTaskAudit(audit);
 
-      const reqStatus = (audit.request?.status || "").toLowerCase();
+      const reqStatus = normalizeEnumKey(audit.request?.status);
       if (reqStatus === "arrived") {
         setMissionPhase((prev) => (prev === "arrived" ? prev : "arrived"));
         setRobots((prev) =>
@@ -1220,8 +1204,11 @@ export const StaffKdsPage: React.FC = () => {
           ),
         );
       } else if (
-        reqStatus === "in_transit" ||
-        reqStatus === "in_progress" ||
+        reqStatus === "intransit" ||
+        reqStatus === "inprogress" ||
+        reqStatus === "moving" ||
+        reqStatus === "movingtopickup" ||
+        reqStatus === "loading" ||
         reqStatus === "pending" ||
         reqStatus === "assigned"
       ) {
@@ -1229,7 +1216,7 @@ export const StaffKdsPage: React.FC = () => {
         setRecentSqliteTasks((prev) =>
           prev.map((rt) =>
             normalizeTaskKey(rt.taskId) === normalizeTaskKey(currentLeg.taskId)
-              ? { ...rt, status: reqStatus }
+              ? { ...rt, status: audit.request?.status || reqStatus }
               : rt,
           ),
         );
@@ -1421,11 +1408,6 @@ export const StaffKdsPage: React.FC = () => {
     }
   };
 
-  // Task Queue Handlers: Change Table, Change Station & View Details
-  const handleOpenTaskReroute = (legIndex: number, _tableNo?: string) => {
-    handleOpenWorkflowRerouteModal(legIndex);
-  };
-
   // Toggle Customer Seating / Table Occupancy
   const handleToggleTableOccupied = async (
     e: React.MouseEvent,
@@ -1441,12 +1423,13 @@ export const StaffKdsPage: React.FC = () => {
     );
 
     try {
-      await tableService.updateTableStatus(table.id, newStatus);
-      try {
+      const apiStatus = newStatus === "occupied" ? "Occupied" : "Available";
+      const ok = await tableService.updateTableStatus(table.id, apiStatus);
+      if (!ok) {
         await apiClient.post(`/v1/tables/${table.id}/status`, {
-          status: newStatus,
+          status: apiStatus,
         });
-      } catch {}
+      }
       showToast(
         newStatus === "occupied"
           ? `Bàn ${table.name} đã nhận khách (Có khách ngồi dùng bữa)!`
@@ -1463,12 +1446,7 @@ export const StaffKdsPage: React.FC = () => {
       setIsAssignStationModalOpen(true);
       return;
     }
-    const matched = tables.find(
-      (t) =>
-        t.name.toLowerCase() === tableNoOrId.toLowerCase() ||
-        t.id === tableNoOrId ||
-        t.tableNo === tableNoOrId,
-    );
+    const matched = tables.find((t) => matchesTableIdentifier(t, tableNoOrId));
     const effectiveId = matched?.id || tableNoOrId;
     setAssignStationTableId(effectiveId);
     setAssignStationTargetStationId(matched?.stationId || "");
@@ -1517,11 +1495,7 @@ export const StaffKdsPage: React.FC = () => {
                   : "Về bếp";
         }
 
-        const matchedTable = tables.find(
-          (t) =>
-            t.name.toLowerCase() === leg.tableNo.toLowerCase() ||
-            t.tableNo === leg.tableNo,
-        );
+        const matchedTable = tables.find((t) => matchesTableIdentifier(t, leg.tableNo));
 
         list.push({
           taskId: leg.taskId,
@@ -1548,12 +1522,14 @@ export const StaffKdsPage: React.FC = () => {
       }
 
       const rawSt = String(rt.status || "").toLowerCase().trim();
+      const normSt = normalizeEnumKey(rt.status);
       // Strictly exclude completed, cancelled, aborted, or failed tasks
       const isFinished =
-        rawSt === "completed" ||
-        rawSt === "cancelled" ||
-        rawSt === "failed" ||
-        rawSt === "aborted" ||
+        normSt === "completed" ||
+        normSt === "delivered" ||
+        normSt === "cancelled" ||
+        normSt === "failed" ||
+        normSt === "aborted" ||
         rawSt.includes("hủy") ||
         rawSt.includes("hoàn tất") ||
         rawSt.includes("thất bại") ||
@@ -1580,19 +1556,18 @@ export const StaffKdsPage: React.FC = () => {
       });
 
       if (!alreadyInList) {
-        const matchedTable = tables.find(
-          (t) =>
-            t.name.toLowerCase() === String(rt.destination || "").toLowerCase() ||
-            t.tableNo === rt.destination,
-        );
+        const matchedTable = tables.find((t) => matchesTableIdentifier(t, rt.destination));
         const wfStep =
-          rawSt === "arrived"
+          normSt === "arrived"
             ? 3
-            : rawSt === "in_transit" ||
-                rawSt === "in_progress" ||
-                rawSt === "pending" ||
-                rawSt === "assigned" ||
-                rawSt === "delivering"
+            : normSt === "intransit" ||
+                normSt === "inprogress" ||
+                normSt === "moving" ||
+                normSt === "movingtopickup" ||
+                normSt === "loading" ||
+                normSt === "pending" ||
+                normSt === "assigned" ||
+                normSt === "delivering"
               ? 2
               : 1;
 
@@ -1682,9 +1657,7 @@ export const StaffKdsPage: React.FC = () => {
       if (isTray1Active) {
         for (let i = 0; i < tray1Tables.length; i++) {
           const tbl = tray1Tables[i];
-          const matched = tables.find(
-            (t) => t.name.toLowerCase() === tbl.toLowerCase() || t.tableNo?.toLowerCase() === tbl.toLowerCase(),
-          );
+          const matched = tables.find((t) => matchesTableIdentifier(t, tbl));
           trayAssignments.push({
             cargoLevel: 1,
             toStationId: matched?.stationId || undefined,
@@ -1698,9 +1671,7 @@ export const StaffKdsPage: React.FC = () => {
       if (isTray2Active) {
         for (let i = 0; i < tray2Tables.length; i++) {
           const tbl = tray2Tables[i];
-          const matched = tables.find(
-            (t) => t.name.toLowerCase() === tbl.toLowerCase() || t.tableNo?.toLowerCase() === tbl.toLowerCase(),
-          );
+          const matched = tables.find((t) => matchesTableIdentifier(t, tbl));
           trayAssignments.push({
             cargoLevel: 2,
             toStationId: matched?.stationId || undefined,
@@ -1762,7 +1733,6 @@ export const StaffKdsPage: React.FC = () => {
         };
       });
 
-      if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
       setLiveTaskAudit(null);
       setMissionPhase("moving");
 
@@ -1865,8 +1835,6 @@ export const StaffKdsPage: React.FC = () => {
         showToast(confirmRes.message || "Không thể xác nhận hoàn tất chặng giao món!", "info");
         return;
       }
-
-      if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
 
       // Cập nhật bàn vừa trả món sang Có Khách (occupied)
       setTables((prev) =>
@@ -2028,12 +1996,7 @@ export const StaffKdsPage: React.FC = () => {
       );
     }
 
-    const targetNode = tables.find(
-      (t) =>
-        t.name.toLowerCase() === rerouteNewTable.toLowerCase() ||
-        t.id === rerouteNewTable ||
-        t.tableNo === rerouteNewTable,
-    );
+    const targetNode = tables.find((t) => matchesTableIdentifier(t, rerouteNewTable));
     const targetStationId = resolveTargetStationIdForTable(targetNode);
     if (!targetStationId) {
       showToast(
@@ -2125,16 +2088,10 @@ export const StaffKdsPage: React.FC = () => {
 
       setTables((prev) =>
         prev.map((t) => {
-          if (
-            (t.name.toLowerCase() === oldTableNo.toLowerCase() || t.tableNo === oldTableNo) &&
-            t.status === "serving"
-          ) {
+          if (matchesTableIdentifier(t, oldTableNo) && t.status === "serving") {
             return { ...t, status: "empty", assignedRobot: null };
           }
-          if (
-            t.name.toLowerCase() === rerouteNewTable.toLowerCase() ||
-            t.tableNo === rerouteNewTable
-          ) {
+          if (matchesTableIdentifier(t, rerouteNewTable)) {
             return { ...t, status: "serving", assignedRobot: activeSequence.robotCode };
           }
           return t;
@@ -2327,8 +2284,8 @@ export const StaffKdsPage: React.FC = () => {
               ...t,
               stationId: assignStationTargetStationId || null,
               stationName: stationObj ? stationObj.name : null,
-              worldX: hasOwnWaypoint ? t.worldX : stationObj ? stationObj.xCoord : t.worldX,
-              worldY: hasOwnWaypoint ? t.worldY : stationObj ? stationObj.yCoord : t.worldY,
+              worldX: hasOwnWaypoint ? t.worldX : stationObj ? (stationObj.metricX ?? stationObj.xCoord) : t.worldX,
+              worldY: hasOwnWaypoint ? t.worldY : stationObj ? (stationObj.metricY ?? stationObj.yCoord) : t.worldY,
             };
           }),
         );
@@ -2427,6 +2384,7 @@ export const StaffKdsPage: React.FC = () => {
         rerouteConflictModal.taskId,
         rerouteConflictModal.newStationId,
         "Nhân viên KDS",
+        rerouteConflictModal.newTableNo,
       );
       if (!res.success) {
         showToast(res.message || "Không thể điều phối chặng 2.", "info");
@@ -2494,7 +2452,7 @@ export const StaffKdsPage: React.FC = () => {
       if (isTaskPaused) {
         await robotService.resumeTask(
           currentLeg.taskId,
-          "Đã dọn chướng ngại vật hành lang",
+          "Nhân viên KDS",
         );
         setIsTaskPaused(false);
         showToast(
@@ -2535,7 +2493,6 @@ export const StaffKdsPage: React.FC = () => {
     const robotId = effectiveRobot?.id;
     try {
       await robotService.abortTask(curTaskId, robotId);
-      if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
       setMissionPhase("idle");
       setActiveSequence(null);
       setIsDispatching(false);
@@ -2569,8 +2526,7 @@ export const StaffKdsPage: React.FC = () => {
   const cleanKdsUserName = fixMojibake(
     kdsUser?.name || kdsUser?.email?.split("@")[0] || "Nhân Viên KDS",
   );
-  const cleanKdsUserEmail =
-    kdsUser?.email || (_subdomain ? `kds@${_subdomain}.vn` : "kds@vora.vn");
+  const cleanKdsUserEmail = kdsUser?.email || "";
   const kdsUserInitials = getUserInitials(cleanKdsUserName);
 
   const handleKdsLogout = () => {
@@ -2608,23 +2564,17 @@ export const StaffKdsPage: React.FC = () => {
         : undefined;
     const arrivedTableKey =
       currentWorkflowStep === 3 && activeLeg
-        ? activeLeg.tableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase()
+        ? normalizeTableCode(activeLeg.tableNo)
         : assistedDropoffAlert?.destinationTableNo
-          ? assistedDropoffAlert.destinationTableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase()
+          ? normalizeTableCode(assistedDropoffAlert.destinationTableNo)
           : "";
 
     return tables.map((t) => {
-      const tNameNorm = (t.name || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
-      const tNoNorm = (t.tableNo || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
+      const tNameNorm = normalizeTableCode(t.name);
+      const tNoNorm = normalizeTableCode(t.tableNo);
       const matchedLeg =
         activeSequence?.status === "in_progress"
-          ? activeSequence.legs.find((leg) => {
-              const legNorm = leg.tableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase();
-              return (
-                leg.tableNo.toLowerCase() === t.name.toLowerCase() ||
-                (legNorm && (tNameNorm === legNorm || tNoNorm === legNorm))
-              );
-            })
+          ? activeSequence.legs.find((leg) => matchesTableIdentifier(t, leg.tableNo))
           : undefined;
       const isArrivedTarget = Boolean(
         arrivedTableKey && (tNameNorm === arrivedTableKey || tNoNorm === arrivedTableKey),
@@ -2705,12 +2655,7 @@ export const StaffKdsPage: React.FC = () => {
       const currentLeg = activeSequence.legs[activeSequence.currentLegIndex];
       if (!currentLeg) return null;
       const nextLeg = activeSequence.legs[activeSequence.currentLegIndex + 1];
-      const normLeg = currentLeg.tableNo.replace(/^Bàn\s+/i, "").trim().toLowerCase();
-      const matchedTable = tables.find((t) => {
-        const tNo = (t.tableNo || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
-        const tName = (t.name || "").replace(/^Bàn\s+/i, "").trim().toLowerCase();
-        return (normLeg && (tNo === normLeg || tName === normLeg)) || t.name === currentLeg.tableNo;
-      });
+      const matchedTable = tables.find((t) => matchesTableIdentifier(t, currentLeg.tableNo));
       return {
         taskId: currentLeg.taskId,
         robotCode: activeSequence.robotCode,
@@ -4100,7 +4045,6 @@ export const StaffKdsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      if (transitTimerRef.current) clearTimeout(transitTimerRef.current);
                       setMissionPhase("idle");
                       setActiveSequence(null);
                     }}
@@ -4903,7 +4847,7 @@ export const StaffKdsPage: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                         <button
                           type="button"
-                          onClick={() => handleOpenTaskReroute(task.legIndex, task.tableNo)}
+                          onClick={() => handleOpenWorkflowRerouteModal(task.legIndex)}
                           className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 border border-amber-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                           title="Đổi bàn đích đến cho nhiệm vụ này"
                         >
@@ -5773,6 +5717,7 @@ export const StaffKdsPage: React.FC = () => {
                   rows={5}
                   value={importCsvContent}
                   onChange={(e) => setImportCsvContent(e.target.value)}
+                  placeholder={"TableNo,TableName,Capacity,StationName\nT01,Bàn 01,4,ST_TABLE_01"}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px] text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
@@ -5820,7 +5765,8 @@ export const StaffKdsPage: React.FC = () => {
                 type="button"
                 disabled={
                   isSubmittingImportCsv ||
-                  (importCsvMode === "upload" && !importCsvFile)
+                  (importCsvMode === "upload" && !importCsvFile) ||
+                  (importCsvMode === "text" && !importCsvContent.trim())
                 }
                 onClick={handleImportCsv}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/10 cursor-pointer"
@@ -6364,7 +6310,7 @@ export const StaffKdsPage: React.FC = () => {
                   onClick={() => {
                     const task = selectedTaskDetail;
                     setSelectedTaskDetail(null);
-                    handleOpenTaskReroute(task.legIndex, task.tableNo);
+                    handleOpenWorkflowRerouteModal(task.legIndex);
                   }}
                   className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >

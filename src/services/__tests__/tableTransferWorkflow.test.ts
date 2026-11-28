@@ -797,6 +797,40 @@ describe('Weekly Report #9 — FE F-07 Reroute Conflict/SignalR & F-09 Nearest D
     expect(updatedTable.worldX).toBe(5.5);
     expect(updatedTable.worldY).toBe(6.75);
   });
+
+  it('sends newTableNo on dispatchSecondLeg when explicitly provided and aligns resumeTask payload with ResumeTaskRequestDto', async () => {
+    post.mockResolvedValue({ data: { success: true, message: 'OK' } });
+
+    await robotService.dispatchSecondLeg('task-leg2', 'st-shared', 'Nhân viên KDS', 'S2');
+    expect(post).toHaveBeenCalledWith('/v1/tasks/task-leg2/dispatch-second-leg', {
+      newStationId: 'st-shared',
+      confirmedBy: 'Nhân viên KDS',
+      newTableNo: 'S2',
+    });
+
+    await robotService.pauseTask('task-leg2', 'Tránh vật cản', 'Nhân viên KDS');
+    expect(post).toHaveBeenCalledWith('/v1/tasks/task-leg2/pause', {
+      reason: 'Tránh vật cản',
+      requestedBy: 'Nhân viên KDS',
+    });
+
+    await robotService.resumeTask('task-leg2', 'Nhân viên KDS');
+    expect(post).toHaveBeenCalledWith('/v1/tasks/task-leg2/resume', {
+      requestedBy: 'Nhân viên KDS',
+    });
+  });
+
+  it('normalizes PascalCase BE Task/Command/Table enums consistently with FE snake_case filters', () => {
+    const normalizeEnumKey = (raw?: string | null) =>
+      (raw || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+    expect(normalizeEnumKey('InTransit')).toBe(normalizeEnumKey('in_transit'));
+    expect(normalizeEnumKey('MovingToPickup')).toBe(normalizeEnumKey('moving_to_pickup'));
+    expect(normalizeEnumKey('DispatchWaypoint')).toBe(normalizeEnumKey('dispatch_waypoint'));
+    expect(normalizeEnumKey('ReturnKitchen')).toBe(normalizeEnumKey('return_kitchen'));
+    expect(normalizeEnumKey('WaitingForService')).toBe('waitingforservice');
+    expect(normalizeEnumKey('Serving')).toBe('serving');
+  });
 });
 
 
