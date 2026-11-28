@@ -1,11 +1,13 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, CheckCircle2, RefreshCw, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Lock, RefreshCw, Trash2, Unlock, X } from 'lucide-react';
 
 export interface DeleteConfirmChip {
   label: string;
   accent?: boolean;
 }
+
+export type ConfirmModalTone = 'danger' | 'warning' | 'success';
 
 export interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -19,11 +21,79 @@ export interface DeleteConfirmModalProps {
   confirmLabel?: string;
   loadingLabel?: string;
   cancelLabel?: string;
-  confirmKeyword?: string;
-  confirmInputPlaceholder?: string;
   theme?: 'light' | 'dark';
+  tone?: ConfirmModalTone;
   isLoading?: boolean;
 }
+
+const TONE_CLASSES: Record<
+  ConfirmModalTone,
+  {
+    light: {
+      iconBox: string;
+      warningCard: string;
+      warningNote: string;
+      accentChip: string;
+      confirmBtn: string;
+    };
+    dark: {
+      iconBox: string;
+      warningCard: string;
+      warningNote: string;
+      accentChip: string;
+      confirmBtn: string;
+    };
+  }
+> = {
+  danger: {
+    light: {
+      iconBox: 'bg-rose-50 border-rose-200 text-rose-600',
+      warningCard: 'bg-rose-50/80 border-rose-200 text-slate-700',
+      warningNote: 'text-rose-800/90',
+      accentChip: 'bg-rose-50 border-rose-200 text-rose-700',
+      confirmBtn: 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/25',
+    },
+    dark: {
+      iconBox: 'bg-rose-500/15 border-rose-500/35 text-rose-400',
+      warningCard: 'bg-rose-500/10 border-rose-500/35 text-slate-200',
+      warningNote: 'text-rose-200/90',
+      accentChip: 'bg-rose-500/15 border-rose-500/35 text-rose-300',
+      confirmBtn: 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/25',
+    },
+  },
+  warning: {
+    light: {
+      iconBox: 'bg-amber-50 border-amber-200 text-amber-600',
+      warningCard: 'bg-amber-50/80 border-amber-200 text-slate-700',
+      warningNote: 'text-amber-900/90',
+      accentChip: 'bg-amber-50 border-amber-200 text-amber-800',
+      confirmBtn: 'bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/25',
+    },
+    dark: {
+      iconBox: 'bg-amber-500/15 border-amber-500/35 text-amber-400',
+      warningCard: 'bg-amber-500/10 border-amber-500/35 text-slate-200',
+      warningNote: 'text-amber-200/90',
+      accentChip: 'bg-amber-500/15 border-amber-500/35 text-amber-300',
+      confirmBtn: 'bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-600/25',
+    },
+  },
+  success: {
+    light: {
+      iconBox: 'bg-emerald-50 border-emerald-200 text-emerald-600',
+      warningCard: 'bg-emerald-50/80 border-emerald-200 text-slate-700',
+      warningNote: 'text-emerald-900/90',
+      accentChip: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+      confirmBtn: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/25',
+    },
+    dark: {
+      iconBox: 'bg-emerald-500/15 border-emerald-500/35 text-emerald-400',
+      warningCard: 'bg-emerald-500/10 border-emerald-500/35 text-slate-200',
+      warningNote: 'text-emerald-200/90',
+      accentChip: 'bg-emerald-500/15 border-emerald-500/35 text-emerald-300',
+      confirmBtn: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/25',
+    },
+  },
+};
 
 export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   isOpen,
@@ -37,23 +107,13 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   confirmLabel = 'Xác Nhận Xóa',
   loadingLabel = 'Đang xử lý...',
   cancelLabel = 'Hủy',
-  confirmKeyword,
-  confirmInputPlaceholder,
   theme = 'light',
+  tone = 'danger',
   isLoading = false,
 }) => {
   const titleId = useId();
-  const [typedKeyword, setTypedKeyword] = useState('');
-
-  const normalizedKeyword = (confirmKeyword || '').trim();
-  const requiresStrictConfirm = normalizedKeyword.length > 0;
-  const isKeywordMatched = !requiresStrictConfirm || typedKeyword.trim() === normalizedKeyword;
-  const isConfirmDisabled = isLoading || !isKeywordMatched;
   const isDark = theme === 'dark';
-
-  useEffect(() => {
-    setTypedKeyword('');
-  }, [isOpen, normalizedKeyword]);
+  const palette = TONE_CLASSES[tone][isDark ? 'dark' : 'light'];
 
   useEffect(() => {
     if (!isOpen) return;
@@ -71,6 +131,9 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   }, [isOpen, isLoading, onClose]);
 
   if (!isOpen) return null;
+
+  const HeaderIcon = tone === 'success' ? CheckCircle2 : AlertTriangle;
+  const ConfirmIcon = tone === 'warning' ? Lock : tone === 'success' ? Unlock : Trash2;
 
   const modalContent = (
     <div
@@ -100,13 +163,9 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         >
           <div className="flex items-start gap-3 min-w-0">
             <div
-              className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
-                isDark
-                  ? 'bg-rose-500/15 border-rose-500/35 text-rose-400'
-                  : 'bg-rose-50 border-rose-200 text-rose-600'
-              }`}
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${palette.iconBox}`}
             >
-              <AlertTriangle className="w-5 h-5" />
+              <HeaderIcon className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <h3
@@ -144,24 +203,12 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           </button>
         </div>
 
-        {/* Red Warning Card */}
-        <div
-          className={`rounded-xl p-3.5 border space-y-2.5 text-xs ${
-            isDark
-              ? 'bg-rose-500/10 border-rose-500/35 text-slate-200'
-              : 'bg-rose-50/80 border-rose-200 text-slate-700'
-          }`}
-        >
+        {/* Warning Content Card */}
+        <div className={`rounded-xl p-3.5 border space-y-2.5 text-xs ${palette.warningCard}`}>
           <div className="leading-relaxed">{description}</div>
 
           {warningNote && (
-            <p
-              className={`text-[11px] leading-relaxed ${
-                isDark ? 'text-rose-200/90' : 'text-rose-800/90'
-              }`}
-            >
-              {warningNote}
-            </p>
+            <p className={`text-[11px] leading-relaxed ${palette.warningNote}`}>{warningNote}</p>
           )}
 
           {chips.length > 0 && (
@@ -171,9 +218,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
                   key={`${chip.label}-${idx}`}
                   className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border ${
                     chip.accent
-                      ? isDark
-                        ? 'bg-rose-500/15 border-rose-500/35 text-rose-300'
-                        : 'bg-rose-50 border-rose-200 text-rose-700'
+                      ? palette.accentChip
                       : isDark
                         ? 'bg-slate-950/80 border-slate-700 text-slate-300'
                         : 'bg-white border-slate-200 text-slate-600'
@@ -185,67 +230,6 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             </div>
           )}
         </div>
-
-        {/* Tier 2: Strict Type-to-Confirm */}
-        {requiresStrictConfirm && (
-          <div className="space-y-2">
-            <label
-              className={`block text-xs font-medium leading-relaxed ${
-                isDark ? 'text-slate-300' : 'text-slate-700'
-              }`}
-            >
-              Nhập chính xác{' '}
-              <code
-                className={`px-1.5 py-0.5 rounded font-mono text-[11px] font-bold border select-all ${
-                  isDark
-                    ? 'bg-slate-950/90 border-slate-700 text-rose-300'
-                    : 'bg-slate-100 border-slate-200 text-rose-700'
-                }`}
-              >
-                {normalizedKeyword}
-              </code>{' '}
-              để mở khóa nút xóa:
-            </label>
-
-            <input
-              type="text"
-              value={typedKeyword}
-              onChange={(e) => setTypedKeyword(e.target.value)}
-              disabled={isLoading}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder={confirmInputPlaceholder || normalizedKeyword}
-              className={`w-full px-3 py-2 rounded-xl border font-mono text-xs transition-colors focus:outline-none disabled:opacity-60 ${
-                isKeywordMatched
-                  ? isDark
-                    ? 'bg-emerald-950/30 border-emerald-500/60 text-emerald-200 focus:border-emerald-400'
-                    : 'bg-emerald-50/50 border-emerald-400 text-emerald-900 focus:border-emerald-500'
-                  : isDark
-                    ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-500 focus:border-rose-500'
-                    : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-rose-500'
-              }`}
-            />
-
-            {isKeywordMatched ? (
-              <p
-                className={`flex items-center gap-1.5 text-[11px] font-semibold ${
-                  isDark ? 'text-emerald-400' : 'text-emerald-700'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Đã khớp mã đối tượng — sẵn sàng xác nhận xóa</span>
-              </p>
-            ) : (
-              <p
-                className={`text-[11px] ${
-                  isDark ? 'text-slate-400' : 'text-slate-500'
-                }`}
-              >
-                Nút xác nhận đang bị khóa cho đến khi khớp chính xác tên/mã đối tượng.
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Footer Actions */}
         <div
@@ -268,14 +252,12 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
           <button
             type="button"
-            disabled={isConfirmDisabled}
+            disabled={isLoading}
             onClick={() => void onConfirm()}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              isConfirmDisabled
-                ? isDark
-                  ? 'bg-rose-600/35 text-rose-200/75 border border-rose-500/35 cursor-not-allowed'
-                  : 'bg-rose-600/40 text-white/80 cursor-not-allowed'
-                : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/25 cursor-pointer active:scale-[0.99]'
+              isLoading
+                ? 'opacity-60 cursor-not-allowed ' + palette.confirmBtn
+                : palette.confirmBtn + ' cursor-pointer active:scale-[0.99]'
             }`}
           >
             {isLoading ? (
@@ -285,7 +267,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
               </>
             ) : (
               <>
-                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <ConfirmIcon className="w-3.5 h-3.5 shrink-0" />
                 <span>{confirmLabel}</span>
               </>
             )}

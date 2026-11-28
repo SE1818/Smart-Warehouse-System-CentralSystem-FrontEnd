@@ -22,7 +22,7 @@ describe('DeleteConfirmModal', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders Standard mode (light and dark), calls onConfirm and supports Escape/cancel', () => {
+  it('renders 1-step danger confirmation in light and dark themes and triggers callbacks', () => {
     const onClose = vi.fn();
     const onConfirm = vi.fn();
 
@@ -49,6 +49,7 @@ describe('DeleteConfirmModal', () => {
     expect(screen.getByText('Hành động cần lưu đồng bộ.')).toBeInTheDocument();
     expect(screen.getByText('Trạm Bàn')).toBeInTheDocument();
     expect(screen.getByText('X: 1.50m, Y: 2.00m')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 
     const confirmBtn = screen.getByRole('button', { name: 'Xóa Trạm' });
     expect(confirmBtn).not.toBeDisabled();
@@ -75,71 +76,47 @@ describe('DeleteConfirmModal', () => {
     expect(screen.getByRole('dialog').className).toContain('bg-[#111827]');
   });
 
-  it('locks confirm in Strict mode until exact confirmKeyword is typed and resets on reopen', () => {
-    const onConfirm = vi.fn();
+  it('supports warning (Ban) and success (Unban) 1-step tones without input friction', () => {
+    const onBanConfirm = vi.fn();
+    const onUnbanConfirm = vi.fn();
 
     const { rerender } = render(
       <DeleteConfirmModal
         theme="dark"
+        tone="warning"
         isOpen={true}
         onClose={vi.fn()}
-        onConfirm={onConfirm}
-        title="Xác Nhận Xóa Robot"
-        description="Xóa robot VORA-01?"
-        confirmKeyword="VORA-01"
-        confirmLabel="Xóa Robot"
+        onConfirm={onBanConfirm}
+        title="Xác Nhận Tạm Khóa Tài Khoản"
+        description="Tạm khóa staff.q1@vora.vn?"
+        confirmLabel="Tạm Khóa Tài Khoản"
       />
     );
 
-    const confirmBtn = screen.getByRole('button', { name: 'Xóa Robot' });
-    const input = screen.getByPlaceholderText('VORA-01') as HTMLInputElement;
-
-    expect(confirmBtn).toBeDisabled();
-    expect(
-      screen.getByText('Nút xác nhận đang bị khóa cho đến khi khớp chính xác tên/mã đối tượng.')
-    ).toBeInTheDocument();
-
-    fireEvent.change(input, { target: { value: 'VORA-02' } });
-    expect(confirmBtn).toBeDisabled();
-    fireEvent.click(confirmBtn);
-    expect(onConfirm).not.toHaveBeenCalled();
-
-    fireEvent.change(input, { target: { value: ' VORA-01 ' } });
-    expect(confirmBtn).not.toBeDisabled();
-    expect(screen.getByText('Đã khớp mã đối tượng — sẵn sàng xác nhận xóa')).toBeInTheDocument();
-
-    fireEvent.click(confirmBtn);
-    expect(onConfirm).toHaveBeenCalledTimes(1);
+    const banBtn = screen.getByRole('button', { name: 'Tạm Khóa Tài Khoản' });
+    expect(banBtn).not.toBeDisabled();
+    expect(banBtn.className).toContain('bg-amber-600');
+    fireEvent.click(banBtn);
+    expect(onBanConfirm).toHaveBeenCalledTimes(1);
 
     rerender(
       <DeleteConfirmModal
         theme="dark"
-        isOpen={false}
-        onClose={vi.fn()}
-        onConfirm={onConfirm}
-        title="Xác Nhận Xóa Robot"
-        description="Xóa robot VORA-01?"
-        confirmKeyword="VORA-01"
-        confirmLabel="Xóa Robot"
-      />
-    );
-
-    rerender(
-      <DeleteConfirmModal
-        theme="dark"
+        tone="success"
         isOpen={true}
         onClose={vi.fn()}
-        onConfirm={onConfirm}
-        title="Xác Nhận Xóa Robot"
-        description="Xóa robot VORA-01?"
-        confirmKeyword="VORA-01"
-        confirmLabel="Xóa Robot"
+        onConfirm={onUnbanConfirm}
+        title="Xác Nhận Mở Khóa Tài Khoản"
+        description="Mở khóa staff.q1@vora.vn?"
+        confirmLabel="Mở Khóa Tài Khoản"
       />
     );
 
-    const reopenedInput = screen.getByPlaceholderText('VORA-01') as HTMLInputElement;
-    expect(reopenedInput.value).toBe('');
-    expect(screen.getByRole('button', { name: 'Xóa Robot' })).toBeDisabled();
+    const unbanBtn = screen.getByRole('button', { name: 'Mở Khóa Tài Khoản' });
+    expect(unbanBtn).not.toBeDisabled();
+    expect(unbanBtn.className).toContain('bg-emerald-600');
+    fireEvent.click(unbanBtn);
+    expect(onUnbanConfirm).toHaveBeenCalledTimes(1);
   });
 
   it('disables buttons and blocks Escape closing while isLoading is true', () => {
