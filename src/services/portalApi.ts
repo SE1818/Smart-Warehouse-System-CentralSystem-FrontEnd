@@ -497,8 +497,11 @@ export const alertService = {
         return res.data
           .filter((n: any) => n.status !== 'Read')
           .map((n: any) => {
+            const sev = (n.severity || '').toLowerCase();
             const text = `${n.title || ''} ${n.message || ''}`.toLowerCase();
             const isCritical =
+              sev === 'error' ||
+              sev === 'critical' ||
               n.type === 'error' ||
               n.priority === 'High' ||
               text.includes('thất bại') ||
@@ -507,14 +510,15 @@ export const alertService = {
               text.includes('failed');
             const isWarning =
               !isCritical &&
-              (n.type === 'warning' ||
+              (sev === 'warning' ||
+                n.type === 'warning' ||
                 text.includes('cảnh báo') ||
                 text.includes('pin') ||
                 text.includes('tạm dừng') ||
                 text.includes('warning'));
             return {
               id: n.id?.toString() || `alt-${Date.now()}`,
-              robot: n.robotCode || n.source || 'AMR',
+              robot: n.robotCode || n.source || (n.category === 'Robot' ? 'AMR' : n.category || 'AMR'),
               type: isCritical ? 'critical' : isWarning ? 'warning' : 'info',
               message: n.message || n.title || 'Thông báo hệ thống',
               time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString('vi-VN') : 'Vừa xong',
