@@ -60,6 +60,7 @@ import {
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/common/Pagination';
 import { MapStationManager } from '@/components/technical/MapStationManager';
+import { DeleteConfirmModal } from '@/components/common/DeleteConfirmModal';
 
 interface AMRNode {
   id: string;
@@ -111,6 +112,14 @@ export const AdminTechnicalPage: React.FC = () => {
   const [selectedAmr, setSelectedAmr] = useState<AMRNode | null>(null);
   const [emergencyStop, setEmergencyStop] = useState(false);
   const [_loading, setLoading] = useState(true);
+  const [missionToCancel, setMissionToCancel] = useState<{
+    id: string;
+    title: string;
+    destination?: string;
+    priority?: string;
+    eta?: string;
+  } | null>(null);
+  const [isCancelingMission, setIsCancelingMission] = useState(false);
 
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed((prev) => {
@@ -1571,7 +1580,15 @@ export const AdminTechnicalPage: React.FC = () => {
                                 )}
                                 <button
                                   type="button"
-                                  onClick={() => handleCancelMission(mission.id)}
+                                  onClick={() =>
+                                    setMissionToCancel({
+                                      id: mission.id,
+                                      title: mission.title,
+                                      destination: mission.destination,
+                                      priority: mission.priority,
+                                      eta: mission.eta,
+                                    })
+                                  }
                                   className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white text-[10px] cursor-pointer"
                                   title="Hủy lệnh này"
                                 >
@@ -2151,7 +2168,15 @@ export const AdminTechnicalPage: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleCancelMission(m.id)}
+                            onClick={() =>
+                              setMissionToCancel({
+                                id: m.id,
+                                title: m.title,
+                                destination: m.destination,
+                                priority: m.priority,
+                                eta: m.eta,
+                              })
+                            }
                             className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200 cursor-pointer"
                           >
                             Hủy Lệnh
@@ -3318,6 +3343,50 @@ export const AdminTechnicalPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        theme="light"
+        isOpen={Boolean(missionToCancel)}
+        onClose={() => {
+          if (!isCancelingMission) setMissionToCancel(null);
+        }}
+        onConfirm={async () => {
+          if (!missionToCancel) return;
+          setIsCancelingMission(true);
+          try {
+            await handleCancelMission(missionToCancel.id);
+            setMissionToCancel(null);
+          } finally {
+            setIsCancelingMission(false);
+          }
+        }}
+        isLoading={isCancelingMission}
+        loadingLabel="Đang hủy lệnh..."
+        title="Xác Nhận Hủy Lệnh Điều Phối"
+        subtitle={missionToCancel ? `Mã lệnh: ${missionToCancel.id}` : undefined}
+        description={
+          <>
+            Bạn có chắc chắn muốn hủy nhiệm vụ{' '}
+            <strong className="text-slate-900 font-extrabold">
+              {missionToCancel?.title}
+            </strong>
+            ?
+          </>
+        }
+        warningNote="Nhiệm vụ sẽ bị loại khỏi hàng đợi điều phối hiện tại của đội robot."
+        chips={
+          missionToCancel
+            ? [
+                ...(missionToCancel.destination
+                  ? [{ label: `Đích: ${missionToCancel.destination}`, accent: true }]
+                  : []),
+                ...(missionToCancel.priority ? [{ label: `Ưu tiên: ${missionToCancel.priority}` }] : []),
+                ...(missionToCancel.eta ? [{ label: `ETA: ${missionToCancel.eta}` }] : []),
+              ]
+            : []
+        }
+        confirmLabel="Xác Nhận Hủy Lệnh"
+      />
     </div>
   );
 };

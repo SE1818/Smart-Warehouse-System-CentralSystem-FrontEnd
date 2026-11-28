@@ -26,6 +26,7 @@ import {
 import { useRobotStore } from '@/stores/robotStore';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/common/Pagination';
+import { DeleteConfirmModal } from '@/components/common/DeleteConfirmModal';
 import type { FleetAMR } from '@/services/portalApi';
 
 type LogTabKey =
@@ -112,6 +113,7 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [detailModal, setDetailModal] = useState<DetailModalState | null>(null);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState<boolean>(false);
 
   const [payload, setPayload] = useState<EdgeRobotLogsPayload>({
     transferLogs: [],
@@ -331,7 +333,7 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
           {activeCategory === 'liveStream' && liveLogs.length > 0 && (
             <button
               type="button"
-              onClick={clearLogs}
+              onClick={() => setIsClearConfirmOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -937,6 +939,33 @@ export const EdgeRobotLogsPanel: React.FC<EdgeRobotLogsPanelProps> = ({
           </div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        theme="light"
+        isOpen={isClearConfirmOpen}
+        onClose={() => setIsClearConfirmOpen(false)}
+        onConfirm={() => {
+          clearLogs();
+          setIsClearConfirmOpen(false);
+        }}
+        title="Xác Nhận Xóa Nhật Ký Phiên"
+        subtitle="Sự Kiện Phiên Trực Tiếp (Live Stream)"
+        description={
+          <>
+            Bạn có chắc chắn muốn xóa toàn bộ{' '}
+            <strong className="text-slate-900 font-extrabold">
+              {liveLogs.length} sự kiện
+            </strong>{' '}
+            đang hiển thị trong phiên trực tiếp hiện tại?
+          </>
+        }
+        warningNote="Hành động này chỉ làm sạch danh sách theo dõi tạm thời trên trình duyệt và không ảnh hưởng tới dữ liệu đã lưu tại trạm."
+        chips={[
+          { label: `${liveLogs.length} bản ghi phiên`, accent: true },
+          ...(tenantSlug ? [{ label: tenantSlug }] : []),
+        ]}
+        confirmLabel="Xóa Phiên"
+      />
     </div>
   );
 };

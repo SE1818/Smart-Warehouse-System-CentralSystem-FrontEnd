@@ -20,6 +20,7 @@ import {
   type SlamMapStationDto,
 } from '@/services/robot';
 import { SlamFloorMapViewer, type MapTableNode, type MapRobotItem } from '@/components/map/SlamFloorMapViewer';
+import { DeleteConfirmModal } from '@/components/common/DeleteConfirmModal';
 import type { StationType } from '@/types/robot';
 
 /**
@@ -143,6 +144,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
   const [newStationType, setNewStationType] = useState<StationType>('Dropoff');
   const [newStationX, setNewStationX] = useState<number>(0);
   const [newStationY, setNewStationY] = useState<number>(0);
+  const [stationToDelete, setStationToDelete] = useState<SlamMapWaypointDto | null>(null);
 
   const mapFileInputRef = useRef<HTMLInputElement>(null);
   const waypointsFileInputRef = useRef<HTMLInputElement>(null);
@@ -839,7 +841,7 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
                           <td className="py-2.5 px-3 text-right">
                             <button
                               type="button"
-                              onClick={() => handleRemoveStation(st.id)}
+                              onClick={() => setStationToDelete(st)}
                               className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
                               title="Xóa trạm"
                             >
@@ -891,6 +893,50 @@ export const MapStationManager: React.FC<MapStationManagerProps> = ({
           </div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        theme="light"
+        isOpen={Boolean(stationToDelete)}
+        onClose={() => setStationToDelete(null)}
+        onConfirm={() => {
+          if (!stationToDelete) return;
+          handleRemoveStation(stationToDelete.id);
+          setStationToDelete(null);
+        }}
+        title="Xác Nhận Xóa Trạm Bản Đồ"
+        subtitle={stationToDelete ? `Trạm: ${stationToDelete.name}` : undefined}
+        description={
+          <>
+            Bạn có chắc chắn muốn xóa trạm{' '}
+            <strong className="text-slate-900 font-extrabold">
+              {stationToDelete?.name}
+            </strong>{' '}
+            khỏi danh sách cấu hình bản đồ hiện tại?
+          </>
+        }
+        warningNote="Lưu ý: Sau khi xác nhận xóa khỏi danh sách, hãy nhấn 'Lưu Danh Sách Trạm' để đồng bộ cấu hình mới tới đội robot."
+        chips={
+          stationToDelete
+            ? [
+                {
+                  label:
+                    stationToDelete.type === 'Pickup' || stationToDelete.type === 'Kitchen'
+                      ? 'Trạm Bếp'
+                      : stationToDelete.type === 'Charging' || stationToDelete.type === 'ChargingDock'
+                        ? 'Trạm Thay Pin'
+                        : stationToDelete.type === 'Standby'
+                          ? 'Điểm Chờ'
+                          : 'Trạm Bàn',
+                  accent: true,
+                },
+                {
+                  label: `X: ${stationToDelete.worldX.toFixed(2)}m, Y: ${stationToDelete.worldY.toFixed(2)}m`,
+                },
+              ]
+            : []
+        }
+        confirmLabel="Xóa Trạm"
+      />
     </div>
   );
 };

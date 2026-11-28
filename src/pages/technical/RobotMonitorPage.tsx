@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRobotStore } from '@/stores/robotStore';
 import { Bot, Wifi, Activity, Battery } from 'lucide-react';
+import { DeleteConfirmModal } from '@/components/common/DeleteConfirmModal';
 
 interface LogEntry {
   timestamp: string;
@@ -23,6 +24,7 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
     clearLogs 
   } = useRobotStore();
   const [loading, setLoading] = useState(true);
+  const [isClearLogsConfirmOpen, setIsClearLogsConfirmOpen] = useState(false);
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -187,9 +189,11 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                 <span>Nhật Ký Điều Hướng Thiết Bị</span>
               </h2>
-              <button 
-                onClick={clearLogs}
-                className="text-xs text-slate-400 hover:text-slate-200 transition-all font-bold px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer"
+              <button
+                type="button"
+                disabled={logs.length === 0}
+                onClick={() => setIsClearLogsConfirmOpen(true)}
+                className="text-xs text-slate-400 hover:text-slate-200 transition-all font-bold px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Xóa Nhật Ký
               </button>
@@ -217,6 +221,30 @@ export function RobotMonitorPage({ embedded = false }: RobotMonitorPageProps = {
         </div>
 
       </div>
+
+      <DeleteConfirmModal
+        theme="dark"
+        isOpen={isClearLogsConfirmOpen}
+        onClose={() => setIsClearLogsConfirmOpen(false)}
+        onConfirm={() => {
+          clearLogs();
+          setIsClearLogsConfirmOpen(false);
+        }}
+        title="Xác Nhận Xóa Nhật Ký Điều Hướng"
+        subtitle="Nhật Ký Điều Hướng Thiết Bị (Realtime Console)"
+        description={
+          <>
+            Bạn có chắc chắn muốn xóa toàn bộ{' '}
+            <strong className="text-white font-extrabold">
+              {logs.length} bản ghi nhật ký
+            </strong>{' '}
+            trong phiên theo dõi hiện tại?
+          </>
+        }
+        warningNote="Các dòng log điều hướng đã xóa sẽ không thể khôi phục trên màn hình console hiện tại."
+        chips={[{ label: `${logs.length} bản ghi`, accent: true }]}
+        confirmLabel="Xóa Nhật Ký"
+      />
     </div>
   );
 }
