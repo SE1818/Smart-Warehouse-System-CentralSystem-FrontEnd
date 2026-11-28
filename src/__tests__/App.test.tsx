@@ -18,7 +18,6 @@ vi.mock('../pages/auth/ForgotPasswordPage', () => ({ ForgotPasswordPage: () => <
 vi.mock('../pages/auth/ResetPasswordPage', () => ({ ResetPasswordPage: () => <div>Reset Password Page</div> }));
 vi.mock('../pages/technical/AdminTechnicalPage', () => ({ AdminTechnicalPage: () => <div data-testid="technical-page">Technical Page</div> }));
 vi.mock('../pages/staff/StaffKdsPage', () => ({ StaffKdsPage: () => <div data-testid="staff-page">Staff Page</div> }));
-vi.mock('../pages/technical/StoreEdgeSetupPage', () => ({ StoreEdgeSetupPage: () => <div data-testid="edge-setup-page">Store Edge Setup Page</div> }));
 vi.mock('../pages/technical/RobotMonitorPage', () => ({ RobotMonitorPage: () => <div data-testid="robot-monitor-page">Robot Monitor Page</div> }));
 
 // Icons mock (matches the keys used across pages)
@@ -71,10 +70,10 @@ describe('App routing and integration', () => {
     await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument());
   });
 
-  it('renders RegisterPage on /register route', async () => {
+  it('redirects /register to /login (login-only portal)', async () => {
     window.history.pushState(null, '', '/register');
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Register Page')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument());
   });
 
   it('renders ForgotPasswordPage at /forgot-password', async () => {
@@ -123,13 +122,6 @@ describe('App routing and integration', () => {
     window.history.pushState(null, '', '/staff');
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('staff-page')).toBeInTheDocument());
-  });
-
-  it('renders StoreEdgeSetupPage on /edge-setup when authenticated', async () => {
-    storeAuth('Technician');
-    window.history.pushState(null, '', '/edge-setup');
-    render(<App />);
-    await waitFor(() => expect(screen.getByTestId('edge-setup-page')).toBeInTheDocument());
   });
 
   it('renders RobotMonitorPage on /robot-monitor when authenticated', async () => {

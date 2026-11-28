@@ -29,7 +29,6 @@ import {
   Bot,
   Navigation,
   Terminal,
-  Server,
   Settings,
   LayoutGrid,
   Radio,
@@ -40,7 +39,6 @@ import {
 } from 'lucide-react';
 import { fixMojibake, getUserInitials } from '@/utils/textUtils';
 import { RobotMonitorPage } from './RobotMonitorPage';
-import { StoreEdgeSetupPage } from './StoreEdgeSetupPage';
 import { LocalSqliteSyncCard } from '@/components/technical/LocalSqliteSyncCard';
 import { EdgeRobotLogsPanel } from '@/components/technical/EdgeRobotLogsPanel';
 import { useRobotStore } from '@/stores/robotStore';
@@ -100,7 +98,7 @@ interface MissionQueueItem {
 
 export const AdminTechnicalPage: React.FC = () => {
   // Navigation Sub-tabs
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'map-stations' | 'robots' | 'missions' | 'monitor' | 'edge-logs' | 'edge-setup' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'map-stations' | 'robots' | 'missions' | 'monitor' | 'edge-logs' | 'sqlite-sync' | 'analytics' | 'settings'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('tech_sidebar_collapsed') === 'true';
@@ -892,7 +890,6 @@ export const AdminTechnicalPage: React.FC = () => {
           { id: 'monitor', label: 'Giám Sát & Nhật Ký AMR', icon: Terminal },
           { id: 'edge-logs', label: 'Nhật Ký Robot Tại Trạm', icon: FileText },
           { id: 'sqlite-sync', label: 'Lưu Trữ & Đồng Bộ Quán', icon: Database },
-          { id: 'edge-setup', label: 'Thiết Bị Trạm Quán', icon: Server },
           { id: 'analytics', label: 'Thống Kê Hiệu Suất', icon: BarChart3 },
           { id: 'settings', label: 'Cấu Hình Điều Hướng', icon: Settings },
         ],
@@ -3013,15 +3010,6 @@ export const AdminTechnicalPage: React.FC = () => {
                     </div>
                   );
                 })()}
-              </div>
-            )}
-
-            {/* ============================================================== */}
-            {/* SUBTAB: EDGE BOX & POS INTEGRATION */}
-            {/* ============================================================== */}
-            {activeSubTab === 'edge-setup' && (
-              <div className="space-y-4">
-                <StoreEdgeSetupPage embedded tenantSubdomain={tenantSlug || undefined} />
               </div>
             )}
 

@@ -502,6 +502,21 @@ apiClient.interceptors.response.use(
       url.includes('/auth/refresh-token') ||
       url.includes('/auth/logout');
 
+    const errorCode = String(error?.response?.data?.code || '').toUpperCase();
+    if (errorCode === 'USER_BANNED' || (status === 403 && (errorCode === 'TENANT_BANNED' || errorCode === 'TENANT_SUSPENDED'))) {
+      const scope = errorCode === 'USER_BANNED' ? 'Account' : 'Store';
+      const reason = error?.response?.data?.reason || 'ADMIN_BANNED';
+      const message =
+        error?.response?.data?.message ||
+        (scope === 'Account'
+          ? 'Tài khoản của bạn đã bị quản trị viên khóa. Cửa hàng vẫn hoạt động bình thường.'
+          : 'Cửa hàng của bạn đã bị quản trị viên tạm khóa.');
+      sessionStorage.setItem('vora_ban_context', JSON.stringify({ scope, reason, message }));
+      clearAuthSession();
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
     if (status !== 401 || isAuthEndpoint) {
       return Promise.reject(error);
     }

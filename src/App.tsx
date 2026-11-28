@@ -8,15 +8,14 @@ import { queryClient } from './services/queryClient';
 
 // Auth pages
 const LoginPage = lazy(() => import('./pages/auth/LoginPage').then(m => ({ default: m.LoginPage })));
-const RegisterPage = lazy(() => import('./pages/auth/RegisterPage').then(m => ({ default: m.RegisterPage })));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
 // Technical Engineer & Staff KDS pages
 const AdminTechnicalPage = lazy(() => import('./pages/technical/AdminTechnicalPage').then(m => ({ default: m.AdminTechnicalPage })));
 const StaffKdsPage = lazy(() => import('./pages/staff/StaffKdsPage').then(m => ({ default: m.StaffKdsPage })));
-const StoreEdgeSetupPage = lazy(() => import('./pages/technical/StoreEdgeSetupPage').then(m => ({ default: m.StoreEdgeSetupPage })));
 const RobotMonitorPage = lazy(() => import('./pages/technical/RobotMonitorPage').then(m => ({ default: m.RobotMonitorPage })));
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { BanRealtimeGuard } from './hooks/useBanRealtimeGuard';
 import { ShieldAlert } from 'lucide-react';
 
 
@@ -42,6 +41,7 @@ function App() {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<BrowserRouter>
+			<BanRealtimeGuard />
 			<ToastContainer
 				position="top-right"
 				autoClose={3000}
@@ -85,7 +85,7 @@ function App() {
 				<Routes>
 					{/* Auth routes */}
 					<Route path="/login" element={<LoginPage />} />
-					<Route path="/register" element={<RegisterPage />} />
+					<Route path="/register" element={<Navigate to="/login" replace />} />
 					<Route path="/forgot-password" element={<ForgotPasswordPage />} />
 					<Route path="/reset-password" element={<ResetPasswordPage />} />
 					<Route path="/unauthorized" element={<UnauthorizedPage />} />
@@ -111,14 +111,6 @@ function App() {
 					/>
 
 					{/* Direct technical & store edge routes */}
-					<Route
-						path="/edge-setup"
-						element={
-							<ProtectedRoute allowedRoles={['Technician', 'SuperAdmin']}>
-								<StoreEdgeSetupPage />
-							</ProtectedRoute>
-						}
-					/>
 					<Route
 						path="/robot-monitor"
 						element={

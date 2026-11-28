@@ -206,55 +206,42 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 font-sans px-4 tech-grid relative overflow-hidden">
-      {/* Decorative gradient glowing circles */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-      <div className="bg-slate-850/95 backdrop-blur-xl rounded-3xl border border-slate-700/80 shadow-2xl p-8 w-full max-w-md space-y-6 relative z-10 text-white">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 py-8">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 w-full max-w-md space-y-6 text-slate-900">
         <div className="text-center space-y-3">
-          <div className="w-16 h-16 rounded-2xl bg-white border border-slate-700/80 p-2 mx-auto flex items-center justify-center shadow-xl shadow-[#0062FF]/25">
+          <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 p-2 mx-auto flex items-center justify-center shadow-xs">
             <img src="/brand/vora-icon.png" alt="VORA Emblem" width="48" height="48" loading="eager" className="w-full h-full object-contain" />
           </div>
           <div>
-            <div className="flex items-center justify-center gap-2">
-              <h1 className="text-2xl font-black text-white tracking-tight font-heading">VORA</h1>
-            </div>
-            <p className="text-slate-400 text-xs font-medium uppercase tracking-widest mt-1">
+            <h1 className="text-[26px] font-semibold text-[#0A192F] tracking-normal font-heading">VORA</h1>
+            <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mt-1">
               Hệ Thống Quản Trị &amp; Vận Hành AMR
             </p>
           </div>
         </div>
 
         {edgeNode?.isEdgeNode && (
-          <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/40 rounded-2xl text-amber-200 text-xs flex items-start gap-3 shadow-inner">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
-            <div className="space-y-0.5">
-              <p className="font-semibold text-white tracking-wide flex items-center gap-1.5 flex-wrap">
-                <span>Trạm Điều Phối Tại Quán:</span>
-                <span className="text-amber-400 font-bold uppercase">{edgeNode.restaurantName || edgeNode.subdomain}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-400/20 text-amber-300 rounded border border-amber-400/30">
-                  @{edgeNode.subdomain}
-                </span>
-              </p>
-              <p className="text-gray-300 text-[11px] leading-relaxed">
-                Thiết bị phần cứng đặt tại quán. Chỉ nhân viên thuộc nhà hàng này mới được phép đăng nhập.
-              </p>
-            </div>
+          <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs space-y-1">
+            <p className="font-semibold text-amber-900">
+              Trạm Điều Phối Tại Quán: {edgeNode.restaurantName || edgeNode.subdomain}
+            </p>
+            <p className="text-amber-800 text-[11px] leading-relaxed">
+              Chỉ nhân viên thuộc nhà hàng này mới được phép đăng nhập.
+            </p>
           </div>
         )}
 
         {error && (
-          <div className="p-4 bg-red-950/60 border border-red-500/40 rounded-xl text-red-200 text-xs font-semibold leading-relaxed flex flex-col gap-2">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-medium leading-relaxed flex flex-col gap-2">
             <div className="flex items-start gap-2.5">
-              <Icons.AlertWarning className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <Icons.AlertWarning className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
             {emailNotVerified && (
               <button
                 type="button"
                 onClick={handleResendVerification}
-                className="self-start text-red-400 font-bold hover:text-red-300 underline text-xs cursor-pointer"
+                className="self-start text-red-700 font-semibold hover:text-red-800 underline text-xs cursor-pointer"
               >
                 Gửi lại email xác minh
               </button>
@@ -264,7 +251,7 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
               Email công vụ
             </label>
             <input
@@ -272,18 +259,18 @@ export function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="nhanvien@vora.vn"
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 text-sm text-white font-medium placeholder-slate-500 transition-all"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0062FF]/15 focus:border-[#0062FF] focus:bg-white text-sm text-slate-900 font-medium placeholder-slate-400 transition-all"
               required
             />
           </div>
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
                 Mật khẩu bảo mật
               </label>
               <Link
                 to="/forgot-password"
-                className="text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                className="text-[11px] font-semibold text-[#0062FF] hover:text-[#0052CC] transition-colors cursor-pointer"
               >
                 Quên mật khẩu?
               </Link>
@@ -293,7 +280,7 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 text-sm text-white font-medium placeholder-slate-500 transition-all"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0062FF]/15 focus:border-[#0062FF] focus:bg-white text-sm text-slate-900 font-medium placeholder-slate-400 transition-all"
               required
             />
           </div>
@@ -301,7 +288,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-600/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full bg-[#0062FF] hover:bg-[#0052CC] text-white py-3.5 rounded-xl font-semibold text-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
           >
             {loading ? (
               <>
@@ -315,23 +302,23 @@ export function LoginPage() {
         </form>
 
         {/* Quick Credentials Pre-fills */}
-        <div className="pt-2 border-t border-slate-800/80 space-y-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">
+        <div className="pt-3 border-t border-slate-200 space-y-2.5">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-center">
             Chọn nhanh vai trò đăng nhập
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <button
               type="button"
               onClick={() => {
                 setEmail('engineer@vora.vn');
                 setPassword('Password123!');
               }}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-blue-500/50 rounded-xl text-left transition-all cursor-pointer group"
+              className="px-3 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-[#0062FF]/40 rounded-xl text-left transition-all cursor-pointer"
             >
-              <div className="text-[11px] font-bold text-blue-400 group-hover:text-blue-300">
+              <div className="text-xs font-semibold text-slate-900">
                 Kỹ Sư Kỹ Thuật
               </div>
-              <div className="text-[10px] text-slate-400 truncate">Vận hành &amp; Bảo trì kỹ thuật</div>
+              <div className="text-[11px] text-slate-500 truncate mt-0.5">Vận hành &amp; Bảo trì kỹ thuật</div>
             </button>
 
             <button
@@ -340,17 +327,17 @@ export function LoginPage() {
                 setEmail('staff@vora.vn');
                 setPassword('Password123!');
               }}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-left transition-all cursor-pointer group"
+              className="px-3 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-emerald-500/40 rounded-xl text-left transition-all cursor-pointer"
             >
-              <div className="text-[11px] font-bold text-emerald-400 group-hover:text-emerald-300">
+              <div className="text-xs font-semibold text-slate-900">
                 Nhân Viên Vận Hành
               </div>
-              <div className="text-[10px] text-slate-400 truncate">Quầy bếp &amp; Phục vụ bàn</div>
+              <div className="text-[11px] text-slate-500 truncate mt-0.5">Quầy bếp &amp; Phục vụ bàn</div>
             </button>
           </div>
         </div>
 
-        <div className="text-center text-[11px] text-slate-400">
+        <div className="text-center text-xs text-slate-500">
           Chỉ dành cho cán bộ kỹ thuật và nhân viên được cấp quyền truy cập.
         </div>
       </div>

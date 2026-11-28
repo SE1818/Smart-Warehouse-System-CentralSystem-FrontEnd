@@ -1,6 +1,5 @@
 // Technical & Edge pages
 export { AdminTechnicalPage } from './technical/AdminTechnicalPage';
-export { StoreEdgeSetupPage } from './technical/StoreEdgeSetupPage';
 export { RobotMonitorPage } from './technical/RobotMonitorPage';
 
 // Staff KDS pages

@@ -64,20 +64,14 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 tech-grid relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
-
-      <div className="glass-panel rounded-3xl border border-slate-200/80 shadow-2xl p-8 w-full max-w-md space-y-6 glow-blue relative z-10">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4 py-8">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 w-full max-w-md space-y-6">
         <div className="text-center space-y-3">
-          <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center p-1 bg-gradient-to-tr from-brand-600/10 to-brand-500/5 border border-brand-500/20 shadow-lg">
-            <img src="/brand/vora-icon.png" alt="VORA Logo" className="w-12 h-12 object-contain filter drop-shadow-md" />
+          <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 p-2 mx-auto flex items-center justify-center shadow-xs">
+            <img src="/brand/vora-icon.png" alt="VORA Emblem" className="w-full h-full object-contain" />
           </div>
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-50 border border-brand-200/60 text-[10px] font-bold text-brand-700 uppercase tracking-widest mb-1.5">
-              VORA
-            </div>
-            <h1 className="text-2xl font-heading font-black text-slate-900 tracking-tight">
+            <h1 className="text-2xl font-heading font-semibold text-[#0A192F]">
               {status === 'success' ? 'Đặt lại thành công!' : 'Đặt lại mật khẩu'}
             </h1>
             <p className="text-slate-500 text-xs font-medium mt-1">
@@ -87,9 +81,9 @@ export function ResetPasswordPage() {
         </div>
 
         {message && (
-          <div className={`p-4 rounded-xl text-xs font-semibold leading-relaxed ${
-            status === 'success' ? 'bg-green-50 border border-green-200/60 text-green-750' :
-            'bg-red-50 border border-red-200/60 text-red-750'
+          <div className={`p-4 rounded-xl text-xs font-medium leading-relaxed ${
+            status === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' :
+            'bg-red-50 border border-red-200 text-red-700'
           }`}>
             {message}
           </div>
@@ -98,40 +92,40 @@ export function ResetPasswordPage() {
         {status !== 'success' && status !== 'error' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">New Password</label>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider">Mật khẩu mới</label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0062FF]/15 focus:border-[#0062FF] focus:bg-white transition-all text-sm text-slate-900 font-medium placeholder-slate-400"
                 required
                 minLength={8}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Confirm New Password</label>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider">Xác nhận mật khẩu mới</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white transition-all text-sm text-slate-800 font-medium"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0062FF]/15 focus:border-[#0062FF] focus:bg-white transition-all text-sm text-slate-900 font-medium placeholder-slate-400"
                 required
               />
             </div>
             <button
               type="submit"
               disabled={status === 'loading'}
-              className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white py-3 rounded-xl font-bold text-sm shadow-md shadow-brand-500/15 hover:shadow-brand-500/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#0062FF] hover:bg-[#0052CC] text-white py-3.5 rounded-xl font-semibold text-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {status === 'loading' ? (
                 <>
                   <Icons.Spinner className="w-4 h-4 text-white" />
-                  <span>Resetting...</span>
+                  <span>Đang đặt lại...</span>
                 </>
               ) : (
-                <span>Reset Password</span>
+                <span>Đặt Lại Mật Khẩu</span>
               )}
             </button>
           </form>
@@ -139,9 +133,9 @@ export function ResetPasswordPage() {
 
         {status !== 'error' && (
           <p className="text-center text-xs text-slate-500 font-medium">
-            Remember your password?{' '}
-            <Link to="/login" className="text-brand-600 font-bold hover:text-brand-700 transition-colors">
-              Sign in
+            Bạn đã nhớ mật khẩu?{' '}
+            <Link to="/login" className="text-[#0062FF] font-semibold hover:text-[#0052CC] transition-colors">
+              Đăng nhập
             </Link>
           </p>
         )}
